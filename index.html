@@ -3,6 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=1920, height=1080" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
     <style>
       * {
@@ -12,11 +18,167 @@
       }
       html,
       body {
-        margin: 0;
         width: 1920px;
         height: 1080px;
         overflow: hidden;
-        background: #000;
+        background: #06060a;
+        font-family: "Inter", system-ui, -apple-system, sans-serif;
+        color: #fff;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      #stage {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        background:
+          radial-gradient(
+            ellipse 70% 55% at 50% 50%,
+            rgba(139, 92, 246, 0.16),
+            transparent 65%
+          ),
+          radial-gradient(
+            ellipse 55% 35% at 50% 75%,
+            rgba(59, 130, 246, 0.09),
+            transparent 70%
+          ),
+          #06060a;
+        overflow: hidden;
+      }
+
+      .glow-ring {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 1600px;
+        height: 1600px;
+        margin: -800px 0 0 -800px;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle at center,
+          rgba(167, 139, 250, 0.22) 0%,
+          rgba(99, 102, 241, 0.05) 35%,
+          transparent 60%
+        );
+        filter: blur(40px);
+        pointer-events: none;
+      }
+
+      .scanline {
+        position: absolute;
+        top: 50%;
+        left: 0;
+        width: 1920px;
+        height: 1px;
+        background: linear-gradient(
+          90deg,
+          transparent 0%,
+          rgba(167, 139, 250, 0.0) 10%,
+          rgba(167, 139, 250, 0.85) 50%,
+          rgba(167, 139, 250, 0.0) 90%,
+          transparent 100%
+        );
+        box-shadow: 0 0 16px rgba(167, 139, 250, 0.6);
+        pointer-events: none;
+      }
+
+      .center {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 1400px;
+        margin: 0 0 0 -700px;
+        transform: translateY(-50%);
+        text-align: center;
+      }
+
+      .logo-wrap {
+        display: inline-block;
+        margin: 0 auto 56px;
+        filter: drop-shadow(0 0 28px rgba(167, 139, 250, 0.55));
+      }
+      .logo-mark {
+        width: 128px;
+        height: 128px;
+        display: block;
+      }
+
+      .title {
+        font-size: 168px;
+        font-weight: 600;
+        letter-spacing: -0.045em;
+        line-height: 1;
+        background: linear-gradient(180deg, #ffffff 0%, #b8b3d4 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        will-change: transform, filter, opacity;
+      }
+      .title-glow {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 168px;
+        font-weight: 600;
+        letter-spacing: -0.045em;
+        line-height: 1;
+        color: rgba(167, 139, 250, 0.25);
+        filter: blur(28px);
+        pointer-events: none;
+      }
+      .title-row {
+        position: relative;
+        display: inline-block;
+      }
+
+      .subtitle {
+        margin-top: 44px;
+        font-size: 32px;
+        font-weight: 300;
+        letter-spacing: 0.42em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.78);
+      }
+      .subtitle .w {
+        display: inline-block;
+      }
+      .subtitle .dot {
+        display: inline-block;
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: #a78bfa;
+        vertical-align: middle;
+        margin: 0 22px 6px 22px;
+        box-shadow: 0 0 10px rgba(167, 139, 250, 0.9);
+      }
+
+      .vignette {
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(
+          ellipse at center,
+          transparent 45%,
+          rgba(0, 0, 0, 0.75) 100%
+        );
+        pointer-events: none;
+      }
+
+      .hairline {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 1px;
+        height: 360px;
+        margin: -180px 0 0 0;
+        background: linear-gradient(
+          180deg,
+          transparent 0%,
+          rgba(167, 139, 250, 0.6) 50%,
+          transparent 100%
+        );
+        transform-origin: 50% 50%;
       }
     </style>
   </head>
@@ -25,26 +187,222 @@
       id="root"
       data-composition-id="main"
       data-start="0"
-      data-duration="10"
+      data-duration="8"
       data-width="1920"
       data-height="1080"
     >
-      
-      
+      <div
+        id="stage"
+        class="clip"
+        data-start="0"
+        data-duration="8"
+        data-track-index="0"
+      >
+        <div
+          id="ring"
+          class="glow-ring clip"
+          data-start="0"
+          data-duration="8"
+          data-track-index="1"
+          data-layout-allow-overflow="true"
+        ></div>
 
-      <!--
-        Add your clips here. Example:
-        <div id="title" class="clip" data-start="0" data-duration="5" data-track-index="1"
-             style="font-size: 64px; color: #fff; padding: 40px">
-          Hello World
+        <div
+          id="hairline"
+          class="hairline clip"
+          data-start="0.2"
+          data-duration="1.4"
+          data-track-index="2"
+        ></div>
+
+        <div
+          id="scan"
+          class="scanline clip"
+          data-start="0.6"
+          data-duration="1.4"
+          data-track-index="3"
+        ></div>
+
+        <div
+          id="content"
+          class="center clip"
+          data-start="0"
+          data-duration="8"
+          data-track-index="4"
+        >
+          <div class="logo-wrap" id="logo">
+            <svg
+              class="logo-mark"
+              viewBox="0 0 100 100"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <rect
+                id="logo-l"
+                x="14"
+                y="14"
+                width="22"
+                height="72"
+                rx="2"
+                stroke="#a78bfa"
+                stroke-width="3"
+              />
+              <rect
+                id="logo-r"
+                x="64"
+                y="14"
+                width="22"
+                height="72"
+                rx="2"
+                stroke="#a78bfa"
+                stroke-width="3"
+              />
+              <rect
+                id="logo-bar"
+                x="14"
+                y="46"
+                width="72"
+                height="8"
+                fill="#a78bfa"
+              />
+            </svg>
+          </div>
+
+          <div class="title-row">
+            <div class="title-glow" id="title-glow" aria-hidden="true">Hyperframes</div>
+            <h1 class="title" id="title">Hyperframes</h1>
+          </div>
+
+          <p class="subtitle" id="subtitle">
+            <span class="w" id="w1">Prompt</span>
+            <span class="dot" id="d1"></span>
+            <span class="w" id="w2">Animate</span>
+            <span class="dot" id="d2"></span>
+            <span class="w" id="w3">Render</span>
+          </p>
         </div>
-      -->
+
+        <div class="vignette"></div>
+      </div>
     </div>
 
     <script>
       window.__timelines = window.__timelines || {};
-      const tl = gsap.timeline({ paused: true });
-      // Example: tl.from("#title", { opacity: 0, y: -50, duration: 1 }, 0);
+
+      const tl = gsap.timeline({
+        paused: true,
+        defaults: { ease: "power3.out" },
+      });
+
+      tl.set(["#title", "#title-glow", "#subtitle", "#logo"], { opacity: 0 });
+      tl.set("#ring", { opacity: 0, scale: 0.6 });
+      tl.set("#hairline", { opacity: 0, scaleY: 0 });
+      tl.set("#scan", { opacity: 0, x: -1920 });
+      tl.set(["#w1", "#w2", "#w3"], { opacity: 0, y: 14 });
+      tl.set(["#d1", "#d2"], { opacity: 0, scale: 0 });
+
+      tl.to("#ring", { opacity: 1, scale: 1, duration: 2.4, ease: "power2.out" }, 0);
+
+      tl.to(
+        "#hairline",
+        { opacity: 1, scaleY: 1, duration: 1.0, ease: "power3.out" },
+        0.2,
+      );
+
+      tl.to(
+        "#scan",
+        { opacity: 1, x: 1920, duration: 1.4, ease: "power2.inOut" },
+        0.6,
+      );
+
+      tl.to(
+        "#logo",
+        {
+          opacity: 1,
+          y: 0,
+          scale: 1,
+          duration: 1.2,
+          ease: "power3.out",
+        },
+        0.7,
+      ).from(
+        "#logo",
+        { y: 24, scale: 0.9, duration: 1.2, ease: "power3.out" },
+        0.7,
+      );
+
+      tl.to(
+        "#title-glow",
+        { opacity: 1, duration: 1.6, ease: "power2.out" },
+        1.0,
+      );
+      tl.to(
+        "#title",
+        {
+          opacity: 1,
+          y: 0,
+          duration: 1.4,
+          ease: "power3.out",
+        },
+        1.1,
+      ).from(
+        "#title",
+        { y: 36, duration: 1.4, ease: "power3.out" },
+        1.1,
+      );
+
+      tl.to("#subtitle", { opacity: 1, duration: 1.0 }, 2.0);
+      tl.to(
+        ["#w1", "#w2", "#w3"],
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.9,
+          stagger: 0.18,
+          ease: "power3.out",
+        },
+        2.05,
+      );
+      tl.to(
+        ["#d1", "#d2"],
+        {
+          opacity: 1,
+          scale: 1,
+          duration: 0.6,
+          stagger: 0.18,
+          ease: "back.out(2)",
+        },
+        2.23,
+      );
+
+      tl.to(
+        "#hairline",
+        { opacity: 0, duration: 0.8, ease: "power2.in" },
+        1.6,
+      );
+
+      tl.to(
+        "#ring",
+        { scale: 1.06, duration: 3.4, ease: "sine.inOut" },
+        2.6,
+      );
+      tl.to(
+        "#logo",
+        { scale: 1.03, duration: 3.4, ease: "sine.inOut" },
+        2.6,
+      );
+      tl.to(
+        "#title-glow",
+        { opacity: 0.6, duration: 2.6, ease: "sine.inOut" },
+        2.6,
+      );
+
+      tl.to(
+        "#stage",
+        { opacity: 0, duration: 1.0, ease: "power2.in" },
+        7.0,
+      );
+
       window.__timelines["main"] = tl;
     </script>
   </body>
