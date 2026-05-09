@@ -3,6 +3,7 @@ out/
 dist/
 .cache/
 .hyperframes/
+renders/
 *.mp4
 .DS_Store
 .env
