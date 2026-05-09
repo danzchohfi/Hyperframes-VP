@@ -6,7 +6,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@200;300;400;500&display=swap"
       rel="stylesheet"
     />
     <script src="vendor/gsap.min.js"></script>
@@ -21,7 +21,7 @@
         width: 1920px;
         height: 1080px;
         overflow: hidden;
-        background: #06060a;
+        background: #0a0608;
         font-family: "Inter", system-ui, -apple-system, sans-serif;
         color: #fff;
         -webkit-font-smoothing: antialiased;
@@ -34,15 +34,15 @@
         background:
           radial-gradient(
             ellipse 70% 55% at 50% 50%,
-            rgba(139, 92, 246, 0.16),
+            rgba(244, 114, 182, 0.20),
             transparent 65%
           ),
           radial-gradient(
-            ellipse 55% 35% at 50% 75%,
-            rgba(59, 130, 246, 0.09),
+            ellipse 55% 40% at 50% 75%,
+            rgba(239, 68, 68, 0.10),
             transparent 70%
           ),
-          #06060a;
+          #0a0608;
         overflow: hidden;
       }
 
@@ -50,17 +50,17 @@
         position: absolute;
         top: 50%;
         left: 50%;
-        width: 1600px;
-        height: 1600px;
-        margin: -800px 0 0 -800px;
+        width: 1700px;
+        height: 1700px;
+        margin: -850px 0 0 -850px;
         border-radius: 50%;
         background: radial-gradient(
           circle at center,
-          rgba(167, 139, 250, 0.22) 0%,
-          rgba(99, 102, 241, 0.05) 35%,
-          transparent 60%
+          rgba(244, 114, 182, 0.26) 0%,
+          rgba(225, 29, 72, 0.06) 38%,
+          transparent 62%
         );
-        filter: blur(40px);
+        filter: blur(48px);
         pointer-events: none;
       }
 
@@ -73,12 +73,12 @@
         background: linear-gradient(
           90deg,
           transparent 0%,
-          rgba(167, 139, 250, 0.0) 10%,
-          rgba(167, 139, 250, 0.85) 50%,
-          rgba(167, 139, 250, 0.0) 90%,
+          rgba(244, 114, 182, 0) 10%,
+          rgba(244, 114, 182, 0.9) 50%,
+          rgba(244, 114, 182, 0) 90%,
           transparent 100%
         );
-        box-shadow: 0 0 16px rgba(167, 139, 250, 0.6);
+        box-shadow: 0 0 18px rgba(244, 114, 182, 0.7);
         pointer-events: none;
       }
 
@@ -86,46 +86,50 @@
         position: absolute;
         top: 50%;
         left: 50%;
-        width: 1400px;
-        margin: 0 0 0 -700px;
+        width: 1500px;
+        margin: 0 0 0 -750px;
         transform: translateY(-50%);
         text-align: center;
       }
 
       .logo-wrap {
         display: inline-block;
-        margin: 0 auto 56px;
-        filter: drop-shadow(0 0 28px rgba(167, 139, 250, 0.55));
+        margin: 0 auto 48px;
+        filter: drop-shadow(0 0 30px rgba(244, 114, 182, 0.7));
       }
       .logo-mark {
-        width: 128px;
-        height: 128px;
+        width: 132px;
+        height: 132px;
         display: block;
       }
 
       .title {
-        font-size: 168px;
-        font-weight: 600;
-        letter-spacing: -0.045em;
+        font-family: "Cormorant Garamond", "Times New Roman", serif;
+        font-style: italic;
+        font-weight: 500;
+        font-size: 196px;
+        letter-spacing: -0.02em;
         line-height: 1;
-        background: linear-gradient(180deg, #ffffff 0%, #b8b3d4 100%);
+        background: linear-gradient(180deg, #ffffff 0%, #fbcfe8 100%);
         -webkit-background-clip: text;
         background-clip: text;
         -webkit-text-fill-color: transparent;
-        will-change: transform, filter, opacity;
       }
       .title-glow {
         position: absolute;
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        font-size: 168px;
-        font-weight: 600;
-        letter-spacing: -0.045em;
+        font-family: "Cormorant Garamond", "Times New Roman", serif;
+        font-style: italic;
+        font-weight: 500;
+        font-size: 196px;
+        letter-spacing: -0.02em;
         line-height: 1;
-        color: rgba(167, 139, 250, 0.25);
-        filter: blur(28px);
+        color: rgba(244, 114, 182, 0.30);
+        filter: blur(34px);
         pointer-events: none;
+        white-space: nowrap;
       }
       .title-row {
         position: relative;
@@ -133,25 +137,25 @@
       }
 
       .subtitle {
-        margin-top: 44px;
-        font-size: 32px;
+        margin-top: 40px;
+        font-size: 36px;
         font-weight: 300;
-        letter-spacing: 0.42em;
+        letter-spacing: 0.46em;
         text-transform: uppercase;
-        color: rgba(255, 255, 255, 0.78);
+        color: rgba(255, 255, 255, 0.82);
       }
       .subtitle .w {
         display: inline-block;
       }
       .subtitle .dot {
         display: inline-block;
-        width: 5px;
-        height: 5px;
+        width: 6px;
+        height: 6px;
         border-radius: 50%;
-        background: #a78bfa;
+        background: #f472b6;
         vertical-align: middle;
-        margin: 0 22px 6px 22px;
-        box-shadow: 0 0 10px rgba(167, 139, 250, 0.9);
+        margin: 0 24px 8px 24px;
+        box-shadow: 0 0 12px rgba(244, 114, 182, 1);
       }
 
       .vignette {
@@ -160,7 +164,7 @@
         background: radial-gradient(
           ellipse at center,
           transparent 45%,
-          rgba(0, 0, 0, 0.75) 100%
+          rgba(0, 0, 0, 0.78) 100%
         );
         pointer-events: none;
       }
@@ -170,15 +174,24 @@
         left: 50%;
         top: 50%;
         width: 1px;
-        height: 360px;
-        margin: -180px 0 0 0;
+        height: 380px;
+        margin: -190px 0 0 0;
         background: linear-gradient(
           180deg,
           transparent 0%,
-          rgba(167, 139, 250, 0.6) 50%,
+          rgba(244, 114, 182, 0.7) 50%,
           transparent 100%
         );
         transform-origin: 50% 50%;
+      }
+
+      .heart-particle {
+        position: absolute;
+        width: 14px;
+        height: 14px;
+        color: #f472b6;
+        filter: drop-shadow(0 0 8px rgba(244, 114, 182, 0.9));
+        pointer-events: none;
       }
     </style>
   </head>
@@ -187,7 +200,7 @@
       id="root"
       data-composition-id="main"
       data-start="0"
-      data-duration="8"
+      data-duration="9"
       data-width="1920"
       data-height="1080"
     >
@@ -195,14 +208,14 @@
         id="stage"
         class="clip"
         data-start="0"
-        data-duration="8"
+        data-duration="9"
         data-track-index="0"
       >
         <div
           id="ring"
           class="glow-ring clip"
           data-start="0"
-          data-duration="8"
+          data-duration="9"
           data-track-index="1"
           data-layout-allow-overflow="true"
         ></div>
@@ -221,13 +234,14 @@
           data-start="0.6"
           data-duration="1.4"
           data-track-index="3"
+          data-layout-allow-overflow="true"
         ></div>
 
         <div
           id="content"
           class="center clip"
           data-start="0"
-          data-duration="8"
+          data-duration="9"
           data-track-index="4"
         >
           <div class="logo-wrap" id="logo">
@@ -236,51 +250,91 @@
               viewBox="0 0 100 100"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
             >
-              <rect
-                id="logo-l"
-                x="14"
-                y="14"
-                width="22"
-                height="72"
-                rx="2"
-                stroke="#a78bfa"
+              <path
+                id="heart-path"
+                d="M50 84 C 22 64, 10 46, 18 30 C 24 18, 40 16, 50 30 C 60 16, 76 18, 82 30 C 90 46, 78 64, 50 84 Z"
+                fill="none"
+                stroke="#f472b6"
                 stroke-width="3"
+                stroke-linejoin="round"
               />
-              <rect
-                id="logo-r"
-                x="64"
-                y="14"
-                width="22"
-                height="72"
-                rx="2"
-                stroke="#a78bfa"
-                stroke-width="3"
-              />
-              <rect
-                id="logo-bar"
-                x="14"
-                y="46"
-                width="72"
-                height="8"
-                fill="#a78bfa"
+              <path
+                id="heart-fill"
+                d="M50 84 C 22 64, 10 46, 18 30 C 24 18, 40 16, 50 30 C 60 16, 76 18, 82 30 C 90 46, 78 64, 50 84 Z"
+                fill="#f472b6"
+                opacity="0"
               />
             </svg>
           </div>
 
           <div class="title-row">
-            <div class="title-glow" id="title-glow" aria-hidden="true">Hyperframes</div>
-            <h1 class="title" id="title">Hyperframes</h1>
+            <div class="title-glow" id="title-glow" aria-hidden="true">
+              Jessica, eu te amo!
+            </div>
+            <h1 class="title" id="title">Jessica, eu te amo!</h1>
           </div>
 
           <p class="subtitle" id="subtitle">
-            <span class="w" id="w1">Prompt</span>
+            <span class="w" id="w1">Para</span>
             <span class="dot" id="d1"></span>
-            <span class="w" id="w2">Animate</span>
-            <span class="dot" id="d2"></span>
-            <span class="w" id="w3">Render</span>
+            <span class="w" id="w2">Sempre</span>
           </p>
         </div>
+
+        <svg
+          id="hearts"
+          width="1920"
+          height="1080"
+          viewBox="0 0 1920 1080"
+          style="position: absolute; inset: 0; pointer-events: none"
+          aria-hidden="true"
+          data-layout-allow-overflow="true"
+        >
+          <g fill="#f472b6" filter="url(#hglow)">
+            <defs>
+              <filter id="hglow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="4" />
+              </filter>
+            </defs>
+            <path
+              class="hp"
+              id="hp1"
+              d="M0 14 C -7 9, -10 4, -7 -1 C -5 -5, -1 -5, 0 -1 C 1 -5, 5 -5, 7 -1 C 10 4, 7 9, 0 14 Z"
+              transform="translate(420 820) scale(2.2)"
+              opacity="0"
+            />
+            <path
+              class="hp"
+              id="hp2"
+              d="M0 14 C -7 9, -10 4, -7 -1 C -5 -5, -1 -5, 0 -1 C 1 -5, 5 -5, 7 -1 C 10 4, 7 9, 0 14 Z"
+              transform="translate(1500 760) scale(1.8)"
+              opacity="0"
+            />
+            <path
+              class="hp"
+              id="hp3"
+              d="M0 14 C -7 9, -10 4, -7 -1 C -5 -5, -1 -5, 0 -1 C 1 -5, 5 -5, 7 -1 C 10 4, 7 9, 0 14 Z"
+              transform="translate(300 380) scale(1.6)"
+              opacity="0"
+            />
+            <path
+              class="hp"
+              id="hp4"
+              d="M0 14 C -7 9, -10 4, -7 -1 C -5 -5, -1 -5, 0 -1 C 1 -5, 5 -5, 7 -1 C 10 4, 7 9, 0 14 Z"
+              transform="translate(1640 320) scale(2.0)"
+              opacity="0"
+            />
+            <path
+              class="hp"
+              id="hp5"
+              d="M0 14 C -7 9, -10 4, -7 -1 C -5 -5, -1 -5, 0 -1 C 1 -5, 5 -5, 7 -1 C 10 4, 7 9, 0 14 Z"
+              transform="translate(960 940) scale(1.4)"
+              opacity="0"
+            />
+          </g>
+        </svg>
 
         <div class="vignette"></div>
       </div>
@@ -298,8 +352,10 @@
       tl.set("#ring", { opacity: 0, scale: 0.6 });
       tl.set("#hairline", { opacity: 0, scaleY: 0 });
       tl.set("#scan", { opacity: 0, x: -1920 });
-      tl.set(["#w1", "#w2", "#w3"], { opacity: 0, y: 14 });
-      tl.set(["#d1", "#d2"], { opacity: 0, scale: 0 });
+      tl.set(["#w1", "#w2"], { opacity: 0, y: 14 });
+      tl.set("#d1", { opacity: 0, scale: 0 });
+      tl.set("#heart-fill", { opacity: 0 });
+      tl.set(".hp", { opacity: 0, y: 30 });
 
       tl.to("#ring", { opacity: 1, scale: 1, duration: 2.4, ease: "power2.out" }, 0);
 
@@ -317,18 +373,23 @@
 
       tl.to(
         "#logo",
-        {
-          opacity: 1,
-          y: 0,
-          scale: 1,
-          duration: 1.2,
-          ease: "power3.out",
-        },
+        { opacity: 1, duration: 1.2, ease: "power3.out" },
         0.7,
       ).from(
         "#logo",
         { y: 24, scale: 0.9, duration: 1.2, ease: "power3.out" },
         0.7,
+      );
+
+      // gentle heart pulse
+      tl.to(
+        "#heart-fill",
+        { opacity: 0.85, duration: 0.4, ease: "power2.out" },
+        1.4,
+      ).to(
+        "#heart-fill",
+        { opacity: 0.55, duration: 0.6, ease: "sine.inOut" },
+        1.8,
       );
 
       tl.to(
@@ -338,12 +399,7 @@
       );
       tl.to(
         "#title",
-        {
-          opacity: 1,
-          y: 0,
-          duration: 1.4,
-          ease: "power3.out",
-        },
+        { opacity: 1, duration: 1.4, ease: "power3.out" },
         1.1,
       ).from(
         "#title",
@@ -351,28 +407,51 @@
         1.1,
       );
 
-      tl.to("#subtitle", { opacity: 1, duration: 1.0 }, 2.0);
+      tl.to("#subtitle", { opacity: 1, duration: 1.0 }, 2.1);
       tl.to(
-        ["#w1", "#w2", "#w3"],
+        ["#w1", "#w2"],
         {
           opacity: 1,
           y: 0,
           duration: 0.9,
-          stagger: 0.18,
+          stagger: 0.22,
           ease: "power3.out",
         },
-        2.05,
+        2.15,
       );
       tl.to(
-        ["#d1", "#d2"],
+        "#d1",
         {
           opacity: 1,
           scale: 1,
           duration: 0.6,
-          stagger: 0.18,
           ease: "back.out(2)",
         },
-        2.23,
+        2.37,
+      );
+
+      // floating heart particles
+      tl.to(
+        ".hp",
+        {
+          opacity: 0.9,
+          y: -40,
+          duration: 2.4,
+          stagger: 0.25,
+          ease: "sine.inOut",
+        },
+        2.4,
+      );
+      tl.to(
+        ".hp",
+        {
+          opacity: 0,
+          y: -120,
+          duration: 1.8,
+          stagger: 0.18,
+          ease: "sine.in",
+        },
+        5.0,
       );
 
       tl.to(
@@ -381,27 +460,21 @@
         1.6,
       );
 
+      // gentle hold breathing
+      tl.to("#ring", { scale: 1.06, duration: 4.0, ease: "sine.inOut" }, 2.8);
+      tl.to("#logo", { scale: 1.04, duration: 4.0, ease: "sine.inOut" }, 2.8);
       tl.to(
-        "#ring",
-        { scale: 1.06, duration: 3.4, ease: "sine.inOut" },
-        2.6,
-      );
-      tl.to(
-        "#logo",
-        { scale: 1.03, duration: 3.4, ease: "sine.inOut" },
-        2.6,
+        "#heart-fill",
+        { opacity: 0.85, duration: 1.0, ease: "sine.inOut", yoyo: true, repeat: 3 },
+        2.8,
       );
       tl.to(
         "#title-glow",
-        { opacity: 0.6, duration: 2.6, ease: "sine.inOut" },
-        2.6,
+        { opacity: 0.65, duration: 2.6, ease: "sine.inOut" },
+        2.8,
       );
 
-      tl.to(
-        "#stage",
-        { opacity: 0, duration: 1.0, ease: "power2.in" },
-        7.0,
-      );
+      tl.to("#stage", { opacity: 0, duration: 1.0, ease: "power2.in" }, 8.0);
 
       window.__timelines["main"] = tl;
     </script>
