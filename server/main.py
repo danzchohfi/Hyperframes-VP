@@ -70,6 +70,7 @@ from .services import camera_picker as cam_picker_svc
 from .services import multicam_render as mc_render_svc
 from .services import vlog as vlog_svc
 from .services import vlog_pipeline as vlog_pipeline_svc
+from .services import take_grouping as take_grouping_svc
 from .services import podcast_pipeline as podcast_pipeline_svc
 from .services import shorts as shorts_svc
 from .services import yt_thumbnail as yt_thumb_svc
@@ -2395,6 +2396,28 @@ class VlogPipelineIn(BaseModel):
     do_face_clustering: bool = True
 
 
+@app.post("/api/projects/{pid}/vlog/group-takes")
+async def vlog_group_takes(pid: str, threshold: float = 0.45) -> dict[str, Any]:
+    """Group clips that look like multiple takes of the same line and pick the
+    best take in each group."""
+    state = _load(pid)
+    if not state.clips:
+        raise HTTPException(400, "no clips")
+    if not any(c.get("transcript_text") for c in state.clips):
+        raise HTTPException(400, "transcribe clips first")
+    raw_groups = take_grouping_svc.group_takes(state.clips, threshold=threshold)
+    annotated = take_grouping_svc.annotate_groups(state.clips, raw_groups)
+    storage.write_json(pid, "vlog_takes.json", {
+        "threshold": threshold,
+        "groups": annotated,
+        "total_clips": len(state.clips),
+        "grouped_clips": sum(len(g["group"]) for g in annotated),
+    })
+    _stage(state, "vlog_takes", "done",
+           f"{len(annotated)} grupos · {sum(len(g['group']) for g in annotated)} retakes detectados")
+    return {"groups": annotated}
+
+
 @app.post("/api/projects/{pid}/vlog/auto-pipeline")
 async def vlog_auto_pipeline(pid: str, body: VlogPipelineIn) -> dict[str, Any]:
     _load(pid)
@@ -2411,6 +2434,64 @@ async def vlog_auto_pipeline(pid: str, body: VlogPipelineIn) -> dict[str, Any]:
 
     job_id = await jobs_svc.manager.submit(pid, "vlog_pipeline", _run)
     return {"job_id": job_id, "status": "pending"}
+
+
+@app.post("/api/projects/{pid}/vlog/narratives/{nid}/storyboard")
+async def narrative_storyboard(pid: str, nid: str) -> dict[str, Any]:
+    """Generate one thumbnail per bite in the narrative sequence — a visual
+    storyboard so the user can review the cut at a glance."""
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    npath = pdir / "vlog_narratives.json"
+    if not npath.exists():
+        raise HTTPException(400, "no narratives")
+    data = storage.read_json(pid, "vlog_narratives.json")
+    target = next((n for n in data["narratives"] if n["id"] == nid), None)
+    if not target:
+        raise HTTPException(404, "narrative not found")
+
+    clip_by_id = {c["id"]: c for c in state.clips}
+    sb_dir = pdir / "clips" / "storyboards" / nid
+    sb_dir.mkdir(parents=True, exist_ok=True)
+    panels: list[dict[str, Any]] = []
+    for i, b in enumerate(target.get("sequence", [])):
+        cid = b.get("clip_id")
+        clip = clip_by_id.get(cid)
+        if not clip:
+            continue
+        src = pdir / "clips" / clip["filename"]
+        if not src.exists():
+            continue
+        # Sample at 25% into the bite window
+        at = float(b.get("start", 0)) + max(0.05, (float(b.get("end", 0)) - float(b.get("start", 0))) * 0.25)
+        out = sb_dir / f"panel_{i:02d}.jpg"
+        try:
+            await ff.grab_thumbnail(src, out, at=at, width=420)
+            panels.append({
+                "panel": i,
+                "clip_id": cid,
+                "clip_name": clip.get("name"),
+                "at": at,
+                "url": f"/api/projects/{pid}/files/clips/storyboards/{nid}/{out.name}",
+                "reason": b.get("reason", ""),
+                "duration": float(b.get("end", 0)) - float(b.get("start", 0)),
+            })
+        except Exception as e:
+            continue
+    target["storyboard_panels"] = panels
+    storage.write_json(pid, "vlog_narratives.json", data)
+    _stage(state, "vlog_storyboard", "done", f"{len(panels)} panels for {nid}")
+    return {"narrative_id": nid, "panels": panels}
+
+
+@app.get("/api/projects/{pid}/files/clips/storyboards/{nid}/{name}")
+async def serve_storyboard_panel(pid: str, nid: str, name: str):
+    pdir = storage.project_dir(pid)
+    fp = (pdir / "clips" / "storyboards" / nid / name).resolve()
+    base = (pdir / "clips" / "storyboards" / nid).resolve()
+    if not fp.exists() or base not in fp.parents:
+        raise HTTPException(404)
+    return FileResponse(fp)
 
 
 @app.post("/api/projects/{pid}/vlog/narratives")
@@ -2505,6 +2586,7 @@ class VlogAssembleIn(BaseModel):
     loudnorm: bool = True
     apply_brand: bool = True
     chapter_cards: bool = True
+    auto_social_copy: bool = True
 
 
 @app.post("/api/projects/{pid}/vlog/music-suggest")
@@ -2648,6 +2730,30 @@ async def vlog_assemble(pid: str, body: VlogAssembleIn) -> dict[str, Any]:
                                          "genre": narrative.genre,
                                          "clips": len(items),
                                          "branded": body.apply_brand})
+
+    # Auto-generate social copy from the unified narrative transcript
+    social_payload: dict[str, Any] | None = None
+    if body.auto_social_copy:
+        try:
+            clip_ts: dict[str, dict] = {}
+            for c in state.clips:
+                tp = pdir / "clips" / f"{c['id']}_transcript.json"
+                if tp.exists():
+                    clip_ts[c["id"]] = _json.loads(tp.read_text())
+            unified = vlog_svc.build_vlog_transcript(narrative, clip_ts) if clip_ts else None
+            full_text = " ".join(s.get("text", "") for s in (unified or {}).get("segments") or []).strip()
+            if full_text:
+                social = await social_svc.generate(
+                    transcript_text=full_text,
+                    title=narrative.name,
+                    logline=narrative.logline,
+                    brand_name=state.name,
+                    language=(unified or {}).get("language") or "pt",
+                )
+                storage.write_json(pid, "social_copy.json", social.model_dump())
+                social_payload = social.model_dump()
+        except Exception as e:
+            _stage(state, "vlog_social", "error", str(e))
     return {
         "narrative": narrative.model_dump(),
         "plan": plan,
@@ -2655,6 +2761,7 @@ async def vlog_assemble(pid: str, body: VlogAssembleIn) -> dict[str, Any]:
         "url": final_url,
         "bytes": final_path.stat().st_size,
         "branded": body.apply_brand,
+        "social_copy": social_payload,
     }
 
 
