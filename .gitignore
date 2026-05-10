@@ -4,8 +4,20 @@ dist/
 .cache/
 .hyperframes/
 renders/
-*.mp4
 .DS_Store
 .env
 .env.local
 npm-debug.log*
+
+# python
+.venv/
+__pycache__/
+*.pyc
+
+# pipeline runtime
+server/projects/*
+!server/projects/.gitkeep
+
+# allow the committed example renders
+*.mp4
+!preview/*.mp4

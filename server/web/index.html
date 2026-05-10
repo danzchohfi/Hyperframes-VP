@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>HyperFrames Video Pipeline</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <header class="brand">
+          <div class="brand-logo">HF</div>
+          <div>
+            <div class="brand-name">HyperFrames VP</div>
+            <div class="brand-sub">Whisper + Claude + Hyperframes</div>
+          </div>
+        </header>
+        <button id="new-project" class="btn-primary">+ Novo projeto</button>
+        <div id="project-list" class="project-list"></div>
+      </aside>
+
+      <main class="main">
+        <div id="empty" class="empty">
+          <div class="empty-pill">● Whisper + ffmpeg + LUT + Hyperframes</div>
+          <h1>Video Editor</h1>
+          <p>Suba seu vídeo, descreva a edição que quer, e o pipeline cuida do resto.</p>
+          <button id="empty-new" class="btn-primary">+ Criar projeto</button>
+        </div>
+
+        <div id="project-view" class="project-view hidden">
+          <header class="ph">
+            <div>
+              <div class="ph-eyebrow">Projeto</div>
+              <h2 id="project-name">—</h2>
+            </div>
+            <div class="ph-actions">
+              <button id="delete-project" class="btn-ghost danger">Excluir</button>
+            </div>
+          </header>
+
+          <section class="card">
+            <h3>1 · Vídeo de origem</h3>
+            <div class="row">
+              <label class="dropzone" id="dropzone">
+                <input id="file-input" type="file" accept="video/*" hidden />
+                <div class="dz-icon">⬆</div>
+                <div class="dz-title">Arraste seu vídeo</div>
+                <div class="dz-sub">ou clique para selecionar · MP4 / MOV / AVI</div>
+              </label>
+              <video id="preview" controls playsinline class="preview"></video>
+            </div>
+            <div id="upload-status" class="status muted"></div>
+          </section>
+
+          <section class="card">
+            <h3>2 · Brand book</h3>
+            <div class="grid-2">
+              <label>Nome
+                <input id="brand-name" type="text" placeholder="Marca" />
+              </label>
+              <label>Tagline
+                <input id="brand-tagline" type="text" placeholder="Subtítulo curto" />
+              </label>
+              <label>Título do intro
+                <input id="brand-intro-title" type="text" placeholder="Mesmo que nome se vazio" />
+              </label>
+              <label>Subtítulo do intro
+                <input id="brand-intro-sub" type="text" placeholder="Opcional" />
+              </label>
+              <label>Texto do outro
+                <input id="brand-outro" type="text" placeholder="Ex.: Obrigado por assistir" />
+              </label>
+              <label>Posição da legenda
+                <select id="brand-cap-pos">
+                  <option value="bottom">Inferior</option>
+                  <option value="center">Centro</option>
+                </select>
+              </label>
+            </div>
+            <div class="palette">
+              <div class="swatch-group">
+                <span>Paleta</span>
+                <label class="sw"><input id="c-primary" type="color" value="#a78bfa" /><em>Principal</em></label>
+                <label class="sw"><input id="c-secondary" type="color" value="#3b82f6" /><em>Secundária</em></label>
+                <label class="sw"><input id="c-accent" type="color" value="#f472b6" /><em>Destaque</em></label>
+                <label class="sw"><input id="c-bg" type="color" value="#06060a" /><em>Fundo</em></label>
+                <label class="sw"><input id="c-fg" type="color" value="#ffffff" /><em>Texto</em></label>
+              </div>
+            </div>
+            <div class="actions">
+              <button id="save-brand" class="btn-primary">Salvar brand</button>
+              <span id="brand-status" class="status muted"></span>
+            </div>
+          </section>
+
+          <section class="card">
+            <h3>3 · LUT (.cube)</h3>
+            <div class="row">
+              <label class="dropzone small" id="lut-zone">
+                <input id="lut-input" type="file" accept=".cube" hidden />
+                <div class="dz-icon">🎨</div>
+                <div class="dz-title">Subir LUT (.cube)</div>
+                <div class="dz-sub">Aplicada antes da renderização</div>
+              </label>
+              <div id="lut-status" class="status muted"></div>
+            </div>
+          </section>
+
+          <section class="card">
+            <h3>4 · Pipeline</h3>
+            <div class="stages">
+              <div class="stage" data-stage="transcribe">
+                <div class="stage-check">○</div>
+                <div class="stage-body">
+                  <div class="stage-title">Transcrição</div>
+                  <div class="stage-sub">Whisper API</div>
+                </div>
+                <button class="btn-ghost" data-run="transcribe">Rodar</button>
+              </div>
+              <div class="stage" data-stage="silence">
+                <div class="stage-check">○</div>
+                <div class="stage-body">
+                  <div class="stage-title">Detectar silêncios</div>
+                  <div class="stage-sub">ffmpeg silencedetect</div>
+                </div>
+                <div class="silence-opts">
+                  <label>Ruído <input id="opt-noise" type="number" value="-32" step="1" /> dB</label>
+                  <label>Min <input id="opt-min" type="number" value="0.5" step="0.1" /> s</label>
+                </div>
+                <button class="btn-ghost" data-run="silence">Rodar</button>
+              </div>
+              <div class="stage" data-stage="apply">
+                <div class="stage-check">○</div>
+                <div class="stage-body">
+                  <div class="stage-title">Aplicar edição</div>
+                  <div class="stage-sub">Cortes + LUT → graded.mp4</div>
+                </div>
+                <button class="btn-ghost" data-run="apply">Rodar</button>
+              </div>
+              <div class="stage" data-stage="render">
+                <div class="stage-check">○</div>
+                <div class="stage-body">
+                  <div class="stage-title">Renderização</div>
+                  <div class="stage-sub">Hyperframes (intro + body + outro + legendas)</div>
+                </div>
+                <select id="render-aspect" class="inline-select">
+                  <option value="9:16">9:16</option>
+                  <option value="16:9">16:9</option>
+                  <option value="1:1">1:1</option>
+                </select>
+                <button class="btn-primary" data-run="render">Renderizar</button>
+              </div>
+            </div>
+            <div id="pipeline-log" class="log"></div>
+          </section>
+
+          <section class="card" id="export-card">
+            <h3>5 · Exportar</h3>
+            <video id="result" controls playsinline class="preview wide"></video>
+            <div class="actions">
+              <select id="export-aspect" class="inline-select">
+                <option value="9:16">9:16 (Reels)</option>
+                <option value="16:9">16:9 (YouTube)</option>
+                <option value="1:1">1:1 (Feed)</option>
+              </select>
+              <button id="do-export" class="btn-ghost">Reframar</button>
+              <a id="download-link" class="btn-primary" href="#" download>⬇ Baixar MP4</a>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
