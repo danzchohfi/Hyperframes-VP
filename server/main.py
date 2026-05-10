@@ -1657,6 +1657,103 @@ async def export_podcast_rss(pid: str, body: PodcastRssIn) -> dict[str, Any]:
     }
 
 
+# ---- publishing bundle (one-stop) -------------------------------------------
+
+@app.get("/api/projects/{pid}/publishing-bundle")
+async def publishing_bundle(pid: str) -> dict[str, Any]:
+    """Aggregate everything a creator needs to publish: titles, captions,
+    hashtags, chapters in YouTube format, asset URLs, etc.
+
+    Returns null for missing pieces so the UI can show "generate X" buttons.
+    """
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    bundle: dict[str, Any] = {
+        "project_id": pid,
+        "project_name": state.name,
+        "duration": state.source_duration,
+    }
+
+    # social copy
+    sc_path = pdir / "social_copy.json"
+    if sc_path.exists():
+        sc = storage.read_json(pid, "social_copy.json")
+        bundle["title"] = sc.get("youtube_title")
+        bundle["thumbnail_title"] = sc.get("thumbnail_title")
+        bundle["hook"] = sc.get("hook")
+        bundle["caption"] = sc.get("caption")
+        bundle["long_caption"] = sc.get("long_caption")
+        bundle["youtube_description"] = sc.get("youtube_description")
+        bundle["hashtags"] = sc.get("hashtags") or []
+
+    # fallback title from story
+    if not bundle.get("title") and (pdir / "story.json").exists():
+        story = storage.read_json(pid, "story.json")
+        bundle["title"] = story.get("title")
+        bundle["logline"] = story.get("logline")
+
+    bundle.setdefault("title", state.name)
+
+    # chapters
+    if (pdir / "chapters.json").exists():
+        ch = storage.read_json(pid, "chapters.json")
+        bundle["chapters"] = ch.get("chapters") or []
+        bundle["youtube_chapter_markdown"] = ch.get("youtube_markdown")
+
+    # speakers
+    if (pdir / "speakers.json").exists():
+        sp = storage.read_json(pid, "speakers.json") or {}
+        bundle["speakers"] = (sp.get("stats") or {}).get("by_speaker")
+
+    # asset URLs (only if files exist)
+    base = f"/api/projects/{pid}"
+
+    def _opt(path: str, url: str) -> str | None:
+        return url if (pdir / path).exists() else None
+
+    bundle["assets"] = {
+        "source": _opt("source.mp4", f"{base}/files/source.mp4"),
+        "graded": _opt("graded.mp4", f"{base}/files/graded.mp4"),
+        "roughcut": _opt("roughcut.mp4", f"{base}/files/roughcut.mp4"),
+        "highlights": _opt("highlights.mp4", f"{base}/files/highlights.mp4"),
+        "podcast_mp3": _opt(
+            f"exports/{state.name.replace(' ', '_')}-podcast.mp3",
+            f"{base}/exports/{state.name.replace(' ', '_')}-podcast.mp3",
+        ),
+        "yt_thumbnail": _opt("thumbs/youtube.jpg", f"{base}/files/thumbs/youtube.jpg"),
+        "rss_feed": _opt(
+            f"exports/{state.name.replace(' ', '_')}-feed.xml",
+            f"{base}/exports/{state.name.replace(' ', '_')}-feed.xml",
+        ),
+    }
+
+    # Best-effort SRT URL
+    srt_path = pdir / "exports" / f"{state.name.replace(' ', '_')}.srt"
+    bundle["assets"]["srt"] = f"{base}/exports/{srt_path.name}" if srt_path.exists() else None
+
+    # FCPXML
+    fcp = pdir / "exports" / f"{state.name.replace(' ', '_')}.fcpxml"
+    bundle["assets"]["fcpxml"] = f"{base}/exports/{fcp.name}" if fcp.exists() else None
+
+    # Shorts
+    sm = pdir / "shorts_manifest.json"
+    if sm.exists():
+        bundle["shorts"] = storage.read_json(pid, "shorts_manifest.json").get("shorts") or []
+
+    # What's missing — list of suggestions
+    missing: list[str] = []
+    if not bundle.get("youtube_description"):
+        missing.append("Gere /social-copy")
+    if not bundle.get("chapters"):
+        missing.append("Gere /chapters")
+    if not bundle["assets"]["yt_thumbnail"]:
+        missing.append("Gere /yt-thumbnail")
+    if not bundle["assets"]["podcast_mp3"]:
+        missing.append("Gere /export/podcast-mp3")
+    bundle["missing"] = missing
+    return bundle
+
+
 # ---- audio-only export ------------------------------------------------------
 
 class AudioExportIn(BaseModel):

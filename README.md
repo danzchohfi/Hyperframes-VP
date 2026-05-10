@@ -602,6 +602,50 @@ da lista. Útil quando ficou pesado no disco.
 curl -X POST localhost:8765/api/projects/$PID/archive
 ```
 
+## Waves 9-17 — virando editor de podcast a sério
+
+### Pipeline 1-click (`POST /podcast-pipeline`)
+Transcribe → diarize → chapters → silence cut → filler removal →
+LUT/loudnorm → per-speaker level → social copy, num único job
+assíncrono. UI mostra barra de progresso ao vivo via SSE.
+
+### Saídas prontas pra publicar
+
+| Asset | Endpoint |
+|---|---|
+| **MP4 final brandado** (intro/legendas/lower-thirds/logo/CTAs) | `POST /render` |
+| **Rough cut do roteiro** | `POST /roughcut` |
+| **N shorts 9:16** com brand aplicado per-clip | `POST /shorts/batch` |
+| **Highlights reel** de 30s | `POST /highlights` |
+| **Hook 4s** pro opening de Reel | `POST /hook` |
+| **MP4 com legenda queimada** (TikTok/podcast/minimal style) | `POST /export/burn-captions` |
+| **SRT / VTT / ASS karaoke** | `POST /export/captions` |
+| **MP3 com chapters markers + ID3** | `POST /export/podcast-mp3` |
+| **RSS XML pra Apple/Spotify** | `POST /export/podcast-rss` |
+| **FCPXML / xmeml multitrack** (V1 A-roll + V2 B-roll inserts) | `POST /export/fcpxml` / `/export/premiere` |
+| **Thumbnail YouTube 1280x720** com text overlay | `POST /yt-thumbnail` |
+| **Bundle .zip** com tudo | `POST /export/bundle` |
+| **Publishing bundle** (título/caption/hashtags/chapters/URLs num só JSON) | `GET /publishing-bundle` |
+
+### Brand book vira visual
+
+`BrandBook` aplica:
+- Paleta + tipografia em intro/outro/captions/chapter cards
+- 3 caption styles: minimal, tiktok (uppercase + scale-on-hot), podcast (chip)
+- **Logo watermark** num dos 4 cantos
+- **Lower-thirds** (`speakers["A"] = {name, role, color}`) pinada por turno
+- **CTA cards** em tempos definidos
+- Cores diferentes de legenda por speaker (auto ou via brand.speakers)
+
+### Workflows técnicos por baixo
+
+- **Diarização**: pyannote (se HF_TOKEN) → MFCC k-means (numpy/scipy) → adaptive gap
+- **Multicam sync**: cross-correlation FFT entre source e cada ângulo, offsets em segundos vão pro FCPXML multicam
+- **Qualidade B-roll**: OpenCV (Laplacian variance, mean brightness, inter-frame absdiff). Roda automático em uploads. Match contextual pula clips ruins.
+- **Nivelamento por speaker**: ffmpeg volumedetect mede dBFS por turno; gain por speaker pra hit -18 LUFS; filter chain `volume=enable='between(t,a,b)':volume=NdB`
+- **Repetições**: detecta "X X X" + n-gram repeated dentro de uma janela
+- **Job queue assíncrono** com SSE pra progresso ao vivo + cancellation
+
 ## Waves 9-11 — virando editor de podcast a sério
 
 Quando pediram pra fechar o gap com o Eddie pra **podcast**, o sistema ganhou:
