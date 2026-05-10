@@ -275,6 +275,61 @@ async def burn_subtitles(src: Path, dst: Path, ass_path: Path) -> None:
     ])
 
 
+async def extract_audio_with_chapters(
+    src: Path,
+    dst: Path,
+    *,
+    chapters: list[dict],
+    title: str,
+    artist: str,
+    album: str | None = None,
+    bitrate: str = "192k",
+) -> None:
+    """Extract MP3 with ID3 tags + chapter markers.
+
+    `chapters` is [{name, start, end}, ...] in seconds. ffmpeg accepts an
+    -f ffmetadata file describing them.
+    """
+    import tempfile
+    meta_lines = [";FFMETADATA1"]
+    meta_lines.append(f"title={_escape_meta(title)}")
+    meta_lines.append(f"artist={_escape_meta(artist)}")
+    if album:
+        meta_lines.append(f"album={_escape_meta(album)}")
+    for ch in chapters:
+        s_ms = int(float(ch.get("start") or 0.0) * 1000)
+        e_ms = int(float(ch.get("end") or 0.0) * 1000)
+        if e_ms <= s_ms:
+            continue
+        meta_lines.append("[CHAPTER]")
+        meta_lines.append("TIMEBASE=1/1000")
+        meta_lines.append(f"START={s_ms}")
+        meta_lines.append(f"END={e_ms}")
+        meta_lines.append(f"title={_escape_meta(ch.get('name', 'Chapter'))}")
+
+    with tempfile.NamedTemporaryFile("w", suffix=".meta", delete=False) as f:
+        f.write("\n".join(meta_lines) + "\n")
+        meta_path = f.name
+
+    try:
+        await run([
+            "ffmpeg", "-y", "-i", str(src),
+            "-i", meta_path,
+            "-map_metadata", "1",
+            "-vn",
+            "-c:a", "libmp3lame", "-b:a", bitrate,
+            str(dst),
+        ])
+    finally:
+        Path(meta_path).unlink(missing_ok=True)
+
+
+def _escape_meta(text: str) -> str:
+    # ffmetadata escapes: =, ;, #, \, newline
+    out = text.replace("\\", "\\\\").replace("=", r"\=").replace(";", r"\;").replace("#", r"\#")
+    return out.replace("\n", " ")
+
+
 async def extract_audio(src: Path, dst: Path, *, format: str = "mp3", bitrate: str = "192k") -> None:
     """Extract the audio stream as MP3 (default) or WAV."""
     if format == "mp3":

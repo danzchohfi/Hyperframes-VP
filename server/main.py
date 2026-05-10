@@ -67,6 +67,7 @@ from .services import podcast_pipeline as podcast_pipeline_svc
 from .services import shorts as shorts_svc
 from .services import yt_thumbnail as yt_thumb_svc
 from .services import repetitions as repetitions_svc
+from .services import podcast_rss as podcast_rss_svc
 from .services.events import bus, emit_stage, emit_log, emit_state_changed
 from .services import captions as captions_svc
 from .services.brand import BrandBook
@@ -1517,6 +1518,143 @@ async def emojify_captions(pid: str, body: EmojifyIn) -> dict[str, Any]:
     storage.write_json(pid, "transcript.json", transcript)
     _stage(state, "emojify", "done", f"{sum(1 for a, b in zip(texts, out) if a != b)} lines decorated")
     return {"updated": sum(1 for a, b in zip(texts, out) if a != b)}
+
+
+# ---- podcast publishing: MP3 + chapter markers ------------------------------
+
+class PodcastMp3In(BaseModel):
+    source: str = "graded"  # graded | roughcut | source | highlights
+    artist: str | None = None
+    album: str | None = None
+    bitrate: str = "192k"
+
+
+@app.post("/api/projects/{pid}/export/podcast-mp3")
+async def export_podcast_mp3(pid: str, body: PodcastMp3In) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    candidates = {
+        "graded": pdir / "graded.mp4",
+        "roughcut": pdir / "roughcut.mp4",
+        "source": pdir / "source.mp4",
+        "highlights": pdir / "highlights.mp4",
+    }
+    src = candidates.get(body.source)
+    if not src or not src.exists():
+        raise HTTPException(400, f"{body.source} not available")
+
+    # Pull chapters from chapters.json if present, else from the story.
+    chapters: list[dict] = []
+    if (pdir / "chapters.json").exists():
+        for c in storage.read_json(pid, "chapters.json").get("chapters") or []:
+            chapters.append({"name": c["name"], "start": c["start"], "end": c["end"]})
+    elif state.has_story and state.has_soundbites:
+        story = storage.read_json(pid, "story.json")
+        analysis = storage.read_json(pid, "soundbites.json")
+        bite_by_id = {b["id"]: b for b in analysis["soundbites"]}
+        cursor = 0.0
+        for c in story.get("chapters", []):
+            sids = c.get("soundbite_ids", [])
+            ch_dur = sum(max(0.0, float(bite_by_id[s]["end"]) - float(bite_by_id[s]["start"]))
+                         for s in sids if s in bite_by_id)
+            if ch_dur > 0:
+                chapters.append({"name": c["name"], "start": cursor, "end": cursor + ch_dur})
+                cursor += ch_dur
+
+    title = state.name
+    if (pdir / "social_copy.json").exists():
+        title = storage.read_json(pid, "social_copy.json").get("youtube_title") or title
+    elif state.has_story:
+        title = storage.read_json(pid, "story.json").get("title") or title
+
+    artist = body.artist or state.name
+    album = body.album or "Podcast"
+
+    out = pdir / "exports" / f"{state.name.replace(' ', '_')}-podcast.mp3"
+    out.parent.mkdir(exist_ok=True)
+    _stage(state, "podcast_mp3", "running", f"{len(chapters)} chapters")
+    try:
+        await ff.extract_audio_with_chapters(
+            src, out, chapters=chapters,
+            title=title, artist=artist, album=album, bitrate=body.bitrate,
+        )
+    except Exception as e:
+        _stage(state, "podcast_mp3", "error", str(e))
+        raise HTTPException(500, str(e))
+    _stage(state, "podcast_mp3", "done", f"{out.name} · {out.stat().st_size // 1024} KB")
+    storage.append_render_history(pid, name=out.name, kind="podcast_mp3",
+                                  url=f"/api/projects/{pid}/exports/{out.name}",
+                                  bytes=out.stat().st_size,
+                                  extra={"chapters": len(chapters)})
+    return {
+        "export": out.name,
+        "url": f"/api/projects/{pid}/exports/{out.name}",
+        "bytes": out.stat().st_size,
+        "chapters": len(chapters),
+        "title": title,
+    }
+
+
+# ---- podcast RSS feed -------------------------------------------------------
+
+class PodcastRssIn(BaseModel):
+    show_title: str = ""
+    show_description: str = ""
+    show_link: str = ""
+    show_image_url: str | None = None
+    author: str = ""
+    audio_url: str = ""           # public URL of the MP3 (user fills in)
+    episode_number: int | None = None
+
+
+@app.post("/api/projects/{pid}/export/podcast-rss")
+async def export_podcast_rss(pid: str, body: PodcastRssIn) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+
+    title = body.show_title or state.name
+    description = body.show_description
+    if (pdir / "social_copy.json").exists():
+        sc = storage.read_json(pid, "social_copy.json")
+        if not description:
+            description = sc.get("youtube_description") or sc.get("caption") or ""
+    chapters_md = None
+    if (pdir / "chapters.json").exists():
+        chapters_md = storage.read_json(pid, "chapters.json").get("youtube_markdown")
+
+    image = body.show_image_url
+    if not image and (pdir / "thumbs" / "youtube.jpg").exists():
+        image = f"/api/projects/{pid}/files/thumbs/youtube.jpg"
+
+    audio_url = body.audio_url or f"/api/projects/{pid}/exports/{state.name.replace(' ', '_')}-podcast.mp3"
+    duration = state.source_duration or 0.0
+    ep = {
+        "title": title,
+        "description": description,
+        "audio_url": audio_url,
+        "duration_seconds": duration,
+        "guid": f"{pid}",
+        "episode_number": body.episode_number,
+        "image_url": image,
+        "chapter_markdown": chapters_md,
+    }
+    rss = podcast_rss_svc.render_rss(
+        show_title=title,
+        show_description=description,
+        show_link=body.show_link or "https://example.com",
+        show_image_url=image,
+        author=body.author or state.name,
+        episodes=[ep],
+    )
+    out = pdir / "exports" / f"{state.name.replace(' ', '_')}-feed.xml"
+    out.parent.mkdir(exist_ok=True)
+    out.write_text(rss, encoding="utf-8")
+    _stage(state, "podcast_rss", "done", out.name)
+    return {
+        "export": out.name,
+        "url": f"/api/projects/{pid}/exports/{out.name}",
+        "bytes": out.stat().st_size,
+    }
 
 
 # ---- audio-only export ------------------------------------------------------
