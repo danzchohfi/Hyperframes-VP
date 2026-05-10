@@ -1,7 +1,8 @@
 """Run `npx hyperframes render` against a generated composition.
 
 Streams progress events back via the optional `on_event` callback so the SSE
-event bus can update the UI in real time.
+event bus can update the UI in real time. Tracks the live process per project
+so callers can cancel an in-flight render.
 """
 
 from __future__ import annotations
@@ -9,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import re
 import shutil
+import signal
 from pathlib import Path
 from typing import Awaitable, Callable
 
@@ -16,9 +18,31 @@ OnEvent = Callable[[dict], None] | Callable[[dict], Awaitable[None]]
 
 _PROGRESS_RE = re.compile(r"(\d{1,3})%\s+([A-Za-z][^\s].*?)(?:\s|$)")
 
+# project_id → asyncio.subprocess.Process
+_active: dict[str, asyncio.subprocess.Process] = {}
+
 
 class RenderError(RuntimeError):
     pass
+
+
+def is_active(project_id: str) -> bool:
+    proc = _active.get(project_id)
+    return proc is not None and proc.returncode is None
+
+
+async def cancel(project_id: str) -> bool:
+    proc = _active.get(project_id)
+    if not proc or proc.returncode is not None:
+        return False
+    try:
+        proc.send_signal(signal.SIGTERM)
+        await asyncio.wait_for(proc.wait(), timeout=4.0)
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.wait()
+    _active.pop(project_id, None)
+    return True
 
 
 async def render(
@@ -27,6 +51,7 @@ async def render(
     output_dir: Path,
     name: str,
     on_event: OnEvent | None = None,
+    project_id: str | None = None,
 ) -> Path:
     """Render and return the path to the produced MP4."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -37,6 +62,8 @@ async def render(
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
     )
+    if project_id:
+        _active[project_id] = proc
 
     out_lines: list[str] = []
     last_progress: int = -1
@@ -72,6 +99,8 @@ async def render(
             await _emit({"progress": 100, "label": "Render complete"})
 
     rc = await proc.wait()
+    if project_id:
+        _active.pop(project_id, None)
     out = "\n".join(out_lines)
     if rc != 0:
         raise RenderError(f"hyperframes render failed (exit {rc})\n{out}")

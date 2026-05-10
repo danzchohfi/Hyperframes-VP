@@ -208,6 +208,23 @@ async def apply_lut(src: Path, dst: Path, lut: Path) -> None:
     )
 
 
+async def extract_audio(src: Path, dst: Path, *, format: str = "mp3", bitrate: str = "192k") -> None:
+    """Extract the audio stream as MP3 (default) or WAV."""
+    if format == "mp3":
+        codec = ["-c:a", "libmp3lame", "-b:a", bitrate]
+    elif format == "wav":
+        codec = ["-c:a", "pcm_s16le"]
+    elif format == "m4a":
+        codec = ["-c:a", "aac", "-b:a", bitrate]
+    else:
+        raise FFmpegError(f"unsupported audio format: {format}")
+    await run([
+        "ffmpeg", "-y", "-i", str(src),
+        "-vn", *codec,
+        str(dst),
+    ])
+
+
 async def grab_thumbnail(src: Path, dst: Path, *, at: float, width: int = 480) -> None:
     """Save a single still frame at `at` seconds as JPEG."""
     dst.parent.mkdir(parents=True, exist_ok=True)

@@ -51,6 +51,8 @@
               <video id="preview" controls playsinline class="preview"></video>
             </div>
             <div id="upload-status" class="status muted"></div>
+            <svg id="cuts-timeline" class="cuts-timeline" viewBox="0 0 1000 60" preserveAspectRatio="none" hidden></svg>
+            <div id="stale-warnings" class="stale-warnings"></div>
           </section>
 
           <section class="card">
@@ -165,6 +167,7 @@
                   <option value="pt">pt</option>
                   <option value="en">en</option>
                 </select>
+                <input id="opt-filler-custom" type="text" placeholder="custom: ah,ehh,sabe" class="snap-input" style="max-width:240px" />
                 <button class="btn-ghost" data-run="fillers">Rodar</button>
               </div>
               <div class="stage" data-stage="apply">
@@ -195,6 +198,7 @@
                 </select>
                 <label class="cb"><input id="render-chapters" type="checkbox" /> chapters</label>
                 <button class="btn-primary" data-run="render">Renderizar</button>
+                <button id="cancel-render-btn" class="btn-ghost danger" style="display:none">⏹ Cancelar</button>
               </div>
             </div>
             <div id="pipeline-log" class="log"></div>
@@ -327,6 +331,19 @@
             <p class="card-help">FCPXML abre no Final Cut Pro (<em>Arquivo → Importar → XML</em>). O Premiere/Resolve XML (xmeml) abre no Premiere Pro e DaVinci Resolve. Os cortes ficam não-destrutivos.</p>
             <div class="export-divider"></div>
             <div class="actions">
+              <select id="audio-format" class="inline-select">
+                <option value="mp3">MP3</option>
+                <option value="m4a">M4A</option>
+                <option value="wav">WAV</option>
+              </select>
+              <select id="audio-source" class="inline-select" title="vídeo de origem">
+                <option value="graded">graded</option>
+                <option value="roughcut">roughcut</option>
+                <option value="source">source</option>
+                <option value="highlights">highlights</option>
+              </select>
+              <button id="audio-btn" class="btn-ghost">🎧 Áudio</button>
+              <a id="audio-link" class="btn-primary" href="#" download style="display:none">⬇ áudio</a>
               <button id="bundle-btn" class="btn-ghost">📦 Bundle (.zip)</button>
               <a id="bundle-link" class="btn-primary" href="#" download style="display:none">⬇ Baixar bundle</a>
               <button id="dup-btn" class="btn-ghost">🪞 Duplicar projeto</button>

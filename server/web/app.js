@@ -58,6 +58,9 @@ async function loadProject(id) {
   const p = await api(`/api/projects/${id}`);
   state.current = p;
   attachEventStream(id);
+  renderStaleWarnings(p);
+  renderCutsTimeline(p);
+  $("#cancel-render-btn").style.display = p.render_active ? "inline-block" : "none";
   $("#empty").classList.add("hidden");
   $("#project-view").classList.remove("hidden");
   $("#project-name").textContent = p.name;
@@ -296,10 +299,33 @@ function attachEventStream(pid) {
         st.classList.add(data.status);
         const sub = st.querySelector(".stage-sub");
         if (data.message && sub) sub.textContent = data.message;
+        // progress bar
+        let bar = st.querySelector(".stage-progress");
+        if (!bar) {
+          bar = document.createElement("div");
+          bar.className = "stage-progress";
+          bar.style.width = "0%";
+          st.appendChild(bar);
+        }
+        if (data.status === "running") {
+          if (typeof data.progress === "number") {
+            bar.style.width = `${Math.round(data.progress * 100)}%`;
+          }
+        } else if (data.status === "done") {
+          bar.style.width = "100%";
+          setTimeout(() => bar.style.width = "0%", 800);
+        } else if (data.status === "error") {
+          bar.style.width = "0%";
+        }
       }
       if (data.status === "done") toast(`✓ ${data.stage}: ${data.message || ""}`, "ok");
       if (data.status === "error") toast(`✗ ${data.stage}: ${data.message || ""}`, "error");
-      if (data.status === "running") toast(`▶ ${data.stage}…`);
+      if (data.status === "running") {
+        if (data.stage === "render") {
+          $("#cancel-render-btn").style.display = "inline-block";
+        }
+        if (typeof data.progress !== "number") toast(`▶ ${data.stage}…`);
+      }
     } else if (data.type === "log") {
       log(data.message, data.level === "error" ? "err" : data.level === "ok" ? "ok" : "");
     } else if (data.type === "state") {
@@ -405,7 +431,13 @@ async function runStage(name) {
         pad: 0.08,
       };
     } else if (name === "fillers") {
-      body = { language: $("#opt-filler-lang").value, pad: 0.04 };
+      const custom = ($("#opt-filler-custom")?.value || "")
+        .split(/[,;]+/).map(s => s.trim()).filter(Boolean);
+      body = {
+        language: $("#opt-filler-lang").value,
+        custom: custom.length ? custom : null,
+        pad: 0.04,
+      };
     } else if (name === "apply") {
       body = {
         loudnorm: $("#opt-loudnorm")?.checked || false,
@@ -928,6 +960,108 @@ async function applyTemplate() {
   }
 }
 
+function renderStaleWarnings(p) {
+  const root = $("#stale-warnings");
+  if (!root) return;
+  root.innerHTML = "";
+  const stale = p.stale || {};
+  const labels = {
+    graded_vs_cuts: "graded.mp4 está desatualizado — re-rode 'Aplicar edição'.",
+    soundbites_vs_transcript: "Transcrição mais nova que os soundbites — re-rode 'Extrair soundbites'.",
+    story_vs_soundbites: "Soundbites mudaram depois do roteiro — re-rode 'Propor roteiro'.",
+    roughcut_vs_story: "Roteiro mudou depois do rough cut — re-gere o rough cut.",
+  };
+  for (const [key, msg] of Object.entries(labels)) {
+    if (stale[key]) {
+      const div = document.createElement("div");
+      div.className = "warn";
+      div.textContent = `⚠ ${msg}`;
+      root.appendChild(div);
+    }
+  }
+}
+
+function renderCutsTimeline(p) {
+  const svg = $("#cuts-timeline");
+  if (!svg) return;
+  const dur = p.source_duration || 0;
+  if (!dur) {
+    svg.hidden = true;
+    return;
+  }
+  svg.hidden = false;
+  const W = 1000, H = 60;
+  // background bar
+  const parts = [`<rect x="0" y="${H/2 - 8}" width="${W}" height="16" rx="4" fill="rgba(255,255,255,0.06)"/>`];
+
+  fetch(`/api/projects/${p.id}/cuts`).then(r => r.ok ? r.json() : null).then(plan => {
+    if (plan?.silences?.length) {
+      for (const s of plan.silences) {
+        const x = (s.start / dur) * W;
+        const w = ((s.end - s.start) / dur) * W;
+        parts.push(`<rect x="${x}" y="${H/2 - 8}" width="${Math.max(2, w)}" height="16" fill="rgba(239, 68, 68, 0.55)"/>`);
+      }
+    }
+    if (plan?.keep?.length) {
+      for (const k of plan.keep) {
+        const x = (k.start / dur) * W;
+        const w = ((k.end - k.start) / dur) * W;
+        parts.push(`<rect x="${x}" y="${H/2 - 8}" width="${Math.max(2, w)}" height="16" fill="rgba(52, 211, 153, 0.55)"/>`);
+      }
+    }
+    fetch(`/api/projects/${p.id}/files/fillers.json`).then(r => r.ok ? r.json() : null).then(filler => {
+      if (filler?.ranges?.length) {
+        for (const r of filler.ranges) {
+          const x = (r.start / dur) * W;
+          const w = ((r.end - r.start) / dur) * W;
+          parts.push(`<rect x="${x}" y="${H/2 - 8}" width="${Math.max(2, w)}" height="16" fill="rgba(245, 158, 11, 0.65)"/>`);
+        }
+      }
+      // legend
+      parts.push(`<text x="6" y="14" fill="rgba(255,255,255,0.55)" font-size="10">verde=keep · vermelho=silence · âmbar=muletas</text>`);
+      parts.push(`<text x="${W - 60}" y="14" fill="rgba(255,255,255,0.55)" font-size="10" text-anchor="end">${dur.toFixed(1)}s</text>`);
+      svg.innerHTML = parts.join("");
+    }).catch(() => {
+      svg.innerHTML = parts.join("") + `<text x="6" y="14" fill="rgba(255,255,255,0.55)" font-size="10">${dur.toFixed(1)}s</text>`;
+    });
+  }).catch(() => {
+    svg.innerHTML = parts.join("") + `<text x="6" y="14" fill="rgba(255,255,255,0.55)" font-size="10">${dur.toFixed(1)}s — sem cortes ainda</text>`;
+  });
+}
+
+async function exportAudio() {
+  if (!state.current) return;
+  log("▶ audio export");
+  try {
+    const r = await api(`/api/projects/${state.current.id}/export/audio`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        format: $("#audio-format").value,
+        source: $("#audio-source").value,
+      }),
+    });
+    log(`✓ audio · ${(r.bytes / 1024).toFixed(0)} KB`, "ok");
+    const a = $("#audio-link");
+    a.href = r.url;
+    a.style.display = "inline-block";
+    a.textContent = `⬇ ${r.export}`;
+  } catch (e) {
+    log(`✗ audio: ${e.message}`, "err");
+  }
+}
+
+async function cancelRender() {
+  if (!state.current) return;
+  try {
+    const r = await api(`/api/projects/${state.current.id}/render/cancel`, { method: "POST" });
+    log(r.cancelled ? "✓ render cancelado" : "ℹ nenhum render rodando", r.cancelled ? "ok" : "");
+    $("#cancel-render-btn").style.display = "none";
+  } catch (e) {
+    log(`✗ cancel: ${e.message}`, "err");
+  }
+}
+
 async function exportBundle() {
   if (!state.current) return;
   log("▶ bundle");
@@ -1219,6 +1353,8 @@ function bind() {
   $("#hl-btn").onclick = buildHighlights;
   $("#social-btn").onclick = generateSocialCopy;
   $("#apply-template-btn").onclick = applyTemplate;
+  $("#audio-btn").onclick = exportAudio;
+  $("#cancel-render-btn").onclick = cancelRender;
   attachVideoSync();
 
   for (const btn of $$("[data-run]")) {

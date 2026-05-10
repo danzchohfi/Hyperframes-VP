@@ -468,6 +468,46 @@ curl -X POST localhost:8765/api/projects/$PID/transcribe \
   -H content-type:application/json -d '{"language":"pt"}'
 ```
 
+## Wave 4 — UX polish
+
+### Visual timeline of cuts
+Logo abaixo do preview, uma faixa SVG mostra toda a duração do source com:
+verde = ranges mantidos, vermelho = silêncios, âmbar = muletas. Atualiza
+toda vez que `cuts.json` ou `fillers.json` muda.
+
+### Stale-state warnings
+`GET /api/projects/{id}` agora retorna `stale: {graded_vs_cuts,
+soundbites_vs_transcript, story_vs_soundbites, roughcut_vs_story}`. A UI
+mostra avisos âmbar quando algum artefato está desatualizado.
+
+### Stage progress bar
+Cada stage card recebe uma barrinha animada. O endpoint `/render` parse os
+percentuais do `hyperframes render` e emite `progress` no SSE → barra
+preenche em tempo real.
+
+### Cancel render
+Botão `⏹ Cancelar` aparece quando o render está ativo. Manda `SIGTERM` no
+processo `npx hyperframes render` rodando.
+```bash
+curl -X POST localhost:8765/api/projects/$PID/render/cancel
+curl localhost:8765/api/projects/$PID/render/status
+```
+
+### Audio-only export
+MP3 / M4A / WAV a partir de qualquer fonte (graded, roughcut, source,
+highlights). Bom pra publicar podcast ou exportar pro CapCut/Premiere
+separadamente.
+```bash
+curl -X POST localhost:8765/api/projects/$PID/export/audio \
+  -H content-type:application/json \
+  -d '{"format":"mp3","source":"roughcut"}'
+```
+
+### Custom filler list
+No card "Pipeline → Remover muletas", input de texto pra adicionar
+muletas customizadas (ex.: `ah,ehh,sabe`). Adicionadas à lista padrão
+do idioma.
+
 ## Limitações conhecidas
 
 - Whisper é chamado uma vez por projeto, sem chunking — vídeos > 25MB precisam

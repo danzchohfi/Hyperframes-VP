@@ -220,7 +220,34 @@ async def list_projects() -> list[dict[str, Any]]:
 
 @app.get("/api/projects/{pid}")
 async def get_project(pid: str) -> dict[str, Any]:
-    return _load(pid).model_dump()
+    state = _load(pid)
+    payload = state.model_dump()
+
+    # stale-state hints — recompute from file mtimes
+    pdir = storage.project_dir(pid)
+    payload["stale"] = _compute_stale(pdir, state)
+    payload["render_active"] = render.is_active(pid)
+    return payload
+
+
+def _compute_stale(pdir: Path, state: storage.ProjectState) -> dict[str, bool]:
+    def _mtime(name: str) -> float:
+        f = pdir / name
+        return f.stat().st_mtime if f.exists() else 0.0
+
+    cuts_mt = max(_mtime("cuts.json"), _mtime("fillers.json"))
+    sb_mt = _mtime("soundbites.json")
+    transcript_mt = _mtime("transcript.json")
+    story_mt = _mtime("story.json")
+    rc_mt = _mtime("roughcut.mp4")
+    graded_mt = _mtime("graded.mp4")
+
+    return {
+        "graded_vs_cuts": graded_mt > 0 and cuts_mt > graded_mt,
+        "soundbites_vs_transcript": sb_mt > 0 and transcript_mt > sb_mt,
+        "story_vs_soundbites": story_mt > 0 and sb_mt > story_mt,
+        "roughcut_vs_story": rc_mt > 0 and story_mt > rc_mt,
+    }
 
 
 @app.delete("/api/projects/{pid}")
@@ -502,6 +529,7 @@ async def do_render(pid: str, body: RenderIn) -> dict[str, Any]:
             output_dir=pdir / "exports",
             name="render",
             on_event=_render_event,
+            project_id=pid,
         )
     except Exception as e:
         _stage(state, "render", "error", f"render: {e}")
@@ -1031,6 +1059,62 @@ async def social_copy(pid: str, body: SocialCopyIn) -> dict[str, Any]:
     storage.write_json(pid, "social_copy.json", copy.model_dump())
     _stage(state, "social_copy", "done", copy.hook[:60] or "ok")
     return copy.model_dump()
+
+
+# ---- audio-only export ------------------------------------------------------
+
+class AudioExportIn(BaseModel):
+    format: str = "mp3"   # mp3 | wav | m4a
+    source: str = "graded"  # graded | roughcut | source | highlights
+
+
+@app.post("/api/projects/{pid}/export/audio")
+async def export_audio(pid: str, body: AudioExportIn) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    candidates = {
+        "graded": pdir / "graded.mp4",
+        "roughcut": pdir / "roughcut.mp4",
+        "source": pdir / "source.mp4",
+        "highlights": pdir / "highlights.mp4",
+    }
+    src = candidates.get(body.source)
+    if not src or not src.exists():
+        raise HTTPException(400, f"{body.source} not available")
+    if body.format not in ("mp3", "wav", "m4a"):
+        raise HTTPException(400, "format must be mp3, wav or m4a")
+
+    name = f"{state.name.replace(' ', '_')}-{body.source}.{body.format}"
+    out = pdir / "exports" / name
+    out.parent.mkdir(exist_ok=True)
+    _stage(state, "audio_export", "running", body.format)
+    try:
+        await ff.extract_audio(src, out, format=body.format)
+    except Exception as e:
+        _stage(state, "audio_export", "error", str(e))
+        raise HTTPException(500, str(e))
+    _stage(state, "audio_export", "done", f"{out.name} · {out.stat().st_size // 1024} KB")
+    return {
+        "export": out.name,
+        "url": f"/api/projects/{pid}/exports/{out.name}",
+        "bytes": out.stat().st_size,
+    }
+
+
+# ---- cancel running render --------------------------------------------------
+
+@app.post("/api/projects/{pid}/render/cancel")
+async def cancel_render(pid: str) -> dict[str, bool]:
+    cancelled = await render.cancel(pid)
+    if cancelled:
+        state = _load(pid)
+        _stage(state, "render", "error", "cancelled")
+    return {"cancelled": cancelled}
+
+
+@app.get("/api/projects/{pid}/render/status")
+async def render_status(pid: str) -> dict[str, bool]:
+    return {"running": render.is_active(pid)}
 
 
 # ---- Hyperframes preset templates -------------------------------------------
