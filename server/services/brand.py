@@ -24,6 +24,21 @@ class SpeakerStyle(BaseModel):
     name: str = "Speaker"
     color: str = "#ffffff"
     chip_bg: str | None = None  # optional pill background; defaults to palette.background
+    role: str | None = None     # for lower-thirds ("Host", "CEO da Acme", ...)
+
+
+class LogoSettings(BaseModel):
+    enabled: bool = False
+    position: str = "top-right"  # top-left | top-right | bottom-left | bottom-right
+    size: float = 0.10           # 10% of the frame width
+
+
+class CTASettings(BaseModel):
+    text: str = ""
+    sub: str | None = None
+    start: float = 0.0
+    duration: float = 4.0
+    position: str = "bottom"     # top | bottom | center
 
 
 class BrandBook(BaseModel):
@@ -40,3 +55,6 @@ class BrandBook(BaseModel):
     intro_title: str | None = None
     intro_subtitle: str | None = None
     outro_text: str | None = None
+    logo: LogoSettings = Field(default_factory=LogoSettings)
+    lower_thirds: bool = False        # show speaker name + role chip during talk
+    ctas: list[CTASettings] = Field(default_factory=list)

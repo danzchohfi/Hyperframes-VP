@@ -216,6 +216,83 @@ def build_composition(
         )
     caption_html = "\n      ".join(caption_html_parts)
 
+    # Logo: copy into composition if it's a local file path
+    logo_html = ""
+    if brand.logo and brand.logo.enabled and brand.logo_url:
+        logo_src = brand.logo_url
+        # if it's a path on the server, try to copy locally
+        if logo_src.startswith("/api/projects/"):
+            # split /api/projects/{pid}/files/{name} → grab the filename
+            try:
+                local = project_dir / logo_src.split("/files/")[-1]
+                if local.exists():
+                    dst = comp_dir / f"logo{local.suffix}"
+                    shutil.copy2(local, dst)
+                    logo_src = dst.name
+            except Exception:
+                pass
+        pos_map = {
+            "top-left": "top: 4%; left: 4%;",
+            "top-right": "top: 4%; right: 4%;",
+            "bottom-left": "bottom: 4%; left: 4%;",
+            "bottom-right": "bottom: 4%; right: 4%;",
+        }
+        pos_css = pos_map.get(brand.logo.position, pos_map["top-right"])
+        logo_html = (
+            f'<img id="brand-logo" src="{html.escape(logo_src)}" '
+            f'style="position:absolute;{pos_css}width:{int(width * brand.logo.size)}px;'
+            f'opacity:0.92;pointer-events:none;filter:drop-shadow(0 2px 12px rgba(0,0,0,0.55));z-index:5"/>'
+        )
+
+    # Lower-thirds: pinned chip showing current speaker name + role.
+    lower_thirds_html = ""
+    if brand.lower_thirds and speaker_turns and brand.speakers:
+        chips: list[str] = []
+        for i, t in enumerate(speaker_turns):
+            sp = t.get("speaker")
+            style = brand.speakers.get(sp) if sp else None
+            if not style:
+                continue
+            start_tl = float(t.get("start") or 0.0) + intro_dur
+            dur_tl = max(0.3, float(t.get("end") or 0.0) - float(t.get("start") or 0.0))
+            role_str = style.role or ""
+            role_html = f'<div class="lt-role">{html.escape(role_str)}</div>' if role_str else ""
+            chips.append(
+                f'<div class="lt-chip clip" id="lt{i}" '
+                f'data-start="{start_tl:.3f}" data-duration="{dur_tl:.3f}" '
+                f'data-track-index="4" '
+                f'style="--lt-color: {style.color};">'
+                f'<div class="lt-name">{html.escape(style.name)}</div>'
+                f'{role_html}'
+                f'</div>'
+            )
+        lower_thirds_html = "\n      ".join(chips)
+
+    # CTA cards
+    cta_html = ""
+    if brand.ctas:
+        parts: list[str] = []
+        for i, c in enumerate(brand.ctas):
+            if not c.text:
+                continue
+            start_tl = float(c.start) + intro_dur
+            dur_tl = max(0.5, float(c.duration))
+            pos_css = {
+                "top": "top: 8%;",
+                "bottom": "bottom: 8%;",
+                "center": "top: 50%; transform: translate(-50%, -50%);",
+            }.get(c.position, "bottom: 8%;")
+            sub = f'<div class="cta-sub">{html.escape(c.sub)}</div>' if c.sub else ""
+            parts.append(
+                f'<div class="cta-card clip" id="cta{i}" '
+                f'data-start="{start_tl:.3f}" data-duration="{dur_tl:.3f}" '
+                f'data-track-index="6" '
+                f'style="{pos_css}">'
+                f'<div class="cta-text">{html.escape(c.text)}</div>{sub}'
+                f'</div>'
+            )
+        cta_html = "\n      ".join(parts)
+
     # Speaker-color CSS overrides
     speaker_css = ""
     if speaker_colors:
@@ -360,6 +437,54 @@ def build_composition(
         vertical-align: middle;
       }}
       {speaker_css}
+      .lt-chip {{
+        position: absolute;
+        left: 4%;
+        bottom: 18%;
+        padding: 12px 18px;
+        background: rgba(0,0,0,0.55);
+        border-left: 4px solid var(--lt-color, {palette.accent});
+        border-radius: 6px;
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        max-width: 60%;
+      }}
+      .lt-chip .lt-name {{
+        font-family: "{typo.title_family}", sans-serif;
+        font-weight: 700;
+        font-size: {int(width * 0.028)}px;
+        color: var(--lt-color, {palette.foreground});
+        letter-spacing: -0.01em;
+      }}
+      .lt-chip .lt-role {{
+        font-size: {int(width * 0.018)}px;
+        font-weight: 400;
+        color: rgba(255,255,255,0.78);
+        margin-top: 2px;
+      }}
+      .cta-card {{
+        position: absolute;
+        left: 6%;
+        right: 6%;
+        padding: 18px 24px;
+        background: linear-gradient(135deg, {palette.primary}ee, {palette.accent}ee);
+        color: #0a0b10;
+        border-radius: 14px;
+        box-shadow: 0 18px 60px rgba(0,0,0,0.55);
+        text-align: center;
+      }}
+      .cta-card .cta-text {{
+        font-family: "{typo.title_family}", sans-serif;
+        font-weight: 800;
+        font-size: {int(width * 0.046)}px;
+        letter-spacing: -0.02em;
+      }}
+      .cta-card .cta-sub {{
+        font-size: {int(width * 0.024)}px;
+        font-weight: 500;
+        opacity: 0.85;
+        margin-top: 4px;
+      }}
       .chapter-card {{
         position: absolute;
         top: 8%; left: 6%;
@@ -404,6 +529,9 @@ def build_composition(
       {intro_html}
       {chapter_html}
       {caption_html}
+      {lower_thirds_html}
+      {cta_html}
+      {logo_html}
       {outro_html}
     </div>
 
@@ -425,6 +553,23 @@ def build_composition(
         const outroStart = {intro_dur + main_dur};
         tl.fromTo(outro.querySelector(".card-outro"), {{ opacity: 0, y: 18 }},
                   {{ opacity: 1, y: 0, duration: 0.8 }}, outroStart + 0.05);
+      }}
+
+      // Lower-thirds slide-in/out
+      for (const lt of document.querySelectorAll(".lt-chip")) {{
+        const start = parseFloat(lt.dataset.start);
+        const dur = parseFloat(lt.dataset.duration);
+        tl.fromTo(lt, {{ opacity: 0, x: -36 }}, {{ opacity: 1, x: 0, duration: 0.45, ease: "power3.out" }}, start);
+        tl.to(lt, {{ opacity: 0, x: -36, duration: 0.35, ease: "power2.in" }}, start + dur - 0.35);
+      }}
+
+      // CTA cards
+      for (const cta of document.querySelectorAll(".cta-card")) {{
+        const start = parseFloat(cta.dataset.start);
+        const dur = parseFloat(cta.dataset.duration);
+        tl.fromTo(cta, {{ opacity: 0, y: 30, scale: 0.96 }},
+                       {{ opacity: 1, y: 0, scale: 1, duration: 0.5, ease: "back.out(1.6)" }}, start);
+        tl.to(cta, {{ opacity: 0, y: 30, duration: 0.45, ease: "power2.in" }}, start + dur - 0.45);
       }}
 
       // Chapter card flash-ins

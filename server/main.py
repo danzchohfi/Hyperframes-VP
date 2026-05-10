@@ -393,6 +393,33 @@ async def upload_lut(pid: str, file: UploadFile = File(...)) -> dict[str, Any]:
 
 # ---- brand book --------------------------------------------------------------
 
+@app.post("/api/projects/{pid}/brand/logo")
+async def upload_brand_logo(pid: str, file: UploadFile = File(...)) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    name = file.filename or "logo.png"
+    suffix = Path(name).suffix.lower() or ".png"
+    if suffix not in (".png", ".jpg", ".jpeg", ".webp", ".svg"):
+        raise HTTPException(400, "expected PNG/JPG/WEBP/SVG")
+    dst = pdir / f"logo{suffix}"
+    async with aiofiles.open(dst, "wb") as out:
+        while chunk := await file.read(64 * 1024):
+            await out.write(chunk)
+
+    # patch brand.json
+    brand = (
+        BrandBook.model_validate(storage.read_json(pid, "brand.json"))
+        if state.has_brand else BrandBook()
+    )
+    brand.logo_url = f"/api/projects/{pid}/files/{dst.name}"
+    brand.logo.enabled = True
+    storage.write_json(pid, "brand.json", brand.model_dump())
+    state.has_brand = True
+    storage.save(state)
+    _stage(state, "logo_upload", "done", dst.name)
+    return {"logo_url": brand.logo_url, "bytes": dst.stat().st_size}
+
+
 @app.put("/api/projects/{pid}/brand")
 async def set_brand(pid: str, brand: BrandBook) -> dict[str, Any]:
     state = _load(pid)
