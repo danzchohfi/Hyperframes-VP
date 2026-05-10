@@ -417,3 +417,22 @@ a { color: inherit; text-decoration: none; }
 }
 .stats-bar .row { display: flex; justify-content: space-between; }
 .stats-bar .row strong { color: var(--text); font-weight: 600; }
+
+/* History list */
+.history-title {
+  margin: 0 0 10px 0; font-size: 13px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.12em;
+}
+.history-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.history-list li {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; background: var(--bg-3); border: 1px solid var(--line); border-radius: 8px;
+  font-size: 12px;
+}
+.history-list .h-name { flex: 1; font-weight: 600; }
+.history-list .h-meta { color: var(--muted); font-size: 11px; }
+.history-list .h-kind {
+  padding: 2px 8px; border-radius: 4px; background: var(--bg-2);
+  font-size: 10px; color: var(--accent); font-weight: 700; text-transform: uppercase;
+}
+.history-list a { color: var(--ok); }

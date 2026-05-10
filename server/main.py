@@ -55,6 +55,8 @@ from .services import speakers as speakers_svc
 from .services import highlights as highlights_svc
 from .services import social_copy as social_svc
 from .services import templates as templates_svc
+from .services import hooks as hooks_svc
+from .services import emojify as emojify_svc
 from .services.events import bus, emit_stage, emit_log, emit_state_changed
 from .services import captions as captions_svc
 from .services.brand import BrandBook
@@ -539,6 +541,10 @@ async def do_render(pid: str, body: RenderIn) -> dict[str, Any]:
     state.last_export = out.name
     storage.save(state)
     _stage(state, "render", "done", out.name)
+    storage.append_render_history(pid, name=out.name, kind="render",
+                                  url=f"/api/projects/{pid}/exports/{out.name}",
+                                  bytes=out.stat().st_size,
+                                  extra={"aspect": body.aspect, "source": body.source})
     return {"export": out.name, "url": f"/api/projects/{pid}/exports/{out.name}"}
 
 
@@ -1059,6 +1065,115 @@ async def social_copy(pid: str, body: SocialCopyIn) -> dict[str, Any]:
     storage.write_json(pid, "social_copy.json", copy.model_dump())
     _stage(state, "social_copy", "done", copy.hook[:60] or "ok")
     return copy.model_dump()
+
+
+# ---- hook clip --------------------------------------------------------------
+
+class HookIn(BaseModel):
+    target_seconds: float = 4.0
+
+
+@app.post("/api/projects/{pid}/hook")
+async def make_hook(pid: str, body: HookIn) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    src = pdir / "source.mp4"
+    if not src.exists():
+        raise HTTPException(400, "no source")
+    bites = []
+    if state.has_soundbites:
+        bites = storage.read_json(pid, "soundbites.json").get("soundbites") or []
+    pick = hooks_svc.pick(bites, target_seconds=body.target_seconds,
+                          fallback_duration=state.source_duration or 0.0)
+    if not pick:
+        raise HTTPException(400, "no usable range")
+    s, e = pick
+    out = pdir / "exports" / f"{state.name.replace(' ', '_')}-hook.mp4"
+    out.parent.mkdir(exist_ok=True)
+    _stage(state, "hook", "running", f"{e - s:.1f}s @ {s:.1f}s")
+    try:
+        await ff.cut_segments(src, out, [(s, e)])
+    except Exception as ex:
+        _stage(state, "hook", "error", str(ex))
+        raise HTTPException(500, str(ex))
+    _stage(state, "hook", "done", out.name)
+    storage.append_render_history(pid, name=out.name, kind="hook",
+                                  url=f"/api/projects/{pid}/exports/{out.name}",
+                                  bytes=out.stat().st_size,
+                                  extra={"start": s, "end": e})
+    return {
+        "start": s, "end": e, "duration": e - s,
+        "export": out.name,
+        "url": f"/api/projects/{pid}/exports/{out.name}",
+    }
+
+
+# ---- peak thumbnail ---------------------------------------------------------
+
+@app.post("/api/projects/{pid}/peak-thumbnail")
+async def peak_thumbnail(pid: str) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    src = pdir / "source.mp4"
+    if not src.exists():
+        raise HTTPException(400, "no source")
+    if not state.has_soundbites:
+        raise HTTPException(400, "extract soundbites first")
+    analysis = storage.read_json(pid, "soundbites.json")
+    bites = analysis.get("soundbites") or []
+    if not bites:
+        raise HTTPException(400, "no soundbites")
+    top = max(bites, key=lambda b: float(b.get("score") or 0))
+    at = max(0.05, float(top["start"]) + 0.5)
+    out = pdir / "thumbs" / "peak.jpg"
+    try:
+        await ff.grab_thumbnail(src, out, at=at, width=1280)
+    except Exception as e:
+        raise HTTPException(500, str(e))
+    _stage(state, "peak_thumb", "done", f"@ {at:.1f}s")
+    return {
+        "url": f"/api/projects/{pid}/files/thumbs/peak.jpg",
+        "at": at,
+        "soundbite_id": top.get("id"),
+        "score": top.get("score"),
+    }
+
+
+# ---- render history ---------------------------------------------------------
+
+@app.get("/api/projects/{pid}/history")
+async def render_history_list(pid: str) -> list[dict[str, Any]]:
+    _load(pid)
+    return storage.get_render_history(pid)
+
+
+# ---- emoji caption decoration -----------------------------------------------
+
+class EmojifyIn(BaseModel):
+    use_llm: bool = True
+
+
+@app.post("/api/projects/{pid}/captions/emojify")
+async def emojify_captions(pid: str, body: EmojifyIn) -> dict[str, Any]:
+    state = _load(pid)
+    if not state.has_transcript:
+        raise HTTPException(400, "transcribe first")
+    transcript = storage.read_json(pid, "transcript.json")
+    segs = transcript.get("segments") or []
+    if not segs:
+        raise HTTPException(400, "no segments")
+    texts = [(s.get("text") or "").strip() for s in segs]
+    if body.use_llm:
+        out = await emojify_svc.decorate_llm(texts)
+    else:
+        out = [emojify_svc.decorate_local(t) for t in texts]
+    new_segments = []
+    for seg, text in zip(segs, out):
+        new_segments.append({**seg, "text": text})
+    transcript["segments"] = new_segments
+    storage.write_json(pid, "transcript.json", transcript)
+    _stage(state, "emojify", "done", f"{sum(1 for a, b in zip(texts, out) if a != b)} lines decorated")
+    return {"updated": sum(1 for a, b in zip(texts, out) if a != b)}
 
 
 # ---- audio-only export ------------------------------------------------------

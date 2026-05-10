@@ -543,6 +543,41 @@ curl localhost:8765/api/stats
 ```
 Renderizado no rodapé da sidebar.
 
+## Wave 6 — hook, peak thumb, emoji captions, render history
+
+### Hook detection
+Pega o melhor trecho de ~4s pra usar como abertura (Reels/TikTok hook):
+```bash
+curl -X POST localhost:8765/api/projects/$PID/hook \
+  -H content-type:application/json -d '{"target_seconds":4}'
+# → {start, end, duration, url}
+```
+
+### Peak thumbnail
+Pega um frame de alta qualidade no momento do soundbite com maior score:
+```bash
+curl -X POST localhost:8765/api/projects/$PID/peak-thumbnail
+# → thumbs/peak.jpg @ 1280px
+```
+
+### Emoji nas legendas (TikTok-style)
+Decora a transcrição com emojis relevantes (LLM com fallback heurístico
+local pra português + inglês):
+```bash
+curl -X POST localhost:8765/api/projects/$PID/captions/emojify \
+  -H content-type:application/json -d '{"use_llm":true}'
+```
+Funciona em quem usar `export/captions` ou `export/burn-captions` depois —
+os emojis ficam embutidos no texto da legenda.
+
+### Render history
+Cada export agora é registrado em `history.json`. UI mostra os 30 mais
+recentes no card de exportação:
+```bash
+curl localhost:8765/api/projects/$PID/history
+# → [{name, kind, url, bytes, ts, ...extra}, ...]
+```
+
 ## Limitações conhecidas
 
 - Whisper é chamado uma vez por projeto, sem chunking — vídeos > 25MB precisam

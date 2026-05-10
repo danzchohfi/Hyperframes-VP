@@ -160,6 +160,7 @@ async function loadProject(id) {
   await loadSoundbitesAndStory(p);
   await loadTranscriptWords(p);
   await refreshTemplates();
+  await refreshHistory();
 
   await refreshList();
 }
@@ -1166,6 +1167,75 @@ async function detectSpeakers() {
   }
 }
 
+async function makeHook() {
+  if (!state.current) return;
+  log("▶ hook");
+  try {
+    const r = await api(`/api/projects/${state.current.id}/hook`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ target_seconds: 4 }),
+    });
+    log(`✓ hook ${r.duration.toFixed(1)}s @ ${r.start.toFixed(1)}s`, "ok");
+    toast(`Hook pronto · ${r.duration.toFixed(1)}s`, "ok");
+    await refreshHistory();
+  } catch (e) {
+    log(`✗ hook: ${e.message}`, "err");
+  }
+}
+
+async function peakThumb() {
+  if (!state.current) return;
+  log("▶ peak thumbnail");
+  try {
+    const r = await api(`/api/projects/${state.current.id}/peak-thumbnail`, { method: "POST" });
+    const grid = $("#thumbs-grid");
+    const div = document.createElement("div");
+    div.className = "thumb";
+    div.innerHTML = `<img src="${r.url}?t=${Date.now()}" alt="peak"/><div class="label">⭐ Peak @ ${r.at.toFixed(1)}s</div>`;
+    grid.prepend(div);
+    log(`✓ peak thumb @ ${r.at.toFixed(1)}s`, "ok");
+  } catch (e) {
+    log(`✗ peak: ${e.message}`, "err");
+  }
+}
+
+async function emojifyCaptions() {
+  if (!state.current) return;
+  log("▶ emojify");
+  try {
+    const r = await api(`/api/projects/${state.current.id}/captions/emojify`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ use_llm: true }),
+    });
+    log(`✓ ${r.updated} linhas decoradas`, "ok");
+    toast(`${r.updated} legendas com emoji`, "ok");
+  } catch (e) {
+    log(`✗ emojify: ${e.message}`, "err");
+  }
+}
+
+async function refreshHistory() {
+  if (!state.current) return;
+  try {
+    const list = await api(`/api/projects/${state.current.id}/history`);
+    const root = $("#history-list");
+    root.innerHTML = "";
+    for (const e of list.slice().reverse().slice(0, 30)) {
+      const li = document.createElement("li");
+      const kb = (e.bytes / 1024).toFixed(0);
+      li.innerHTML = `
+        <span class="h-kind">${escapeHtml(e.kind)}</span>
+        <span class="h-name">${escapeHtml(e.name)}</span>
+        <span class="h-meta">${kb} KB · ${new Date(e.ts).toLocaleString()}</span>
+        <a href="${e.url}" download>⬇</a>
+      `;
+      root.appendChild(li);
+    }
+  } catch {}
+}
+
 async function chapterThumbs() {
   if (!state.current) return;
   log("▶ chapter thumbs");
@@ -1422,6 +1492,9 @@ function bind() {
   $("#cancel-render-btn").onclick = cancelRender;
   $("#ass-btn").onclick = () => exportCaptions("ass");
   $("#burn-btn").onclick = burnCaptions;
+  $("#hook-btn").onclick = makeHook;
+  $("#peak-thumb-btn").onclick = peakThumb;
+  $("#emojify-btn").onclick = emojifyCaptions;
   $("#search-q").addEventListener("input", (e) => {
     clearTimeout(_searchTimer);
     _searchTimer = setTimeout(() => runSearch(e.target.value.trim()), 200);

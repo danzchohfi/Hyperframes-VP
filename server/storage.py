@@ -192,6 +192,50 @@ def take_snapshot(project_id: str, label: str) -> dict[str, Any]:
     return meta
 
 
+def append_render_history(
+    project_id: str,
+    *,
+    name: str,
+    kind: str,
+    url: str,
+    bytes: int,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Track every export that produces a downloadable artifact."""
+    p = project_dir(project_id) / "history.json"
+    entries: list[dict[str, Any]] = []
+    if p.exists():
+        try:
+            entries = json.loads(p.read_text())
+        except Exception:
+            entries = []
+    entry = {
+        "name": name,
+        "kind": kind,
+        "url": url,
+        "bytes": bytes,
+        "ts": _now(),
+    }
+    if extra:
+        entry.update({k: v for k, v in extra.items() if k not in entry})
+    entries.append(entry)
+    # cap history to 200 most recent
+    if len(entries) > 200:
+        entries = entries[-200:]
+    p.write_text(json.dumps(entries, indent=2, ensure_ascii=False))
+    return entry
+
+
+def get_render_history(project_id: str) -> list[dict[str, Any]]:
+    p = project_dir(project_id) / "history.json"
+    if not p.exists():
+        return []
+    try:
+        return json.loads(p.read_text())
+    except Exception:
+        return []
+
+
 def restore_snapshot(project_id: str, snap_id: str) -> dict[str, Any]:
     snap_dir = project_dir(project_id) / "snapshots" / snap_id
     if not snap_dir.exists():
