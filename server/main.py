@@ -64,6 +64,7 @@ from .services import jobs as jobs_svc
 from .services import speaker_levels as levels_svc
 from .services import quality as quality_svc
 from .services import podcast_pipeline as podcast_pipeline_svc
+from .services import shorts as shorts_svc
 from .services.events import bus, emit_stage, emit_log, emit_state_changed
 from .services import captions as captions_svc
 from .services.brand import BrandBook
@@ -1578,6 +1579,52 @@ async def angle_quality(pid: str, idx: int) -> dict[str, Any]:
     storage.save(state)
     _stage(state, "quality", "done", f"{angle['name']} → {q['quality']}")
     return angle
+
+
+# ---- auto-shorts batch ------------------------------------------------------
+
+class ShortsBatchIn(BaseModel):
+    target_count: int = 5
+    aspect: str = "9:16"
+    use_hyperframes: bool = True
+    min_seconds: float = 8.0
+    max_seconds: float = 60.0
+
+
+@app.post("/api/projects/{pid}/shorts/batch")
+async def shorts_batch(pid: str, body: ShortsBatchIn) -> dict[str, Any]:
+    _load(pid)
+
+    async def _run(ctx: jobs_svc.JobContext) -> dict[str, Any]:
+        return await shorts_svc.run_batch(
+            ctx,
+            target_count=body.target_count,
+            aspect=body.aspect,
+            use_hyperframes=body.use_hyperframes,
+            min_seconds=body.min_seconds,
+            max_seconds=body.max_seconds,
+        )
+
+    job_id = await jobs_svc.manager.submit(pid, "shorts_batch", _run)
+    return {"job_id": job_id, "status": "pending"}
+
+
+@app.get("/api/projects/{pid}/shorts")
+async def list_shorts(pid: str) -> dict[str, Any]:
+    _load(pid)
+    p = storage.project_dir(pid) / "shorts_manifest.json"
+    if not p.exists():
+        return {"shorts": []}
+    return storage.read_json(pid, "shorts_manifest.json")
+
+
+@app.get("/api/projects/{pid}/files/shorts/{name}")
+async def serve_short(pid: str, name: str):
+    pdir = storage.project_dir(pid)
+    fp = (pdir / "shorts" / name).resolve()
+    if not fp.exists() or (pdir / "shorts").resolve() not in fp.parents:
+        raise HTTPException(404)
+    return FileResponse(fp, media_type="video/mp4", filename=name)
 
 
 # ---- one-click podcast pipeline ---------------------------------------------

@@ -161,6 +161,7 @@ async function loadProject(id) {
   await loadTranscriptWords(p);
   await refreshTemplates();
   await refreshHistory();
+  await refreshShortsGallery();
 
   await refreshList();
 }
@@ -407,6 +408,20 @@ function attachEventStream(pid) {
     } else if (data.type === "log") {
       log(data.message, data.level === "error" ? "err" : data.level === "ok" ? "ok" : "");
     } else if (data.type === "job") {
+      // shorts batch UI
+      if (state.shortsJobId && data.job_id === state.shortsJobId) {
+        const btn = $("#shorts-btn");
+        if (data.status === "done") {
+          btn.disabled = false;
+          state.shortsJobId = null;
+          toast("Shorts prontos", "ok");
+          refreshShortsGallery();
+        } else if (data.status === "error" || data.status === "cancelled") {
+          btn.disabled = false;
+          state.shortsJobId = null;
+          toast(`Shorts ${data.status}`, "error");
+        }
+      }
       // job snapshot — keep the podcast pipeline UI in sync if it's ours
       if (state.podcastJobId && data.job_id === state.podcastJobId) {
         const fill = $("#podcast-fill");
@@ -1291,6 +1306,51 @@ async function runPodcastPipeline() {
   }
 }
 
+async function generateShorts() {
+  if (!state.current) return;
+  const btn = $("#shorts-btn");
+  btn.disabled = true;
+  log("▶ shorts batch");
+  try {
+    const r = await api(`/api/projects/${state.current.id}/shorts/batch`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        target_count: parseInt($("#shorts-count").value || "5", 10),
+        aspect: $("#shorts-aspect").value,
+        use_hyperframes: true,
+      }),
+    });
+    state.shortsJobId = r.job_id;
+    toast(`Gerando shorts… (${r.job_id})`, "ok");
+  } catch (e) {
+    log(`✗ shorts: ${e.message}`, "err");
+    btn.disabled = false;
+  }
+}
+
+async function refreshShortsGallery() {
+  if (!state.current) return;
+  try {
+    const r = await api(`/api/projects/${state.current.id}/shorts`);
+    const root = $("#shorts-gallery");
+    if (!root) return;
+    root.innerHTML = "";
+    for (const s of (r.shorts || [])) {
+      const div = document.createElement("div");
+      div.className = "short";
+      div.innerHTML = `
+        <video src="${s.url}" controls playsinline preload="metadata"></video>
+        <div class="meta">
+          <span>${escapeHtml(s.id)} · ${s.duration.toFixed(1)}s</span>
+          <a href="${s.url}" download>⬇</a>
+        </div>
+      `;
+      root.appendChild(div);
+    }
+  } catch {}
+}
+
 async function downloadYoutubeDescription() {
   if (!state.current) return;
   try {
@@ -1742,6 +1802,7 @@ function bind() {
   $("#podcast-pipeline-btn").onclick = runPodcastPipeline;
   $("#yt-desc-btn").onclick = (e) => { e.preventDefault(); downloadYoutubeDescription(); };
   $("#bite-thumbs-btn").onclick = generateBiteThumbs;
+  $("#shorts-btn").onclick = generateShorts;
   $("#thumbs-btn").onclick = chapterThumbs;
   $("#tx-clear-btn").onclick = txClear;
   $("#tx-keep-btn").onclick = txKeep;
