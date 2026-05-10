@@ -147,6 +147,9 @@ SNAPSHOT_FILES = (
     "roughcut.json",
     "brand.json",
     "broll_placement.json",
+    "speakers.json",
+    "social_copy.json",
+    "music_suggestion.json",
 )
 
 

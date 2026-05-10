@@ -347,11 +347,14 @@ async def build_multicam_fcpxml(
     primary_index: int,
     cuts: list[tuple[float, float]] | None,
     transcript: dict | None = None,
+    angle_offsets: list[float] | None = None,  # seconds; positive = clip starts later
 ) -> str:
     """Build an FCPXML with a multicam media grouping all angles.
 
-    angles[primary_index] dictates the format / time base / cuts. All angles are
-    assumed to start at offset 0 (sync responsibility belongs to the editor in FCP).
+    angles[primary_index] dictates the format / time base / cuts.
+    `angle_offsets` (optional) shifts each angle inside the multicam by the
+    given seconds — supply from `audio_sync.compute_offsets`. The reference
+    angle should have offset 0.
     """
     if not angles:
         raise ValueError("at least one angle is required")
@@ -422,13 +425,18 @@ async def build_multicam_fcpxml(
                 "angleID": f"angle{i + 1}",
             },
         )
+        # If we have an offset, place the asset-clip at -offset inside the
+        # multicam timeline so the audio sync ties up.
+        off = 0.0
+        if angle_offsets and i < len(angle_offsets):
+            off = max(0.0, float(angle_offsets[i]))
         ET.SubElement(
             angle,
             "asset-clip",
             {
                 "ref": asset_ids[i],
                 "name": name,
-                "offset": "0s",
+                "offset": _t(off, tb),
                 "start": "0s",
                 "duration": _t(angle_durations[i], tb),
             },

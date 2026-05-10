@@ -58,6 +58,8 @@ from .services import templates as templates_svc
 from .services import hooks as hooks_svc
 from .services import emojify as emojify_svc
 from .services import waveform as waveform_svc
+from .services import chapters as chapters_svc
+from .services import audio_sync as audio_sync_svc
 from .services.events import bus, emit_stage, emit_log, emit_state_changed
 from .services import captions as captions_svc
 from .services.brand import BrandBook
@@ -666,7 +668,12 @@ async def export_fcpxml(pid: str, body: FcpxmlIn) -> dict[str, Any]:
             kind = "multitrack"
         elif body.multicam and state.angles:
             angles_dir = pdir / "angles"
-            angle_paths = [(a["name"], angles_dir / a["filename"]) for a in state.angles]
+            # source becomes primary angle 0; user angles follow
+            angle_paths: list[tuple[str, Path]] = [(state.name + " (A)", source)]
+            offsets: list[float] = [0.0]
+            for a in state.angles:
+                angle_paths.append((a["name"], angles_dir / a["filename"]))
+                offsets.append(float(a.get("audio_offset") or 0.0))
             primary = max(0, min(body.primary_angle, len(angle_paths) - 1))
             xml = await fcpxml.build_multicam_fcpxml(
                 project_name=state.name,
@@ -674,6 +681,7 @@ async def export_fcpxml(pid: str, body: FcpxmlIn) -> dict[str, Any]:
                 primary_index=primary,
                 cuts=keep,
                 transcript=transcript,
+                angle_offsets=offsets,
             )
             kind = "multicam"
         else:
@@ -1379,18 +1387,109 @@ async def apply_template(pid: str, body: ApplyTemplateIn) -> dict[str, Any]:
     }
 
 
-# ---- speaker-turn hints -----------------------------------------------------
+# ---- diarization ------------------------------------------------------------
+
+class SpeakersIn(BaseModel):
+    backend: str = "auto"  # auto | pyannote | mfcc | gap
+
 
 @app.post("/api/projects/{pid}/speakers")
-async def detect_speakers(pid: str, gap: float = 1.2) -> dict[str, Any]:
+async def detect_speakers(pid: str, body: SpeakersIn | None = None) -> dict[str, Any]:
+    body = body or SpeakersIn()
     state = _load(pid)
     if not state.has_transcript:
         raise HTTPException(400, "transcribe first")
     transcript = storage.read_json(pid, "transcript.json")
-    turns = speakers_svc.segment_turns(transcript.get("words") or [], gap_threshold=gap)
-    storage.write_json(pid, "speakers.json", {"gap": gap, "turns": turns})
-    _stage(state, "speakers", "done", f"{len(turns)} turns")
-    return {"turns": turns}
+    pdir = storage.project_dir(pid)
+    src = pdir / "source.mp4"
+
+    _stage(state, "speakers", "running", body.backend)
+    try:
+        result = await speakers_svc.diarize(
+            src,
+            transcript.get("words") or [],
+            backend=body.backend,
+        )
+    except Exception as e:
+        _stage(state, "speakers", "error", str(e))
+        raise HTTPException(500, str(e))
+
+    storage.write_json(pid, "speakers.json", result)
+    _stage(
+        state,
+        "speakers",
+        "done",
+        f"{result['backend']} · {len(result['turns'])} turns · {result['stats']['speaker_count']} speakers",
+    )
+    return result
+
+
+# ---- multicam audio sync ----------------------------------------------------
+
+@app.post("/api/projects/{pid}/multicam-sync")
+async def multicam_sync(pid: str) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    src = pdir / "source.mp4"
+    if not src.exists():
+        raise HTTPException(400, "no source")
+    if not state.angles:
+        raise HTTPException(400, "no angles")
+
+    # source.mp4 is angle 0; user-uploaded angles follow
+    clips: list[tuple[str, Path]] = [("source", src)]
+    for a in state.angles:
+        clips.append((a["name"], pdir / "angles" / a["filename"]))
+
+    _stage(state, "multicam_sync", "running", f"correlating {len(clips)} clips")
+    try:
+        offsets = await audio_sync_svc.compute_offsets(clips)
+    except Exception as e:
+        _stage(state, "multicam_sync", "error", str(e))
+        raise HTTPException(500, str(e))
+
+    # persist offsets back into the angle records
+    for entry in offsets[1:]:
+        for a in state.angles:
+            if a["name"] == entry["name"]:
+                a["audio_offset"] = entry["offset"]
+                a["sync_score"] = entry["score"]
+    storage.save(state)
+    storage.write_json(pid, "multicam_sync.json", {"offsets": offsets})
+    _stage(state, "multicam_sync", "done", f"offsets={[round(e['offset'], 2) for e in offsets[1:]]}")
+    return {"offsets": offsets}
+
+
+# ---- topic-shift chapter detection ------------------------------------------
+
+@app.post("/api/projects/{pid}/chapters")
+async def detect_chapters_endpoint(pid: str) -> dict[str, Any]:
+    state = _load(pid)
+    if not state.has_transcript:
+        raise HTTPException(400, "transcribe first")
+    transcript = storage.read_json(pid, "transcript.json")
+    _stage(state, "chapters", "running", "detecting topic shifts")
+    try:
+        result = await chapters_svc.detect(transcript)
+    except Exception as e:
+        _stage(state, "chapters", "error", str(e))
+        raise HTTPException(502, str(e))
+    payload = {
+        "chapters": [c.model_dump() for c in result.chapters],
+        "youtube_markdown": chapters_svc.to_youtube_markdown(result.chapters),
+    }
+    storage.write_json(pid, "chapters.json", payload)
+    _stage(state, "chapters", "done", f"{len(result.chapters)} chapters")
+    return payload
+
+
+@app.get("/api/projects/{pid}/chapters")
+async def get_chapters(pid: str):
+    _load(pid)
+    p = storage.project_dir(pid) / "chapters.json"
+    if not p.exists():
+        raise HTTPException(404, "no chapters")
+    return JSONResponse(storage.read_json(pid, "chapters.json"))
 
 
 # ---- chapter thumbnails -----------------------------------------------------
