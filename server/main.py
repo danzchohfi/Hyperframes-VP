@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 import aiofiles
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -36,7 +36,7 @@ from pydantic import BaseModel
 
 from . import storage
 from .services import ffmpeg as ff
-from .services import whisper, silence, composer, render
+from .services import whisper, silence, composer, render, fcpxml, music
 from .services.brand import BrandBook
 
 app = FastAPI(title="HyperFrames Video Pipeline", version="0.1.0")
@@ -68,6 +68,26 @@ class RenderIn(BaseModel):
 
 class ExportIn(BaseModel):
     aspect: str = "9:16"
+
+
+class FcpxmlIn(BaseModel):
+    multicam: bool = False
+    primary_angle: int = 0
+    include_word_markers: bool = True
+    use_cuts: bool = True
+
+
+class AngleIn(BaseModel):
+    name: str = "Angle"
+
+
+class MusicSearchIn(BaseModel):
+    suggestion: dict[str, Any] | None = None
+    limit: int = 10
+
+
+class MusicSelectIn(BaseModel):
+    track: dict[str, Any]
 
 
 # ---- helpers -----------------------------------------------------------------
@@ -356,6 +376,180 @@ async def export(pid: str, body: ExportIn) -> dict[str, Any]:
     except Exception as e:
         raise HTTPException(500, str(e))
     return {"export": name, "url": f"/api/projects/{pid}/exports/{name}"}
+
+
+# ---- multicam angles ---------------------------------------------------------
+
+@app.post("/api/projects/{pid}/angles")
+async def add_angle(pid: str, name: str = Form("Angle"), file: UploadFile = File(...)) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    angles_dir = pdir / "angles"
+    angles_dir.mkdir(exist_ok=True)
+
+    idx = len(state.angles) + 1
+    ext = Path(file.filename or "angle.mp4").suffix or ".mp4"
+    raw = angles_dir / f"angle{idx}_raw{ext}"
+    norm = angles_dir / f"angle{idx}.mp4"
+
+    async with aiofiles.open(raw, "wb") as out:
+        while chunk := await file.read(1024 * 1024):
+            await out.write(chunk)
+
+    try:
+        await ff.normalize(raw, norm)
+        dur = await ff.duration(norm)
+    except ff.FFmpegError as e:
+        raise HTTPException(400, f"ffmpeg failed: {e}")
+
+    raw.unlink(missing_ok=True)
+    angle_record = {
+        "index": idx - 1,
+        "name": name or f"Angle {idx}",
+        "filename": norm.name,
+        "duration": dur,
+    }
+    state.angles.append(angle_record)
+    storage.save(state)
+    _stage(state, "angle", "done", f"{angle_record['name']} ({dur:.2f}s)")
+    return angle_record
+
+
+@app.delete("/api/projects/{pid}/angles/{idx}")
+async def delete_angle(pid: str, idx: int) -> dict[str, str]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    if idx < 0 or idx >= len(state.angles):
+        raise HTTPException(404, "angle not found")
+    record = state.angles.pop(idx)
+    f = pdir / "angles" / record["filename"]
+    f.unlink(missing_ok=True)
+    # re-index remaining angles in metadata only
+    for i, a in enumerate(state.angles):
+        a["index"] = i
+    storage.save(state)
+    return {"status": "deleted"}
+
+
+# ---- FCPXML export -----------------------------------------------------------
+
+@app.post("/api/projects/{pid}/export/fcpxml")
+async def export_fcpxml(pid: str, body: FcpxmlIn) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    source = pdir / "source.mp4"
+    if not source.exists():
+        raise HTTPException(400, "no source video")
+
+    keep: list[tuple[float, float]] | None = None
+    if body.use_cuts and state.has_cuts:
+        plan = storage.read_json(pid, "cuts.json")
+        keep = [(seg["start"], seg["end"]) for seg in plan["keep"]]
+
+    transcript = (
+        storage.read_json(pid, "transcript.json")
+        if (state.has_transcript and body.include_word_markers)
+        else None
+    )
+
+    try:
+        if body.multicam and state.angles:
+            angles_dir = pdir / "angles"
+            angle_paths = [(a["name"], angles_dir / a["filename"]) for a in state.angles]
+            primary = max(0, min(body.primary_angle, len(angle_paths) - 1))
+            xml = await fcpxml.build_multicam_fcpxml(
+                project_name=state.name,
+                angles=angle_paths,
+                primary_index=primary,
+                cuts=keep,
+                transcript=transcript,
+            )
+            kind = "multicam"
+        else:
+            xml = await fcpxml.build_single_cam_fcpxml(
+                project_name=state.name,
+                source=source,
+                cuts=keep,
+                transcript=transcript,
+            )
+            kind = "singlecam"
+    except Exception as e:
+        _stage(state, "fcpxml", "error", str(e))
+        raise HTTPException(500, str(e))
+
+    out_path = pdir / "exports" / f"{state.name.replace(' ', '_')}.fcpxml"
+    out_path.parent.mkdir(exist_ok=True)
+    out_path.write_text(xml, encoding="utf-8")
+    _stage(state, "fcpxml", "done", f"{kind} · {out_path.name}")
+    return {
+        "export": out_path.name,
+        "kind": kind,
+        "url": f"/api/projects/{pid}/exports/{out_path.name}",
+        "bytes": out_path.stat().st_size,
+    }
+
+
+# ---- music suggestion --------------------------------------------------------
+
+@app.post("/api/projects/{pid}/music/suggest")
+async def music_suggest(pid: str) -> dict[str, Any]:
+    state = _load(pid)
+    if not state.has_transcript:
+        raise HTTPException(400, "transcribe first")
+    transcript = storage.read_json(pid, "transcript.json")
+    text = (transcript.get("text") or "").strip()
+    if not text:
+        raise HTTPException(400, "transcript is empty")
+
+    _stage(state, "music_suggest", "running", "asking the model")
+    try:
+        suggestion = await music.suggest_music(text, duration=state.source_duration or 0.0)
+    except Exception as e:
+        _stage(state, "music_suggest", "error", str(e))
+        raise HTTPException(502, f"suggestion failed: {e}")
+
+    state.music_suggestion = suggestion.model_dump()
+    storage.save(state)
+    _stage(state, "music_suggest", "done", suggestion.description[:80])
+    return suggestion.model_dump()
+
+
+@app.post("/api/projects/{pid}/music/search")
+async def music_search(pid: str, body: MusicSearchIn) -> dict[str, Any]:
+    state = _load(pid)
+    suggestion_raw = body.suggestion or state.music_suggestion
+    if not suggestion_raw:
+        raise HTTPException(400, "run /music/suggest first or pass `suggestion` in body")
+    suggestion = music.MusicSuggestion.model_validate(suggestion_raw)
+
+    provider = music.get_provider()
+    if provider is None:
+        return {
+            "provider": None,
+            "tracks": [],
+            "epidemic_search_url": suggestion.epidemic_search_url,
+            "hint": "Set EPIDEMIC_SOUND_TOKEN in .env to enable in-app search.",
+        }
+
+    try:
+        tracks = await provider.search(suggestion, limit=body.limit)
+    except Exception as e:
+        raise HTTPException(502, f"search failed: {e}")
+
+    return {
+        "provider": provider.name,
+        "tracks": [t.model_dump() for t in tracks],
+        "epidemic_search_url": suggestion.epidemic_search_url,
+    }
+
+
+@app.post("/api/projects/{pid}/music/select")
+async def music_select(pid: str, body: MusicSelectIn) -> dict[str, Any]:
+    state = _load(pid)
+    state.music_track = body.track
+    storage.save(state)
+    _stage(state, "music_select", "done", body.track.get("title", "track"))
+    return {"track": body.track}
 
 
 # ---- file serving ------------------------------------------------------------

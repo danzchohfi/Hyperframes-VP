@@ -155,8 +155,35 @@
             <div id="pipeline-log" class="log"></div>
           </section>
 
+          <section class="card">
+            <h3>5 · Multicam (opcional)</h3>
+            <p class="card-help">Suba ângulos extras pra exportar como multicam pro Final Cut. O vídeo principal vira o ângulo 1.</p>
+            <div class="row">
+              <label class="dropzone small" id="angle-zone">
+                <input id="angle-input" type="file" accept="video/*" hidden />
+                <div class="dz-icon">🎬</div>
+                <div class="dz-title">Subir ângulo</div>
+                <div class="dz-sub">MP4 / MOV — sincronize manualmente no FCP</div>
+                <input id="angle-name" type="text" placeholder="Nome (ex.: Wide, Close)" class="angle-name-input" />
+              </label>
+              <ul id="angle-list" class="angle-list"></ul>
+            </div>
+          </section>
+
+          <section class="card">
+            <h3>6 · Música por IA</h3>
+            <p class="card-help">A IA analisa a transcrição e sugere mood, gênero, BPM. Se você tiver token da Epidemic Sound em <code>.env</code>, o sistema busca faixas direto.</p>
+            <div class="actions">
+              <button id="music-suggest-btn" class="btn-primary">✨ Sugerir música</button>
+              <button id="music-search-btn" class="btn-ghost">Buscar na Epidemic</button>
+              <a id="epidemic-link" class="btn-ghost" target="_blank" rel="noopener" href="https://www.epidemicsound.com/search/" style="display:none">Abrir busca no site</a>
+            </div>
+            <div id="music-suggestion" class="music-suggestion hidden"></div>
+            <ul id="music-tracks" class="track-list"></ul>
+          </section>
+
           <section class="card" id="export-card">
-            <h3>5 · Exportar</h3>
+            <h3>7 · Exportar</h3>
             <video id="result" controls playsinline class="preview wide"></video>
             <div class="actions">
               <select id="export-aspect" class="inline-select">
@@ -167,6 +194,15 @@
               <button id="do-export" class="btn-ghost">Reframar</button>
               <a id="download-link" class="btn-primary" href="#" download>⬇ Baixar MP4</a>
             </div>
+            <div class="export-divider"></div>
+            <div class="actions">
+              <label class="cb"><input id="fcpxml-multicam" type="checkbox" /> Multicam</label>
+              <label class="cb"><input id="fcpxml-cuts" type="checkbox" checked /> Aplicar cortes do silêncio</label>
+              <label class="cb"><input id="fcpxml-markers" type="checkbox" checked /> Marcadores por palavra</label>
+              <button id="fcpxml-btn" class="btn-ghost">📄 Exportar FCPXML</button>
+              <a id="fcpxml-link" class="btn-primary" href="#" download style="display:none">⬇ Baixar FCPXML</a>
+            </div>
+            <p class="card-help">Abra no Final Cut Pro: <em>Arquivo → Importar → XML</em>. Os cortes ficam não-destrutivos.</p>
           </section>
         </div>
       </main>

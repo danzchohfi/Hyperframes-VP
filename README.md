@@ -162,6 +162,66 @@ em `server/projects/<id>/composition/`:
   com `data-w-start`/`data-w-end`.
 - `vendor/gsap.min.js` é copiado pra dentro do projeto pra render funcionar offline.
 
+## Exportação para Final Cut Pro (FCPXML)
+
+Além do MP4 renderizado, o app exporta um **FCPXML 1.10** que abre direto no
+Final Cut. As decisões de corte do silêncio viram clipes na timeline, e cada
+palavra da transcrição vira um marcador navegável.
+
+```bash
+# single-cam (só o source.mp4)
+curl -X POST localhost:8765/api/projects/$PID/export/fcpxml \
+  -H content-type:application/json \
+  -d '{"multicam":false,"use_cuts":true,"include_word_markers":true}'
+
+# multicam (use depois de subir ângulos via POST /angles)
+curl -X POST localhost:8765/api/projects/$PID/export/fcpxml \
+  -H content-type:application/json \
+  -d '{"multicam":true,"primary_angle":0}'
+```
+
+No Final Cut: **Arquivo → Importar → XML** → escolha o `.fcpxml`. Os caminhos de
+arquivo são absolutos (`file:///...`), então o vídeo precisa existir no
+mesmo lugar (no Mac que rodou o pipeline).
+
+### Multicam: subir ângulos extras
+
+```bash
+# o source.mp4 é sempre o ângulo 1; angles extras vão pra angles/
+curl -X POST localhost:8765/api/projects/$PID/angles \
+  -F file=@close-up.mp4 -F name="Close"
+curl -X POST localhost:8765/api/projects/$PID/angles \
+  -F file=@drone.mp4 -F name="Drone"
+```
+
+Sincronização entre ângulos é responsabilidade do editor no Final Cut
+(use *Sync Clips* ou markers de claquete). O FCPXML coloca todos com offset 0.
+
+## Sugestão de música por IA + Epidemic Sound
+
+O endpoint `/music/suggest` manda o texto da transcrição pra OpenAI e volta com
+mood, gênero, BPM, instrumentos e palavras-chave de busca. Se você setar
+`EPIDEMIC_SOUND_TOKEN` no `.env`, `/music/search` chama a API parceira da
+Epidemic Sound e devolve faixas. Sem token, o app monta uma URL pré-preenchida
+da busca pública pra você abrir manualmente.
+
+```bash
+curl -X POST localhost:8765/api/projects/$PID/music/suggest
+# → {mood, genres, bpm_min, bpm_max, energy, instruments, description, keywords, epidemic_search_url}
+
+curl -X POST localhost:8765/api/projects/$PID/music/search \
+  -H content-type:application/json -d '{"limit":10}'
+# → {provider, tracks: [{id, title, artist, bpm, preview_url, ...}]}
+
+curl -X POST localhost:8765/api/projects/$PID/music/select \
+  -H content-type:application/json -d '{"track":{"id":"...","title":"..."}}'
+```
+
+> A forma exata da API parceira da Epidemic Sound varia por contrato. O
+> `EpidemicSoundProvider` em `server/services/music.py` parametriza endpoint
+> e shape do retorno — ajuste `_endpoint`/`_params`/`_normalize` se a sua
+> conta tiver outro formato.
+
 ## Limitações conhecidas
 
 - Whisper é chamado uma vez por projeto, sem chunking — vídeos > 25MB precisam

@@ -104,7 +104,59 @@ async function loadProject(id) {
     $("#download-link").style.pointerEvents = "none";
   }
 
+  renderAngles(p);
+  renderMusicSuggestion(p.music_suggestion);
+
   await refreshList();
+}
+
+function renderAngles(p) {
+  const list = $("#angle-list");
+  list.innerHTML = "";
+  for (const a of p.angles || []) {
+    const li = document.createElement("li");
+    li.innerHTML = `
+      <span class="a-name">${escapeHtml(a.name)}</span>
+      <span class="a-meta">${(a.duration || 0).toFixed(1)}s · ${a.filename}</span>
+      <button class="a-del" data-idx="${a.index}">Remover</button>
+    `;
+    li.querySelector(".a-del").onclick = async () => {
+      await api(`/api/projects/${p.id}/angles/${a.index}`, { method: "DELETE" });
+      log(`Ângulo ${a.name} removido`, "ok");
+      await loadProject(p.id);
+    };
+    list.appendChild(li);
+  }
+}
+
+function renderMusicSuggestion(s) {
+  const root = $("#music-suggestion");
+  if (!s) {
+    root.classList.add("hidden");
+    return;
+  }
+  root.classList.remove("hidden");
+  const tag = (text, cls = "") => `<span class="tag ${cls}">${escapeHtml(text)}</span>`;
+  root.innerHTML = `
+    <div class="ms-desc">${escapeHtml(s.description || "")}</div>
+    <div>${(s.mood || []).map(m => tag(m, "mood")).join("")}</div>
+    <div>${(s.genres || []).map(g => tag(g, "genre")).join("")}</div>
+    <div>${tag(`${s.bpm_min}–${s.bpm_max} BPM`, "bpm")} ${tag(`Energia: ${s.energy}`)}</div>
+    <div>${(s.instruments || []).map(i => tag(i)).join("")}</div>
+    <div>${(s.keywords || []).map(k => tag(k)).join("")}</div>
+  `;
+  if (s.epidemic_search_url) {
+    const link = $("#epidemic-link");
+    link.href = s.epidemic_search_url;
+    link.style.display = "inline-block";
+    link.textContent = "🔗 Abrir busca no site";
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
 }
 
 async function newProject() {
@@ -243,6 +295,112 @@ async function deleteProject() {
   await refreshList();
 }
 
+async function uploadAngle(file) {
+  if (!state.current) return;
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("name", $("#angle-name").value || `Ângulo ${(state.current.angles?.length || 0) + 1}`);
+  log(`▶ Subindo ângulo: ${file.name}`);
+  try {
+    const r = await api(`/api/projects/${state.current.id}/angles`, { method: "POST", body: fd });
+    log(`✓ Ângulo "${r.name}" pronto (${r.duration.toFixed(1)}s)`, "ok");
+    $("#angle-name").value = "";
+    await loadProject(state.current.id);
+  } catch (e) {
+    log(`✗ Ângulo: ${e.message}`, "err");
+  }
+}
+
+async function suggestMusic() {
+  if (!state.current) return;
+  const btn = $("#music-suggest-btn");
+  btn.disabled = true;
+  btn.textContent = "✨ Pensando...";
+  log("▶ music suggest");
+  try {
+    const s = await api(`/api/projects/${state.current.id}/music/suggest`, { method: "POST" });
+    log(`✓ Sugestão: ${s.description}`, "ok");
+    renderMusicSuggestion(s);
+  } catch (e) {
+    log(`✗ music suggest: ${e.message}`, "err");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "✨ Sugerir música";
+  }
+}
+
+async function searchMusic() {
+  if (!state.current) return;
+  const list = $("#music-tracks");
+  list.innerHTML = "";
+  log("▶ music search");
+  try {
+    const r = await api(`/api/projects/${state.current.id}/music/search`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ limit: 10 }),
+    });
+    if (!r.provider) {
+      log(`ℹ ${r.hint || "Nenhum provider configurado"}`, "");
+      if (r.epidemic_search_url) {
+        const a = $("#epidemic-link");
+        a.href = r.epidemic_search_url;
+        a.style.display = "inline-block";
+        log("Use 'Abrir busca no site' pra pesquisar manualmente.", "");
+      }
+      return;
+    }
+    if (!r.tracks?.length) {
+      log("Sem resultados.", "");
+      return;
+    }
+    for (const t of r.tracks) {
+      const li = document.createElement("li");
+      li.innerHTML = `
+        <div class="t-title">${escapeHtml(t.title)}<div class="t-meta">${escapeHtml(t.artist || "")} · ${t.bpm ? t.bpm + " BPM" : ""} · ${t.duration ? Math.round(t.duration) + "s" : ""}</div></div>
+        ${t.preview_url ? `<audio controls src="${t.preview_url}"></audio>` : ""}
+        <button class="btn-ghost" data-pick='${JSON.stringify(t).replace(/'/g, "&apos;")}'>Selecionar</button>
+      `;
+      li.querySelector("button").onclick = async (e) => {
+        const track = JSON.parse(e.currentTarget.dataset.pick.replace(/&apos;/g, "'"));
+        await api(`/api/projects/${state.current.id}/music/select`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ track }),
+        });
+        log(`Track selecionada: ${track.title}`, "ok");
+      };
+      list.appendChild(li);
+    }
+    log(`✓ ${r.tracks.length} faixas encontradas via ${r.provider}`, "ok");
+  } catch (e) {
+    log(`✗ music search: ${e.message}`, "err");
+  }
+}
+
+async function exportFcpxml() {
+  if (!state.current) return;
+  log("▶ FCPXML export");
+  try {
+    const res = await api(`/api/projects/${state.current.id}/export/fcpxml`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        multicam: $("#fcpxml-multicam").checked,
+        use_cuts: $("#fcpxml-cuts").checked,
+        include_word_markers: $("#fcpxml-markers").checked,
+      }),
+    });
+    log(`✓ FCPXML ${res.kind} · ${res.bytes} bytes`, "ok");
+    const link = $("#fcpxml-link");
+    link.href = res.url;
+    link.style.display = "inline-block";
+    link.textContent = `⬇ Baixar ${res.export}`;
+  } catch (e) {
+    log(`✗ FCPXML: ${e.message}`, "err");
+  }
+}
+
 function bind() {
   $("#new-project").onclick = newProject;
   $("#empty-new").onclick = newProject;
@@ -262,6 +420,19 @@ function bind() {
   const li = $("#lut-input");
   $("#lut-zone").addEventListener("click", () => li.click());
   li.addEventListener("change", () => li.files[0] && uploadLut(li.files[0]));
+
+  // angle uploader (don't trigger file picker when typing in the name field)
+  const ai = $("#angle-input");
+  $("#angle-zone").addEventListener("click", (e) => {
+    if (e.target.id === "angle-name") return;
+    ai.click();
+  });
+  ai.addEventListener("change", () => ai.files[0] && uploadAngle(ai.files[0]));
+
+  // music + fcpxml
+  $("#music-suggest-btn").onclick = suggestMusic;
+  $("#music-search-btn").onclick = searchMusic;
+  $("#fcpxml-btn").onclick = exportFcpxml;
 
   for (const btn of $$("[data-run]")) {
     btn.addEventListener("click", () => runStage(btn.dataset.run));
