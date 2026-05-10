@@ -345,6 +345,17 @@ a { color: inherit; text-decoration: none; }
 }
 .narrative-card .seq .seg .reason { color: var(--muted); margin-left: 6px; }
 .narrative-card .actions { margin-top: 10px; }
+.vlog-timeline-svg {
+  display: block; width: 100%; height: 64px;
+  margin: 12px 0;
+  border-radius: 8px; overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+}
+.seq-details summary {
+  cursor: pointer; font-size: 11px; color: var(--muted); margin: 6px 0;
+}
+.seq-details summary:hover { color: var(--text); }
 
 /* People (face identity clusters) */
 .people-list {

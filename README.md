@@ -602,6 +602,97 @@ da lista. Útil quando ficou pesado no disco.
 curl -X POST localhost:8765/api/projects/$PID/archive
 ```
 
+## Waves 18-32 — multicam inteligente + modo vlog
+
+### Multicam inteligente
+
+```bash
+# 1. Suba câmeras (cada upload roda quality + face_analysis automaticamente)
+curl -F file=@cam_a.mp4 -F name=Wide   localhost:8765/api/projects/$PID/angles
+curl -F file=@cam_b.mp4 -F name=Marina localhost:8765/api/projects/$PID/angles
+curl -F file=@cam_c.mp4 -F name=Lucas  localhost:8765/api/projects/$PID/angles
+
+# 2. Sync de áudio (cross-correlation FFT entre source e cada câmera)
+curl -X POST localhost:8765/api/projects/$PID/multicam-sync
+
+# 3. Cluster de identidades (quem aparece em qual câmera)
+curl -X POST localhost:8765/api/projects/$PID/face-identities
+curl -X POST localhost:8765/api/projects/$PID/face-identities/thumbnails
+# Renomeia: PUT /face-identities/person_1 {"name":"Marina"}
+
+# 4. Se rodou diarização (/speakers), mapeia speaker → cluster
+curl -X POST localhost:8765/api/projects/$PID/speakers/map-to-faces
+# → {"A":"person_1","B":"person_2"}
+
+# 5. Linha de tempo do sujeito por câmera (detecta quando sujeito muda dentro do clipe)
+curl -X POST localhost:8765/api/projects/$PID/subject-timeline?target=source
+
+# 6. Escolha automática de câmera por turno (split em mudanças de sujeito,
+#    bonus +4 pra câmera que mostra o speaker, penalidade pra quem não mostra)
+curl -X POST localhost:8765/api/projects/$PID/multicam-pick \
+  -d '{"intervals":"turns","split_on_subject_change":true}'
+
+# 7. Renderiza o multicam final (vídeo de cada turno vem da câmera escolhida,
+#    áudio sempre do source)
+curl -X POST localhost:8765/api/projects/$PID/multicam-render
+```
+
+Cada ângulo/clipe ganha automaticamente:
+- `face_analysis: {face_presence, face_area_avg, face_x_avg, shot_type, subject_change}`
+- `quality_check: {quality, blur_score, shake_score, brightness}` (OpenCV)
+- `face_clusters: ["person_1", ...]` depois de `/face-identities`
+
+A UI mostra: `close up` / `medium` / `wide` / `no face` + `⇄ sujeito mudou`
++ `⚠ shaky/blurry/dark` + thumbs de cada pessoa pra renomear inline.
+
+### Modo Vlog (vários clipes → narrativa → vlog brandado)
+
+```bash
+# 1. Sobe N clipes (cada um normaliza + thumbnail automática)
+for f in vlog_*.mp4; do
+  curl -F file=@$f -F name=$(basename $f .mp4) \
+    localhost:8765/api/projects/$PID/clips
+done
+
+# 2. 1-click: transcribe → face cluster → narrativas (devolve job_id)
+curl -X POST localhost:8765/api/projects/$PID/vlog/auto-pipeline \
+  -d '{"language":"pt","aspect":"9:16","apply_brand":true}'
+
+# Ou passo-a-passo:
+curl -X POST localhost:8765/api/projects/$PID/clips/transcribe-all
+curl -X POST localhost:8765/api/projects/$PID/face-identities
+curl -X POST localhost:8765/api/projects/$PID/vlog/group-takes  # detecta retakes
+curl -X POST localhost:8765/api/projects/$PID/vlog/cull-takes   # esconde retakes piores
+curl -X POST localhost:8765/api/projects/$PID/vlog/narratives   # 3-5 narrativas
+
+# 3. Pra cada narrativa: storyboard, B-roll, edit, render
+curl -X POST localhost:8765/api/projects/$PID/vlog/narratives/n1/storyboard
+curl -X POST localhost:8765/api/projects/$PID/vlog/place-broll?narrative_id=n1
+curl -X PUT  localhost:8765/api/projects/$PID/vlog/narratives/n1 \
+  -d '{"sequence":[{"clip_id":"clip_xxx","start":0,"end":5,"reason":"intro"}]}'
+
+# 4. Monta o vlog final
+curl -X POST localhost:8765/api/projects/$PID/vlog/assemble \
+  -d '{"narrative_id":"n1","aspect":"9:16","apply_brand":true,"chapter_cards":true}'
+# → vlog-n1.mp4 + social_copy.json (caption/hashtags/hook auto-gerados)
+
+# 5. Música pro vlog (mood baseado em todas as transcrições)
+curl -X POST localhost:8765/api/projects/$PID/vlog/music-suggest?language=pt
+```
+
+A UI mostra:
+- Cada clipe com thumb 480px + badges de pessoas presentes + `✓ txt`
+- Cards de narrativa com **timeline SVG** mostrando cada bite (cada bloco
+  pinta a thumbnail do clipe, com número e duração)
+- `📰 Storyboard` gera 1 painel por bite a 25% da janela
+- `🎯 B-roll` pede pra IA matchear ângulos tagged como B-roll inserts
+- `✍ Editar narrativa` PUT pra reordenar/cortar bites manualmente
+- `🎬 Montar este vlog` → renderiza com brand + chapter cards + social copy auto
+
+### Templates Vlog
+- `vlog_vertical` (9:16, captions TikTok, palette rosé/cyan/amber)
+- `vlog_horizontal` (16:9, captions minimal, palette lime/cyan)
+
 ## Waves 9-17 — virando editor de podcast a sério
 
 ### Pipeline 1-click (`POST /podcast-pipeline`)

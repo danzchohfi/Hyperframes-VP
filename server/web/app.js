@@ -1498,26 +1498,69 @@ async function vlogProposeNarratives() {
 function renderNarratives(narratives) {
   const root = $("#narratives-list");
   root.innerHTML = "";
+  // Build a clip lookup so we can show clip thumbnails per bite
+  const clipById = {};
+  (state.current?.clips || []).forEach(c => { clipById[c.id] = c; });
+
   for (const n of narratives) {
     const card = document.createElement("div");
     card.className = "narrative-card";
+    const totalDur = n.estimated_duration || (n.sequence || []).reduce((acc, b) => acc + (b.end - b.start), 0);
+    const tlW = 1000;
+    let cursor = 0;
+    const tlBlocks = (n.sequence || []).map((b, i) => {
+      const dur = b.end - b.start;
+      const x = (cursor / Math.max(0.001, totalDur)) * tlW;
+      const w = (dur / Math.max(0.001, totalDur)) * tlW;
+      const clip = clipById[b.clip_id];
+      const fill = clip?.thumbnail
+        ? `<image href="${escapeHtml(clip.thumbnail)}" x="${x.toFixed(1)}" y="0" width="${Math.max(2, w).toFixed(1)}" height="64" preserveAspectRatio="xMidYMid slice" />`
+        : `<rect x="${x.toFixed(1)}" y="0" width="${Math.max(2, w).toFixed(1)}" height="64" fill="rgba(167,139,250,0.4)"/>`;
+      const overlay = `
+        ${fill}
+        <rect x="${x.toFixed(1)}" y="0" width="${Math.max(2, w).toFixed(1)}" height="64" fill="rgba(0,0,0,0.35)"/>
+        <text x="${(x + 4).toFixed(1)}" y="14" fill="white" font-size="9" font-weight="700">${i + 1}</text>
+        <text x="${(x + 4).toFixed(1)}" y="58" fill="white" font-size="9">${dur.toFixed(1)}s</text>`;
+      cursor += dur;
+      return overlay;
+    }).join("");
+    const tl = `<svg viewBox="0 0 ${tlW} 64" preserveAspectRatio="none" class="vlog-timeline-svg">${tlBlocks}</svg>`;
+
     const segs = (n.sequence || []).map(s =>
-      `<span class="seg">${escapeHtml(s.clip_id.slice(-6))} ${s.start.toFixed(1)}-${s.end.toFixed(1)}s<span class="reason">${escapeHtml(s.reason || "")}</span></span>`
+      `<span class="seg">${escapeHtml((clipById[s.clip_id]?.name || s.clip_id).slice(0, 16))} ${s.start.toFixed(1)}-${s.end.toFixed(1)}s<span class="reason">${escapeHtml(s.reason || "")}</span></span>`
     ).join("");
+
     card.innerHTML = `
       <div class="nh">
         <span class="name">${escapeHtml(n.name)}</span>
         <span class="genre">${escapeHtml(n.genre || "")}</span>
-        <span class="duration">~${(n.estimated_duration || 0).toFixed(1)}s</span>
+        <span class="duration">~${totalDur.toFixed(1)}s</span>
       </div>
       <div class="logline">${escapeHtml(n.logline || "")}</div>
-      <div class="seq">${segs}</div>
+      ${tl}
+      <details class="seq-details"><summary>Sequência (${(n.sequence || []).length} bites)</summary><div class="seq">${segs}</div></details>
       <div class="actions">
         <select class="inline-select n-aspect"><option value="9:16">9:16</option><option value="16:9">16:9</option><option value="1:1">1:1</option></select>
+        <button class="btn-ghost n-storyboard" data-id="${n.id}">📰 Storyboard</button>
+        <button class="btn-ghost n-broll" data-id="${n.id}">🎯 B-roll</button>
         <button class="btn-primary n-assemble" data-id="${n.id}">🎬 Montar este vlog</button>
         <a class="btn-ghost n-link" href="#" download style="display:none">⬇ vlog.mp4</a>
       </div>
     `;
+    card.querySelector(".n-storyboard").onclick = async () => {
+      try {
+        const r = await api(`/api/projects/${state.current.id}/vlog/narratives/${n.id}/storyboard`, { method: "POST" });
+        log(`✓ storyboard ${n.id}: ${r.panels.length} painéis`, "ok");
+        toast(`Storyboard com ${r.panels.length} painéis`, "ok");
+      } catch (e) { log(`✗ storyboard: ${e.message}`, "err"); }
+    };
+    card.querySelector(".n-broll").onclick = async () => {
+      try {
+        const r = await api(`/api/projects/${state.current.id}/vlog/place-broll?narrative_id=${n.id}`, { method: "POST" });
+        log(`✓ B-roll ${n.id}: ${r.placements.length} inserts`, "ok");
+        toast(`${r.placements.length} B-roll inserts planejados`, "ok");
+      } catch (e) { log(`✗ B-roll: ${e.message}`, "err"); }
+    };
     card.querySelector(".n-assemble").onclick = async () => {
       const aspect = card.querySelector(".n-aspect").value;
       log(`▶ assemble narrative ${n.id}`);
