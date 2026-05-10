@@ -208,6 +208,45 @@ async def apply_lut(src: Path, dst: Path, lut: Path) -> None:
     )
 
 
+async def mix_music(
+    voice_src: Path,
+    music_src: Path,
+    dst: Path,
+    *,
+    music_db: float = -8.0,
+    duck_threshold: float = 0.05,
+    duck_ratio: float = 8.0,
+) -> None:
+    """Mix a music track under a voice track with sidechain ducking.
+
+    The music is attenuated whenever the voice is loud, so dialogue stays
+    clear. Voice goes through unchanged.
+    """
+    voice_dur = await duration(voice_src)
+    music_dur = await duration(music_src)
+
+    # Loop music if shorter than voice; trim if longer
+    music_input = ["-stream_loop", "-1", "-t", f"{voice_dur:.3f}", "-i", str(music_src)] \
+        if music_dur < voice_dur else ["-i", str(music_src)]
+
+    fc = (
+        f"[1:a]volume={music_db}dB[m];"
+        f"[m][0:a]sidechaincompress=threshold={duck_threshold}:ratio={duck_ratio}:attack=20:release=300[ducked];"
+        f"[0:a][ducked]amix=inputs=2:duration=first:dropout_transition=0[a]"
+    )
+    cmd = ["ffmpeg", "-y",
+           "-i", str(voice_src),
+           *music_input,
+           "-filter_complex", fc,
+           "-map", "0:v?", "-map", "[a]",
+           "-c:v", "copy",
+           "-c:a", "aac", "-b:a", "192k",
+           "-shortest",
+           "-movflags", "+faststart",
+           str(dst)]
+    await run(cmd)
+
+
 async def burn_subtitles(src: Path, dst: Path, ass_path: Path) -> None:
     """Burn an ASS subtitle file into the video via ffmpeg's subtitles filter."""
     # ffmpeg's subtitles filter requires : and ' escaped in the path

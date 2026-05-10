@@ -602,6 +602,24 @@ da lista. Útil quando ficou pesado no disco.
 curl -X POST localhost:8765/api/projects/$PID/archive
 ```
 
+## Wave 8 — música com ducking
+
+Suba uma trilha sonora e o sistema mixa com a voz aplicando ducking
+(sidechaincompress) — a música abaixa quando o speaker fala.
+
+```bash
+curl -X POST -F "file=@trilha.mp3" \
+  localhost:8765/api/projects/$PID/music/upload
+
+curl -X POST localhost:8765/api/projects/$PID/music/mix \
+  -H content-type:application/json \
+  -d '{"source":"roughcut","music_db":-8}'
+```
+
+A música é auto-loopeada quando mais curta que o vídeo, atenuada pra
+`music_db` (default -8 dB), e abaixada via sidechain quando a voz passa de
+threshold. Saída como `*-with-music.mp4`.
+
 ## Limitações conhecidas
 
 - Whisper é chamado uma vez por projeto, sem chunking — vídeos > 25MB precisam

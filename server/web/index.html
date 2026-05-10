@@ -292,6 +292,24 @@
             </div>
             <div id="music-suggestion" class="music-suggestion hidden"></div>
             <ul id="music-tracks" class="track-list"></ul>
+            <div class="actions" style="margin-top:10px">
+              <label class="dropzone small" id="music-zone" style="flex:1">
+                <input id="music-file" type="file" accept="audio/*" hidden />
+                <div class="dz-icon">🎵</div>
+                <div class="dz-title">Subir trilha sonora</div>
+                <div class="dz-sub">MP3 / M4A / WAV — auto-loop e ducking</div>
+              </label>
+              <select id="music-source" class="inline-select">
+                <option value="graded">graded</option>
+                <option value="roughcut">roughcut</option>
+                <option value="source">source</option>
+                <option value="highlights">highlights</option>
+              </select>
+              <input id="music-db" type="number" value="-8" step="1" class="snap-input" style="max-width:80px" />
+              <span class="card-help" style="margin:0 6px 0 0; font-size:11px">dB</span>
+              <button id="mix-btn" class="btn-primary">🎚 Mixar com voz</button>
+              <a id="mix-link" class="btn-ghost" href="#" download style="display:none">⬇ Mix MP4</a>
+            </div>
           </section>
 
           <section class="card" id="export-card">

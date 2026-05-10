@@ -1168,6 +1168,43 @@ async function detectSpeakers() {
   }
 }
 
+async function uploadMusic(file) {
+  if (!state.current) return;
+  const fd = new FormData();
+  fd.append("file", file);
+  log(`▶ uploading music ${file.name}`);
+  try {
+    const r = await api(`/api/projects/${state.current.id}/music/upload`, { method: "POST", body: fd });
+    log(`✓ music uploaded (${(r.bytes / 1024).toFixed(0)} KB)`, "ok");
+    toast(`Música pronta: ${r.filename}`, "ok");
+  } catch (e) {
+    log(`✗ music upload: ${e.message}`, "err");
+  }
+}
+
+async function mixMusic() {
+  if (!state.current) return;
+  log("▶ mixing music + voice");
+  try {
+    const r = await api(`/api/projects/${state.current.id}/music/mix`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        source: $("#music-source").value,
+        music_db: parseFloat($("#music-db").value || "-8"),
+      }),
+    });
+    log(`✓ mix · ${(r.bytes / 1024).toFixed(0)} KB`, "ok");
+    const a = $("#mix-link");
+    a.href = r.url;
+    a.style.display = "inline-block";
+    a.textContent = `⬇ ${r.export}`;
+    await refreshHistory();
+  } catch (e) {
+    log(`✗ mix: ${e.message}`, "err");
+  }
+}
+
 async function showWaveform() {
   if (!state.current) return;
   const svg = $("#waveform");
@@ -1543,6 +1580,10 @@ function bind() {
   $("#emojify-btn").onclick = emojifyCaptions;
   $("#waveform-btn").onclick = showWaveform;
   $("#archive-btn").onclick = archiveProject;
+  $("#mix-btn").onclick = mixMusic;
+  const mf = $("#music-file");
+  $("#music-zone").addEventListener("click", () => mf.click());
+  mf.addEventListener("change", () => mf.files[0] && uploadMusic(mf.files[0]));
   $("#search-q").addEventListener("input", (e) => {
     clearTimeout(_searchTimer);
     _searchTimer = setTimeout(() => runSearch(e.target.value.trim()), 200);

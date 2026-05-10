@@ -1068,6 +1068,68 @@ async def social_copy(pid: str, body: SocialCopyIn) -> dict[str, Any]:
     return copy.model_dump()
 
 
+# ---- music upload + mix -----------------------------------------------------
+
+@app.post("/api/projects/{pid}/music/upload")
+async def upload_music(pid: str, file: UploadFile = File(...)) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    name = file.filename or "music.mp3"
+    suffix = Path(name).suffix or ".mp3"
+    if suffix.lower() not in (".mp3", ".m4a", ".wav", ".flac", ".ogg"):
+        raise HTTPException(400, "audio file required")
+    dst = pdir / f"music{suffix}"
+    async with aiofiles.open(dst, "wb") as out:
+        while chunk := await file.read(64 * 1024):
+            await out.write(chunk)
+    _stage(state, "music_upload", "done", name)
+    return {"filename": dst.name, "bytes": dst.stat().st_size}
+
+
+class MixIn(BaseModel):
+    music_db: float = -8.0
+    source: str = "graded"     # graded | roughcut | source | highlights
+
+
+@app.post("/api/projects/{pid}/music/mix")
+async def mix_music_endpoint(pid: str, body: MixIn) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    candidates = {
+        "graded": pdir / "graded.mp4",
+        "roughcut": pdir / "roughcut.mp4",
+        "source": pdir / "source.mp4",
+        "highlights": pdir / "highlights.mp4",
+    }
+    src = candidates.get(body.source)
+    if not src or not src.exists():
+        raise HTTPException(400, f"{body.source} not available")
+
+    music = next((pdir / f"music{ext}" for ext in (".mp3", ".m4a", ".wav", ".flac", ".ogg")
+                  if (pdir / f"music{ext}").exists()), None)
+    if not music:
+        raise HTTPException(400, "upload a music file first (POST /music/upload)")
+
+    out = pdir / "exports" / f"{state.name.replace(' ', '_')}-with-music.mp4"
+    out.parent.mkdir(exist_ok=True)
+    _stage(state, "music_mix", "running", f"{music.name} @ {body.music_db}dB")
+    try:
+        await ff.mix_music(src, music, out, music_db=body.music_db)
+    except Exception as e:
+        _stage(state, "music_mix", "error", str(e))
+        raise HTTPException(500, str(e))
+    _stage(state, "music_mix", "done", out.name)
+    storage.append_render_history(pid, name=out.name, kind="music_mix",
+                                  url=f"/api/projects/{pid}/exports/{out.name}",
+                                  bytes=out.stat().st_size,
+                                  extra={"music": music.name, "db": body.music_db})
+    return {
+        "export": out.name,
+        "url": f"/api/projects/{pid}/exports/{out.name}",
+        "bytes": out.stat().st_size,
+    }
+
+
 # ---- audio waveform peaks ---------------------------------------------------
 
 @app.get("/api/projects/{pid}/waveform")
