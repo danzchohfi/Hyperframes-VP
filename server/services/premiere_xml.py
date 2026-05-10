@@ -55,6 +55,8 @@ async def build_xmeml(
     project_name: str,
     source: Path,
     cuts: list[tuple[float, float]] | None,
+    broll_angles: list[tuple[str, Path]] | None = None,
+    broll_placements: list[dict] | None = None,
 ) -> str:
     meta = await _meta(source)
     fps = meta["fps"]
@@ -63,6 +65,8 @@ async def build_xmeml(
 
     keep = cuts if cuts else [(0.0, meta["duration"] or 0.0)]
     seq_dur = _frames(sum(e - s for s, e in keep), fps)
+    broll_angles = broll_angles or []
+    broll_placements = broll_placements or []
 
     xmeml = ET.Element("xmeml", {"version": "5"})
     project = ET.SubElement(xmeml, "project")
@@ -84,6 +88,7 @@ async def build_xmeml(
     ET.SubElement(sc, "width").text = str(meta["width"])
     ET.SubElement(sc, "height").text = str(meta["height"])
     vtrack = ET.SubElement(video, "track")
+    vtrack_b = ET.SubElement(video, "track") if broll_placements else None
 
     # Two audio tracks (stereo split commonly expected by Premiere)
     audio = ET.SubElement(media, "audio")
@@ -150,6 +155,39 @@ async def build_xmeml(
             ET.SubElement(sc_a, "trackindex").text = str(ch_idx)
 
         timeline_pos = cend
+
+    # B-roll inserts on second video track
+    if vtrack_b is not None and broll_placements:
+        emitted_files: set[int] = set()
+        for j, p in enumerate(broll_placements):
+            ai = int(p.get("angle_index", -1))
+            if ai < 0 or ai >= len(broll_angles):
+                continue
+            angle_name, angle_path = broll_angles[ai]
+            tl_off = _frames(float(p.get("timeline_offset", 0.0)), fps)
+            tl_dur = _frames(float(p.get("timeline_duration", 0.0)), fps)
+            if tl_dur <= 0:
+                continue
+            a_in = _frames(float(p.get("angle_in", 0.0)), fps)
+            a_out = a_in + tl_dur
+
+            ci = ET.SubElement(vtrack_b, "clipitem", {"id": f"b-clip-{j+1}"})
+            ET.SubElement(ci, "name").text = angle_name
+            ET.SubElement(ci, "duration").text = str(tl_dur)
+            _rate_xml(ci, tb, ntsc)
+            ET.SubElement(ci, "in").text = str(a_in)
+            ET.SubElement(ci, "out").text = str(a_out)
+            ET.SubElement(ci, "start").text = str(tl_off)
+            ET.SubElement(ci, "end").text = str(tl_off + tl_dur)
+            file_id = f"b-file-{ai + 1}"
+            if ai not in emitted_files:
+                f = ET.SubElement(ci, "file", {"id": file_id})
+                ET.SubElement(f, "name").text = angle_path.name
+                ET.SubElement(f, "pathurl").text = _file_url(angle_path)
+                _rate_xml(f, tb, ntsc)
+                emitted_files.add(ai)
+            else:
+                ET.SubElement(ci, "file", {"id": file_id})
 
     ET.indent(xmeml, space="  ")
     body = ET.tostring(xmeml, encoding="unicode")

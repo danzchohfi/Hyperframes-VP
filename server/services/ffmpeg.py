@@ -123,8 +123,17 @@ async def detect_silences(src: Path, *, noise_db: float = -32.0, min_silence: fl
     return list(zip(starts, ends))
 
 
-async def cut_segments(src: Path, dst: Path, keep: list[tuple[float, float]], *, lut: Path | None = None) -> None:
-    """Concatenate the kept segments into dst, optionally applying a 3D LUT."""
+async def cut_segments(
+    src: Path,
+    dst: Path,
+    keep: list[tuple[float, float]],
+    *,
+    lut: Path | None = None,
+    loudnorm: bool = False,
+    denoise: bool = False,
+) -> None:
+    """Concatenate the kept segments into dst, optionally applying a 3D LUT
+    and/or audio polish (loudnorm broadcast target + light denoise)."""
     if not keep:
         raise FFmpegError("no segments to keep")
 
@@ -141,8 +150,30 @@ async def cut_segments(src: Path, dst: Path, keep: list[tuple[float, float]], *,
         parts.append(f"{v}[{i}:a:0]")
     concat = "".join(parts) + f"concat=n={n}:v=1:a=1[v][a]"
 
-    cmd = ["ffmpeg", "-y", *inputs, "-filter_complex", concat,
-           "-map", "[v]", "-map", "[a]",
+    audio_chain = ["[a]"]
+    if denoise:
+        audio_chain.append("afftdn=nf=-25[a1]")
+    if loudnorm:
+        # Single-pass online loudnorm targeting -14 LUFS (social-media spec).
+        audio_chain.append(("loudnorm=I=-14:LRA=11:TP=-1.5") + "[a2]")
+    if len(audio_chain) > 1:
+        # rebuild as filter chain after concat
+        chain_filters: list[str] = []
+        cur_in = "[a]"
+        steps = audio_chain[1:]
+        for i, step in enumerate(steps):
+            out_label = step.split("[")[-1].split("]")[0]
+            f = step.split("[")[0]
+            chain_filters.append(f"{cur_in}{f}[{out_label}]")
+            cur_in = f"[{out_label}]"
+        full = concat + ";" + ";".join(chain_filters)
+        audio_map = cur_in
+    else:
+        full = concat
+        audio_map = "[a]"
+
+    cmd = ["ffmpeg", "-y", *inputs, "-filter_complex", full,
+           "-map", "[v]", "-map", audio_map,
            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
            "-pix_fmt", "yuv420p",
            "-c:a", "aac", "-b:a", "192k",
@@ -177,8 +208,19 @@ async def apply_lut(src: Path, dst: Path, lut: Path) -> None:
     )
 
 
+async def grab_thumbnail(src: Path, dst: Path, *, at: float, width: int = 480) -> None:
+    """Save a single still frame at `at` seconds as JPEG."""
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    await run([
+        "ffmpeg", "-y", "-ss", f"{at:.3f}", "-i", str(src),
+        "-frames:v", "1", "-q:v", "3",
+        "-vf", f"scale={width}:-2",
+        str(dst),
+    ])
+
+
 async def to_aspect(src: Path, dst: Path, target: str) -> None:
-    """Reframe to '9:16' or '16:9' or '1:1' with letterbox/crop fallback."""
+    """Reframe to '9:16' or '16:9' or '1:1' with letterbox/pad fallback."""
     presets = {
         "16:9": (1920, 1080),
         "9:16": (1080, 1920),
@@ -191,26 +233,42 @@ async def to_aspect(src: Path, dst: Path, target: str) -> None:
         f"scale={w}:{h}:force_original_aspect_ratio=decrease,"
         f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1"
     )
-    await run(
-        [
-            "ffmpeg",
-            "-y",
-            "-i",
-            str(src),
-            "-vf",
-            vf,
-            "-c:v",
-            "libx264",
-            "-preset",
-            "veryfast",
-            "-crf",
-            "20",
-            "-pix_fmt",
-            "yuv420p",
-            "-c:a",
-            "copy",
-            "-movflags",
-            "+faststart",
-            str(dst),
-        ]
+    await run([
+        "ffmpeg", "-y", "-i", str(src),
+        "-vf", vf,
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        "-pix_fmt", "yuv420p", "-c:a", "copy",
+        "-movflags", "+faststart",
+        str(dst),
+    ])
+
+
+async def to_aspect_smart(src: Path, dst: Path, target: str, *, anchor_x: float = 0.5) -> None:
+    """Subject-aware reframe: scales to fill (no letterbox), then crops centered
+    on `anchor_x` (0..1, normalized horizontal position from smartcrop).
+    """
+    presets = {
+        "16:9": (1920, 1080),
+        "9:16": (1080, 1920),
+        "1:1": (1080, 1080),
+    }
+    if target not in presets:
+        raise FFmpegError(f"unsupported aspect: {target}")
+    w, h = presets[target]
+
+    # Scale to fill (cover) → crop centered on anchor_x.
+    # We scale so that whichever dimension fits exactly, the other is larger,
+    # then crop the excess.
+    vf = (
+        f"scale='if(gt(a,{w}/{h}),-2,{w})':'if(gt(a,{w}/{h}),{h},-2)':flags=lanczos,"
+        f"crop={w}:{h}:max(0\\,min(iw-{w}\\,iw*{anchor_x:.4f}-{w}/2)):"
+        f"max(0\\,min(ih-{h}\\,ih/2-{h}/2)),setsar=1"
     )
+    await run([
+        "ffmpeg", "-y", "-i", str(src),
+        "-vf", vf,
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        "-pix_fmt", "yuv420p", "-c:a", "copy",
+        "-movflags", "+faststart",
+        str(dst),
+    ])

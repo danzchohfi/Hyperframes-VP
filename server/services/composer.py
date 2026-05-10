@@ -65,6 +65,7 @@ def build_composition(
     transcript: dict | None,
     brand: BrandBook,
     aspect: str = "9:16",
+    chapters: list[dict] | None = None,  # if set → "Eddie cut" mode
 ) -> Path:
     """Materialize a Hyperframes project at project_dir/composition. Returns path."""
     comp_dir = project_dir / "composition"
@@ -189,6 +190,23 @@ def build_composition(
 
     main_start = intro_dur
 
+    # Chapter overlays ("Eddie cut" mode). Each chapter shows a flash card with
+    # its name + summary for ~1.6s at the chapter boundary on the timeline.
+    chapter_html = ""
+    if chapters:
+        cards = []
+        for i, ch in enumerate(chapters):
+            ch_start = float(ch.get("start", 0.0)) + intro_dur
+            ch_dur = min(1.6, float(ch.get("duration") or 1.6))
+            cards.append(
+                f'<div id="ch{i}" class="chapter-card clip" '
+                f'data-start="{ch_start:.3f}" data-duration="{ch_dur:.3f}" data-track-index="3">'
+                f'<div class="ch-num">CHAPTER {i + 1:02d}</div>'
+                f'<div class="ch-name">{html.escape(ch.get("name", ""))}</div>'
+                f'</div>'
+            )
+        chapter_html = "\n      ".join(cards)
+
     html_doc = f"""<!doctype html>
 <html lang="pt-br">
   <head>
@@ -255,15 +273,48 @@ def build_composition(
         {'bottom: 12%;' if brand.caption_position == 'bottom' else 'top: 50%; transform: translateY(-50%);'}
         text-align: center;
         font-family: "{typo.title_family}", system-ui, sans-serif;
-        font-weight: 700;
-        font-size: {int(width * 0.055)}px;
-        line-height: 1.15;
+        font-weight: {('900' if brand.caption_style == 'tiktok' else '600' if brand.caption_style == 'podcast' else '700')};
+        font-size: {int(width * (0.07 if brand.caption_style == 'tiktok' else 0.045 if brand.caption_style == 'podcast' else 0.055))}px;
+        line-height: {('1.05' if brand.caption_style == 'tiktok' else '1.25' if brand.caption_style == 'podcast' else '1.15')};
         color: {caption_color};
-        text-shadow: 0 4px 28px rgba(0,0,0,0.85), 0 0 2px rgba(0,0,0,0.6);
-        letter-spacing: -0.01em;
+        letter-spacing: {'-0.02em' if brand.caption_style == 'tiktok' else '0em' if brand.caption_style == 'podcast' else '-0.01em'};
+        text-transform: {('uppercase' if brand.caption_style == 'tiktok' else 'none')};
+        text-shadow: {('0 4px 28px rgba(0,0,0,0.95), 2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000' if brand.caption_style == 'tiktok' else '0 2px 14px rgba(0,0,0,0.7)' if brand.caption_style == 'podcast' else '0 4px 28px rgba(0,0,0,0.85), 0 0 2px rgba(0,0,0,0.6)')};
+        {'background: rgba(0,0,0,0.55); padding: 14px 20px; border-radius: 10px; backdrop-filter: blur(8px);' if brand.caption_style == 'podcast' else ''}
       }}
-      .caption .cw {{ display: inline-block; margin: 0 0.18em; transition: color 60ms linear; }}
-      .caption .cw.hot {{ color: {caption_highlight}; text-shadow: 0 0 20px {caption_highlight}aa, 0 4px 28px rgba(0,0,0,0.85); }}
+      .caption .cw {{ display: inline-block; margin: 0 0.18em; transition: color 60ms linear, transform 80ms ease; }}
+      .caption .cw.hot {{
+        color: {caption_highlight};
+        text-shadow: 0 0 20px {caption_highlight}aa, 0 4px 28px rgba(0,0,0,0.85);
+        {'transform: scale(1.15);' if brand.caption_style == 'tiktok' else ''}
+      }}
+      .chapter-card {{
+        position: absolute;
+        top: 8%; left: 6%;
+        padding: 14px 22px 16px 22px;
+        background: linear-gradient(135deg, {palette.background}cc, {palette.background}99);
+        border: 1px solid {palette.primary}55;
+        border-left: 3px solid {palette.primary};
+        border-radius: 10px;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+      }}
+      .chapter-card .ch-num {{
+        font-size: {int(width * 0.018)}px;
+        font-weight: 700;
+        letter-spacing: 0.32em;
+        color: {palette.primary};
+        text-transform: uppercase;
+        margin-bottom: 4px;
+      }}
+      .chapter-card .ch-name {{
+        font-family: "{typo.title_family}", system-ui, sans-serif;
+        font-size: {int(width * 0.038)}px;
+        font-weight: {typo.title_weight};
+        color: {palette.foreground};
+        letter-spacing: -0.02em;
+      }}
     </style>
   </head>
   <body>
@@ -279,6 +330,7 @@ def build_composition(
              data-volume="1.0"
              src="body.mp4" preload="auto"></audio>
       {intro_html}
+      {chapter_html}
       {caption_html}
       {outro_html}
     </div>
@@ -301,6 +353,14 @@ def build_composition(
         const outroStart = {intro_dur + main_dur};
         tl.fromTo(outro.querySelector(".card-outro"), {{ opacity: 0, y: 18 }},
                   {{ opacity: 1, y: 0, duration: 0.8 }}, outroStart + 0.05);
+      }}
+
+      // Chapter card flash-ins
+      for (const card of document.querySelectorAll(".chapter-card")) {{
+        const start = parseFloat(card.dataset.start);
+        const dur = parseFloat(card.dataset.duration);
+        tl.fromTo(card, {{ opacity: 0, x: -24 }}, {{ opacity: 1, x: 0, duration: 0.45, ease: "power3.out" }}, start);
+        tl.to(card, {{ opacity: 0, duration: 0.4, ease: "power2.in" }}, start + dur - 0.4);
       }}
 
       window.__timelines["main"] = tl;

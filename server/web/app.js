@@ -1,7 +1,21 @@
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
-const state = { current: null };
+const state = { current: null, sse: null };
+
+function toast(msg, kind = "") {
+  let el = document.querySelector(".live-toast");
+  if (!el) {
+    el = document.createElement("div");
+    el.className = "live-toast";
+    document.body.appendChild(el);
+  }
+  el.className = `live-toast ${kind}`;
+  el.textContent = msg;
+  requestAnimationFrame(() => el.classList.add("show"));
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.remove("show"), 2400);
+}
 
 async function api(path, opts = {}) {
   const res = await fetch(path, opts);
@@ -43,6 +57,7 @@ async function refreshList() {
 async function loadProject(id) {
   const p = await api(`/api/projects/${id}`);
   state.current = p;
+  attachEventStream(id);
   $("#empty").classList.add("hidden");
   $("#project-view").classList.remove("hidden");
   $("#project-name").textContent = p.name;
@@ -61,18 +76,10 @@ async function loadProject(id) {
   // brand
   try {
     const b = await api(`/api/projects/${p.id}/brand`);
-    $("#brand-name").value = b.name || "";
-    $("#brand-tagline").value = b.tagline || "";
-    $("#brand-intro-title").value = b.intro_title || "";
-    $("#brand-intro-sub").value = b.intro_subtitle || "";
-    $("#brand-outro").value = b.outro_text || "";
-    $("#brand-cap-pos").value = b.caption_position || "bottom";
-    $("#c-primary").value = b.palette?.primary || "#a78bfa";
-    $("#c-secondary").value = b.palette?.secondary || "#3b82f6";
-    $("#c-accent").value = b.palette?.accent || "#f472b6";
-    $("#c-bg").value = b.palette?.background || "#06060a";
-    $("#c-fg").value = b.palette?.foreground || "#ffffff";
+    fillBrandForm(b);
   } catch {}
+  await refreshBrandPresets();
+  await refreshSnapshots();
 
   $("#lut-status").textContent = p.has_lut ? `LUT: ${p.lut_filename}` : "Sem LUT";
   $("#lut-status").className = p.has_lut ? "status ok" : "status muted";
@@ -270,6 +277,51 @@ function escapeHtml(s) {
   }[c]));
 }
 
+function attachEventStream(pid) {
+  if (state.sse) {
+    state.sse.close();
+    state.sse = null;
+  }
+  let stateRefreshTimer = null;
+  const es = new EventSource(`/api/projects/${pid}/events`);
+  es.onmessage = (ev) => {
+    let data;
+    try { data = JSON.parse(ev.data); } catch { return; }
+    if (data.type === "stage") {
+      const st = document.querySelector(`.stage[data-stage="${data.stage}"]`);
+      if (st) {
+        st.classList.remove("running", "done", "error");
+        st.classList.add(data.status);
+        const sub = st.querySelector(".stage-sub");
+        if (data.message && sub) sub.textContent = data.message;
+      }
+      if (data.status === "done") toast(`✓ ${data.stage}: ${data.message || ""}`, "ok");
+      if (data.status === "error") toast(`✗ ${data.stage}: ${data.message || ""}`, "error");
+      if (data.status === "running") toast(`▶ ${data.stage}…`);
+    } else if (data.type === "log") {
+      log(data.message, data.level === "error" ? "err" : data.level === "ok" ? "ok" : "");
+    } else if (data.type === "state") {
+      // refresh state.current debounced — avoid hammering on bursts
+      if (stateRefreshTimer) return;
+      stateRefreshTimer = setTimeout(async () => {
+        stateRefreshTimer = null;
+        if (state.current?.id !== pid) return;
+        try {
+          const p = await api(`/api/projects/${pid}`);
+          state.current = p;
+          renderAngles(p);
+          renderMusicSuggestion(p.music_suggestion);
+          await loadSoundbitesAndStory(p);
+        } catch {}
+      }, 250);
+    }
+  };
+  es.onerror = () => {
+    // browser will auto-reconnect
+  };
+  state.sse = es;
+}
+
 async function newProject() {
   const name = prompt("Nome do projeto:", "Meu vídeo");
   if (!name) return;
@@ -314,21 +366,7 @@ async function uploadLut(file) {
 
 async function saveBrand() {
   if (!state.current) return;
-  const body = {
-    name: $("#brand-name").value || "Brand",
-    tagline: $("#brand-tagline").value || null,
-    intro_title: $("#brand-intro-title").value || null,
-    intro_subtitle: $("#brand-intro-sub").value || null,
-    outro_text: $("#brand-outro").value || null,
-    caption_position: $("#brand-cap-pos").value,
-    palette: {
-      primary: $("#c-primary").value,
-      secondary: $("#c-secondary").value,
-      accent: $("#c-accent").value,
-      background: $("#c-bg").value,
-      foreground: $("#c-fg").value,
-    },
-  };
+  const body = collectBrand();
   try {
     await api(`/api/projects/${state.current.id}/brand`, {
       method: "PUT",
@@ -366,8 +404,18 @@ async function runStage(name) {
       };
     } else if (name === "fillers") {
       body = { language: $("#opt-filler-lang").value, pad: 0.04 };
+    } else if (name === "apply") {
+      body = {
+        loudnorm: $("#opt-loudnorm")?.checked || false,
+        denoise: $("#opt-denoise")?.checked || false,
+      };
     } else if (name === "render") {
-      body = { aspect: $("#render-aspect").value, include_captions: true };
+      body = {
+        aspect: $("#render-aspect").value,
+        include_captions: true,
+        source: $("#render-source")?.value || "graded",
+        include_chapter_cards: $("#render-chapters")?.checked || false,
+      };
     }
     const res = await api(path, {
       method: "POST",
@@ -445,6 +493,8 @@ async function buildRoughCut() {
         use_story: useStory,
         soundbite_ids: useStory ? null : checked,
         apply_lut: true,
+        loudnorm: $("#rc-loudnorm")?.checked || false,
+        denoise: $("#rc-denoise")?.checked || false,
       }),
     });
     status.textContent = `${r.duration.toFixed(1)}s · ${r.segments} segmentos · ${r.chapters} capítulos`;
@@ -470,6 +520,7 @@ async function exportPremiere() {
       body: JSON.stringify({
         use_cuts: !$("#premiere-roughcut").checked,
         use_roughcut: $("#premiere-roughcut").checked,
+        include_broll: $("#premiere-broll").checked,
       }),
     });
     log(`✓ Premiere XML · ${res.bytes}b`, "ok");
@@ -480,6 +531,251 @@ async function exportPremiere() {
   } catch (e) {
     log(`✗ Premiere XML: ${e.message}`, "err");
   }
+}
+
+async function placeBroll() {
+  if (!state.current) return;
+  const btn = $("#place-broll-btn");
+  const status = $("#broll-place-status");
+  btn.disabled = true;
+  status.textContent = "matching...";
+  status.className = "status warn";
+  try {
+    const r = await api(`/api/projects/${state.current.id}/place-broll`, { method: "POST" });
+    status.textContent = `${r.placements.length} inserts colocados`;
+    status.className = "status ok";
+    log(`✓ B-roll placement · ${r.placements.length} inserts`, "ok");
+  } catch (e) {
+    status.textContent = e.message;
+    status.className = "status error";
+    log(`✗ place-broll: ${e.message}`, "err");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function smartReframe() {
+  if (!state.current) return;
+  const btn = $("#smart-reframe-btn");
+  btn.disabled = true;
+  btn.textContent = "✨ Detectando subject...";
+  log("▶ smart reframe");
+  try {
+    const r = await api(`/api/projects/${state.current.id}/smart-reframe`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        aspect: $("#export-aspect").value,
+        use_roughcut: state.current.has_roughcut,
+      }),
+    });
+    log(`✓ smart-crop anchor=${r.anchor_x.toFixed(2)} · ${r.url}`, "ok");
+    $("#download-link").href = r.url;
+    $("#result").src = r.url;
+  } catch (e) {
+    log(`✗ smart-reframe: ${e.message}`, "err");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "✨ Smart crop (IA)";
+  }
+}
+
+async function exportCaptions(fmt) {
+  if (!state.current) return;
+  log(`▶ ${fmt}`);
+  try {
+    const useRoughcut = $("#caps-roughcut").checked;
+    const res = await api(`/api/projects/${state.current.id}/export/captions?fmt=${fmt}&use_roughcut=${useRoughcut}`, { method: "POST" });
+    log(`✓ ${fmt} · ${res.cues} cues`, "ok");
+    const link = $("#caps-link");
+    link.href = res.url;
+    link.style.display = "inline-block";
+    link.textContent = `⬇ ${res.export}`;
+  } catch (e) {
+    log(`✗ ${fmt}: ${e.message}`, "err");
+  }
+}
+
+async function refreshSnapshots() {
+  if (!state.current) return;
+  const list = $("#snap-list");
+  list.innerHTML = "";
+  try {
+    const snaps = await api(`/api/projects/${state.current.id}/snapshots`);
+    for (const s of snaps) {
+      const li = document.createElement("li");
+      li.innerHTML = `
+        <span class="snap-label">${escapeHtml(s.label)}</span>
+        <span class="snap-meta">${(s.captured_files || []).length} files · ${new Date(s.created_at).toLocaleString()}</span>
+        <button class="btn-ghost" data-snap="${s.id}">Restaurar</button>
+      `;
+      li.querySelector("button").onclick = async () => {
+        if (!confirm(`Restaurar ${s.label}?`)) return;
+        try {
+          await api(`/api/projects/${state.current.id}/snapshots/${s.id}/restore`, { method: "POST" });
+          log(`✓ snapshot restaurado`, "ok");
+          await loadProject(state.current.id);
+        } catch (e) {
+          log(`✗ restore: ${e.message}`, "err");
+        }
+      };
+      list.appendChild(li);
+    }
+  } catch {}
+}
+
+async function takeSnapshot() {
+  if (!state.current) return;
+  const label = $("#snap-label").value || `snap ${new Date().toLocaleString()}`;
+  try {
+    await api(`/api/projects/${state.current.id}/snapshots`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ label }),
+    });
+    log(`✓ snapshot: ${label}`, "ok");
+    $("#snap-label").value = "";
+    await refreshSnapshots();
+  } catch (e) {
+    log(`✗ snapshot: ${e.message}`, "err");
+  }
+}
+
+async function refreshBrandPresets() {
+  const sel = $("#brand-preset-pick");
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— escolher —</option>';
+  try {
+    const presets = await api(`/api/brand-presets`);
+    for (const p of presets) {
+      const opt = document.createElement("option");
+      opt.value = p._id;
+      opt.textContent = p.name;
+      sel.appendChild(opt);
+    }
+  } catch {}
+}
+
+async function saveBrandPreset() {
+  const name = $("#brand-name").value || prompt("Nome do preset?", "Marca");
+  if (!name) return;
+  const brand = collectBrand();
+  try {
+    await api(`/api/brand-presets`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name, brand }),
+    });
+    log(`✓ Preset salvo: ${name}`, "ok");
+    await refreshBrandPresets();
+  } catch (e) {
+    log(`✗ preset: ${e.message}`, "err");
+  }
+}
+
+async function exportBundle() {
+  if (!state.current) return;
+  log("▶ bundle");
+  try {
+    const r = await api(`/api/projects/${state.current.id}/export/bundle`, { method: "POST" });
+    log(`✓ bundle · ${r.files} files · ${(r.bytes / 1024).toFixed(0)} KB`, "ok");
+    const a = $("#bundle-link");
+    a.href = r.url;
+    a.style.display = "inline-block";
+    a.textContent = `⬇ ${r.export}`;
+  } catch (e) {
+    log(`✗ bundle: ${e.message}`, "err");
+  }
+}
+
+async function duplicateProject() {
+  if (!state.current) return;
+  if (!confirm(`Duplicar "${state.current.name}"?`)) return;
+  try {
+    const p = await api(`/api/projects/${state.current.id}/duplicate`, { method: "POST" });
+    log(`✓ duplicado: ${p.name}`, "ok");
+    await refreshList();
+    await loadProject(p.id);
+  } catch (e) {
+    log(`✗ duplicate: ${e.message}`, "err");
+  }
+}
+
+async function detectSpeakers() {
+  if (!state.current) return;
+  try {
+    const r = await api(`/api/projects/${state.current.id}/speakers`, { method: "POST" });
+    log(`✓ falas · ${r.turns.length} turnos`, "ok");
+    toast(`${r.turns.length} turnos detectados`, "ok");
+  } catch (e) {
+    log(`✗ speakers: ${e.message}`, "err");
+  }
+}
+
+async function chapterThumbs() {
+  if (!state.current) return;
+  log("▶ chapter thumbs");
+  try {
+    const r = await api(`/api/projects/${state.current.id}/chapter-thumbs`, { method: "POST" });
+    const grid = $("#thumbs-grid");
+    grid.innerHTML = "";
+    for (const t of r.thumbs) {
+      const div = document.createElement("div");
+      div.className = "thumb";
+      div.innerHTML = `<img src="${t.url}" alt="${escapeHtml(t.name)}" loading="lazy"/><div class="label">${escapeHtml(t.name)}</div>`;
+      grid.appendChild(div);
+    }
+    log(`✓ thumbs · ${r.thumbs.length}`, "ok");
+  } catch (e) {
+    log(`✗ thumbs: ${e.message}`, "err");
+  }
+}
+
+async function applyBrandPreset() {
+  if (!state.current) return;
+  const id = $("#brand-preset-pick").value;
+  if (!id) return;
+  try {
+    const b = await api(`/api/projects/${state.current.id}/brand/from-preset/${id}`, { method: "POST" });
+    fillBrandForm(b);
+    log(`✓ Preset aplicado`, "ok");
+  } catch (e) {
+    log(`✗ apply preset: ${e.message}`, "err");
+  }
+}
+
+function collectBrand() {
+  return {
+    name: $("#brand-name").value || "Brand",
+    tagline: $("#brand-tagline").value || null,
+    intro_title: $("#brand-intro-title").value || null,
+    intro_subtitle: $("#brand-intro-sub").value || null,
+    outro_text: $("#brand-outro").value || null,
+    caption_position: $("#brand-cap-pos").value,
+    caption_style: $("#brand-cap-style")?.value || "minimal",
+    palette: {
+      primary: $("#c-primary").value,
+      secondary: $("#c-secondary").value,
+      accent: $("#c-accent").value,
+      background: $("#c-bg").value,
+      foreground: $("#c-fg").value,
+    },
+  };
+}
+
+function fillBrandForm(b) {
+  $("#brand-name").value = b.name || "";
+  $("#brand-tagline").value = b.tagline || "";
+  $("#brand-intro-title").value = b.intro_title || "";
+  $("#brand-intro-sub").value = b.intro_subtitle || "";
+  $("#brand-outro").value = b.outro_text || "";
+  $("#brand-cap-pos").value = b.caption_position || "bottom";
+  if ($("#brand-cap-style")) $("#brand-cap-style").value = b.caption_style || "minimal";
+  $("#c-primary").value = b.palette?.primary || "#a78bfa";
+  $("#c-secondary").value = b.palette?.secondary || "#3b82f6";
+  $("#c-accent").value = b.palette?.accent || "#f472b6";
+  $("#c-bg").value = b.palette?.background || "#06060a";
+  $("#c-fg").value = b.palette?.foreground || "#ffffff";
 }
 
 async function doExport() {
@@ -601,6 +897,8 @@ async function exportFcpxml() {
       body: JSON.stringify({
         multicam: $("#fcpxml-multicam").checked,
         use_cuts: $("#fcpxml-cuts").checked,
+        use_roughcut: $("#fcpxml-roughcut")?.checked || false,
+        include_broll: $("#fcpxml-broll")?.checked || false,
         include_word_markers: $("#fcpxml-markers").checked,
       }),
     });
@@ -650,6 +948,17 @@ function bind() {
   $("#soundbites-btn").onclick = extractSoundbites;
   $("#story-btn").onclick = buildStory;
   $("#roughcut-btn").onclick = buildRoughCut;
+  $("#place-broll-btn").onclick = placeBroll;
+  $("#smart-reframe-btn").onclick = smartReframe;
+  $("#srt-btn").onclick = () => exportCaptions("srt");
+  $("#vtt-btn").onclick = () => exportCaptions("vtt");
+  $("#snap-take-btn").onclick = takeSnapshot;
+  $("#save-preset-btn").onclick = saveBrandPreset;
+  $("#apply-preset-btn").onclick = applyBrandPreset;
+  $("#bundle-btn").onclick = exportBundle;
+  $("#dup-btn").onclick = duplicateProject;
+  $("#speakers-btn").onclick = detectSpeakers;
+  $("#thumbs-btn").onclick = chapterThumbs;
 
   for (const btn of $$("[data-run]")) {
     btn.addEventListener("click", () => runStage(btn.dataset.run));

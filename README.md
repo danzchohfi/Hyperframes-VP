@@ -289,6 +289,122 @@ No Premiere: **Arquivo → Importar → seleciona o .xml**. No Resolve: **File �
 Import → Timeline → AAF/EDL/XML**. Os clipes vêm com in/out points e referência
 ao `source.mp4` por path absoluto.
 
+## Refinamentos recentes (Eddie × Hyperframes)
+
+### Progresso ao vivo via SSE
+A UI escuta `GET /api/projects/{id}/events` e recebe stage transitions e
+mensagens em tempo real. Cards mudam de cor sozinhos, e um toast no canto
+mostra o evento atual.
+
+### Loudnorm + denoise no áudio
+Toggles no card "Pipeline → Aplicar edição" e no rough cut. Aplica
+`loudnorm=I=-14:LRA=11:TP=-1.5` (target social media) e `afftdn` num único
+filtro complex.
+
+### B-roll contextual
+Depois de taggear ângulos via `🏷 Tag IA`, clique em `🎯 Posicionar B-roll
+automaticamente`. A IA decide qual ângulo cobre cada soundbite, com in/out
+points sugeridos. Ângulos com `quality != "ok"` são pulados.
+
+```bash
+curl -X POST localhost:8765/api/projects/$PID/place-broll
+# → {placements: [{soundbite_id, angle_index, angle_in, angle_out,
+#                  timeline_offset, timeline_duration, score, reason}], ...}
+```
+
+Os placements alimentam:
+- FCPXML multitrack (lane="1" connected clip)
+- Premiere/Resolve XML (segunda video track)
+
+```bash
+curl -X POST localhost:8765/api/projects/$PID/export/fcpxml \
+  -H content-type:application/json \
+  -d '{"include_broll":true,"use_roughcut":true}'
+
+curl -X POST localhost:8765/api/projects/$PID/export/premiere \
+  -H content-type:application/json \
+  -d '{"include_broll":true,"use_roughcut":true}'
+```
+
+### Smart-crop reframing
+Em vez de letterbox, o sistema detecta a posição horizontal do subject via
+GPT-4o vision (mediana de 5 frames) e faz crop centrado nele. Bom pra
+talking heads em vertical.
+
+```bash
+curl -X POST localhost:8765/api/projects/$PID/smart-reframe \
+  -H content-type:application/json \
+  -d '{"aspect":"9:16","use_roughcut":true}'
+```
+
+### SRT / VTT
+```bash
+curl -X POST "localhost:8765/api/projects/$PID/export/captions?fmt=srt"
+curl -X POST "localhost:8765/api/projects/$PID/export/captions?fmt=vtt&use_roughcut=true"
+```
+
+### Caption styles
+No BrandBook: `caption_style: minimal | tiktok | podcast`. Aplicado tanto na
+preview Hyperframes quanto no render final:
+- `minimal` — branca, peso 700, sombra discreta
+- `tiktok` — uppercase 900, scale 1.15 na palavra ativa, contorno preto duplo
+- `podcast` — peso 600, lowercase, chip semi-transparente com blur
+
+### Render: roughcut + chapter cards
+O endpoint `/render` agora aceita `source: "graded" | "roughcut" | "source"`
+e `include_chapter_cards: true`. Quando ligado, cada capítulo do roteiro
+ganha um cartão flash-in com nome + número, sobreposto ao corpo do vídeo.
+A transcrição é re-timed automaticamente quando a fonte é o rough cut.
+
+### Snapshots
+Salve "fotos" do estado de cuts/soundbites/story/brand pra comparar versões.
+
+```bash
+curl -X POST localhost:8765/api/projects/$PID/snapshots \
+  -H content-type:application/json -d '{"label":"v1 — antes do feedback"}'
+curl localhost:8765/api/projects/$PID/snapshots
+curl -X POST localhost:8765/api/projects/$PID/snapshots/<snap_id>/restore
+```
+
+### Brand presets
+Salve um BrandBook como preset reutilizável em todos os projetos.
+
+```bash
+curl -X POST localhost:8765/api/brand-presets \
+  -H content-type:application/json \
+  -d '{"name":"Acme Corp","brand":{"palette":{"primary":"#0aa"}}}'
+curl localhost:8765/api/brand-presets
+curl -X POST localhost:8765/api/projects/$PID/brand/from-preset/acme-corp
+```
+
+### Speaker turns (heurístico)
+```bash
+curl -X POST "localhost:8765/api/projects/$PID/speakers?gap=1.2"
+# → {turns: [{speaker:"A", start, end, text, word_count}, ...]}
+```
+Quando alternam pausas longas, alterna A/B. Não é diarização real, mas é o
+suficiente pra entrevista um-a-um. Plugar pyannote.audio é o próximo passo.
+
+### Chapter thumbnails
+```bash
+curl -X POST localhost:8765/api/projects/$PID/chapter-thumbs
+# → grava thumbs/chapter_NN.jpg pegando o frame logo após o início do
+#   primeiro soundbite de cada capítulo. UI mostra um grid clicável.
+```
+
+### Bundle export (.zip)
+Empacota tudo (planos, MP4s, FCPXML/xmeml/SRT/VTT, brand.json, LUT, ângulos)
+num zip pra mover entre máquinas / arquivar.
+```bash
+curl -X POST localhost:8765/api/projects/$PID/export/bundle
+```
+
+### Duplicar projeto
+```bash
+curl -X POST localhost:8765/api/projects/$PID/duplicate
+# clona transcript + cuts + soundbites + story + brand + media. Renders não.
+```
+
 ## Limitações conhecidas
 
 - Whisper é chamado uma vez por projeto, sem chunking — vídeos > 25MB precisam

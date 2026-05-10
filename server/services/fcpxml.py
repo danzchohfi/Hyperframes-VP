@@ -171,6 +171,175 @@ async def build_single_cam_fcpxml(
     return _render(fcpxml)
 
 
+async def build_multitrack_fcpxml(
+    *,
+    project_name: str,
+    source: Path,
+    cuts: list[tuple[float, float]] | None,
+    transcript: dict | None = None,
+    broll_angles: list[tuple[str, Path]] | None = None,
+    broll_placements: list[dict] | None = None,
+) -> str:
+    """A-roll spine on V1, B-roll inserts as connected clips on lane=1.
+
+    `broll_placements` items: {angle_index, angle_in, angle_out,
+    timeline_offset, timeline_duration, soundbite_id?}.
+    """
+    meta = await _video_meta(source)
+    tb = meta["time_base"]
+    src_dur = meta["duration"] or 0.0
+    broll_angles = broll_angles or []
+    broll_placements = broll_placements or []
+
+    fcpxml = ET.Element("fcpxml", {"version": "1.10"})
+    resources = ET.SubElement(fcpxml, "resources")
+    ET.SubElement(
+        resources,
+        "format",
+        {
+            "id": "r1",
+            "name": meta["format_name"],
+            "frameDuration": meta["frame_duration"],
+            "width": str(meta["width"]),
+            "height": str(meta["height"]),
+            "colorSpace": "1-1-1 (Rec. 709)",
+        },
+    )
+    # A-roll asset
+    ET.SubElement(
+        resources,
+        "asset",
+        {
+            "id": "r2",
+            "name": source.stem,
+            "src": _file_url(source),
+            "start": "0s",
+            "duration": _t(src_dur, tb),
+            "hasVideo": "1",
+            "hasAudio": "1",
+            "format": "r1",
+            "audioSources": "1",
+            "audioChannels": "2",
+            "audioRate": "48000",
+        },
+    )
+    # B-roll assets
+    angle_durations: dict[int, float] = {}
+    for i, (name, path) in enumerate(broll_angles):
+        m = await _video_meta(path)
+        angle_durations[i] = m["duration"] or 0.0
+        ET.SubElement(
+            resources,
+            "asset",
+            {
+                "id": f"b{i + 1}",
+                "name": name,
+                "src": _file_url(path),
+                "start": "0s",
+                "duration": _t(m["duration"] or 0.0, tb),
+                "hasVideo": "1",
+                "hasAudio": "1",
+                "format": "r1",
+                "audioSources": "1",
+                "audioChannels": "2",
+                "audioRate": "48000",
+            },
+        )
+
+    library = ET.SubElement(fcpxml, "library")
+    event = ET.SubElement(library, "event", {"name": f"HyperFrames · {project_name}"})
+    project = ET.SubElement(event, "project", {"name": project_name})
+
+    keep = cuts if cuts else [(0.0, src_dur)]
+    timeline_dur = sum(e - s for s, e in keep)
+
+    sequence = ET.SubElement(
+        project,
+        "sequence",
+        {
+            "format": "r1",
+            "duration": _t(timeline_dur, tb),
+            "tcStart": "0s",
+            "tcFormat": "NDF",
+            "audioLayout": "stereo",
+            "audioRate": "48k",
+        },
+    )
+    spine = ET.SubElement(sequence, "spine")
+
+    offset = 0.0
+    words = (transcript or {}).get("words") or []
+    aroll_clips: list[ET.Element] = []
+    aroll_offsets: list[tuple[float, float, ET.Element]] = []  # (timeline_start, timeline_end, element)
+    for i, (s, e) in enumerate(keep):
+        clip_dur = max(e - s, 1.0 / 30.0)
+        clip = ET.SubElement(
+            spine,
+            "asset-clip",
+            {
+                "ref": "r2",
+                "name": f"{project_name} cut {i + 1}",
+                "offset": _t(offset, tb),
+                "start": _t(s, tb),
+                "duration": _t(clip_dur, tb),
+                "tcFormat": "NDF",
+            },
+        )
+        aroll_clips.append(clip)
+        aroll_offsets.append((offset, offset + clip_dur, clip))
+        for w in words:
+            ws = float(w.get("start") or 0.0)
+            we = float(w.get("end") or ws)
+            if ws >= s and ws < e:
+                ET.SubElement(
+                    clip,
+                    "marker",
+                    {
+                        "start": _t(ws, tb),
+                        "duration": _t(max(we - ws, 1 / 30.0), tb),
+                        "value": str(w.get("word", "")).strip(),
+                    },
+                )
+        offset += clip_dur
+
+    # Attach B-roll placements as connected clips on lane=1, anchored to the
+    # A-roll spine clip whose timeline range contains the placement start.
+    for placement in broll_placements:
+        ai = int(placement.get("angle_index", 0))
+        if ai < 0 or ai >= len(broll_angles):
+            continue
+        tl_off = float(placement.get("timeline_offset", 0.0))
+        tl_dur = float(placement.get("timeline_duration", 0.0))
+        if tl_dur <= 0:
+            continue
+        ang_in = float(placement.get("angle_in", 0.0))
+        # find host A-roll clip
+        host = None
+        host_start = 0.0
+        for ts, te, elt in aroll_offsets:
+            if tl_off >= ts and tl_off < te:
+                host = elt
+                host_start = ts
+                break
+        if host is None:
+            continue
+        ET.SubElement(
+            host,
+            "asset-clip",
+            {
+                "ref": f"b{ai + 1}",
+                "lane": "1",
+                "name": broll_angles[ai][0],
+                "offset": _t(tl_off - host_start, tb),
+                "start": _t(ang_in, tb),
+                "duration": _t(tl_dur, tb),
+                "audioRole": "music",
+            },
+        )
+
+    return _render(fcpxml)
+
+
 async def build_multicam_fcpxml(
     *,
     project_name: str,

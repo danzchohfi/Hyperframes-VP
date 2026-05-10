@@ -88,10 +88,34 @@
                 <label class="sw"><input id="c-fg" type="color" value="#ffffff" /><em>Texto</em></label>
               </div>
             </div>
+            <div class="grid-2">
+              <label>Estilo de legenda
+                <select id="brand-cap-style">
+                  <option value="minimal">Minimal</option>
+                  <option value="tiktok">TikTok (uppercase, scale on hot)</option>
+                  <option value="podcast">Podcast (chip + light)</option>
+                </select>
+              </label>
+              <label>Preset de marca
+                <select id="brand-preset-pick"><option value="">— escolher —</option></select>
+              </label>
+            </div>
             <div class="actions">
               <button id="save-brand" class="btn-primary">Salvar brand</button>
+              <button id="save-preset-btn" class="btn-ghost">⭐ Salvar como preset</button>
+              <button id="apply-preset-btn" class="btn-ghost">📥 Aplicar preset</button>
               <span id="brand-status" class="status muted"></span>
             </div>
+          </section>
+
+          <section class="card">
+            <h3>Snapshots</h3>
+            <p class="card-help">Salve "fotos" do estado (cuts, soundbites, story…) pra comparar depois.</p>
+            <div class="actions">
+              <input id="snap-label" type="text" placeholder="rótulo (opcional)" class="snap-input" />
+              <button id="snap-take-btn" class="btn-primary">📸 Tirar snapshot</button>
+            </div>
+            <ul id="snap-list" class="snap-list"></ul>
           </section>
 
           <section class="card">
@@ -149,6 +173,8 @@
                   <div class="stage-title">Aplicar edição</div>
                   <div class="stage-sub">Cortes + muletas + LUT → graded.mp4</div>
                 </div>
+                <label class="cb"><input id="opt-loudnorm" type="checkbox" /> loudnorm</label>
+                <label class="cb"><input id="opt-denoise" type="checkbox" /> denoise</label>
                 <button class="btn-ghost" data-run="apply">Rodar</button>
               </div>
               <div class="stage" data-stage="render">
@@ -162,6 +188,12 @@
                   <option value="16:9">16:9</option>
                   <option value="1:1">1:1</option>
                 </select>
+                <select id="render-source" class="inline-select" title="Vídeo base">
+                  <option value="graded">graded.mp4</option>
+                  <option value="roughcut">roughcut.mp4</option>
+                  <option value="source">source.mp4</option>
+                </select>
+                <label class="cb"><input id="render-chapters" type="checkbox" /> chapters</label>
                 <button class="btn-primary" data-run="render">Renderizar</button>
               </div>
             </div>
@@ -199,6 +231,11 @@
               </label>
               <ul id="angle-list" class="angle-list"></ul>
             </div>
+            <div class="actions">
+              <button id="place-broll-btn" class="btn-primary">🎯 Posicionar B-roll automaticamente</button>
+              <span id="broll-place-status" class="status muted"></span>
+            </div>
+            <p class="card-help">Roda depois de extrair soundbites e taggear ângulos. A IA escolhe qual ângulo cobre cada bite.</p>
           </section>
 
           <section class="card">
@@ -217,6 +254,8 @@
             <h3>8 · Exportar</h3>
             <div class="roughcut-bar">
               <button id="roughcut-btn" class="btn-primary">⚡ Gerar rough cut do roteiro</button>
+              <label class="cb"><input id="rc-loudnorm" type="checkbox" /> loudnorm</label>
+              <label class="cb"><input id="rc-denoise" type="checkbox" /> denoise</label>
               <span id="roughcut-status" class="status muted"></span>
             </div>
             <video id="roughcut-video" controls playsinline class="preview wide hidden"></video>
@@ -228,21 +267,41 @@
                 <option value="16:9">16:9 (YouTube)</option>
                 <option value="1:1">1:1 (Feed)</option>
               </select>
-              <button id="do-export" class="btn-ghost">Reframar</button>
+              <button id="do-export" class="btn-ghost">Reframar (letterbox)</button>
+              <button id="smart-reframe-btn" class="btn-ghost">✨ Smart crop (IA)</button>
               <a id="download-link" class="btn-primary" href="#" download>⬇ Baixar MP4</a>
+            </div>
+            <div class="export-divider"></div>
+            <div class="actions">
+              <button id="srt-btn" class="btn-ghost">📝 SRT</button>
+              <button id="vtt-btn" class="btn-ghost">📝 VTT</button>
+              <label class="cb"><input id="caps-roughcut" type="checkbox" /> usar rough cut</label>
+              <a id="caps-link" class="btn-primary" href="#" download style="display:none">⬇ Baixar legenda</a>
             </div>
             <div class="export-divider"></div>
             <div class="actions">
               <label class="cb"><input id="fcpxml-multicam" type="checkbox" /> Multicam</label>
               <label class="cb"><input id="fcpxml-cuts" type="checkbox" checked /> Aplicar cortes do silêncio</label>
+              <label class="cb"><input id="fcpxml-roughcut" type="checkbox" /> Usar rough cut</label>
+              <label class="cb"><input id="fcpxml-broll" type="checkbox" /> Inserir B-roll (V2)</label>
               <label class="cb"><input id="fcpxml-markers" type="checkbox" checked /> Marcadores por palavra</label>
               <button id="fcpxml-btn" class="btn-ghost">📄 FCPXML</button>
               <a id="fcpxml-link" class="btn-primary" href="#" download style="display:none">⬇ Baixar FCPXML</a>
               <button id="premiere-btn" class="btn-ghost">📄 Premiere/Resolve XML</button>
               <a id="premiere-link" class="btn-primary" href="#" download style="display:none">⬇ Baixar Premiere XML</a>
               <label class="cb"><input id="premiere-roughcut" type="checkbox" /> usar rough cut</label>
+              <label class="cb"><input id="premiere-broll" type="checkbox" /> incluir B-roll</label>
             </div>
             <p class="card-help">FCPXML abre no Final Cut Pro (<em>Arquivo → Importar → XML</em>). O Premiere/Resolve XML (xmeml) abre no Premiere Pro e DaVinci Resolve. Os cortes ficam não-destrutivos.</p>
+            <div class="export-divider"></div>
+            <div class="actions">
+              <button id="bundle-btn" class="btn-ghost">📦 Bundle (.zip)</button>
+              <a id="bundle-link" class="btn-primary" href="#" download style="display:none">⬇ Baixar bundle</a>
+              <button id="dup-btn" class="btn-ghost">🪞 Duplicar projeto</button>
+              <button id="speakers-btn" class="btn-ghost">🎤 Detectar falas</button>
+              <button id="thumbs-btn" class="btn-ghost">🖼 Thumbnails de capítulos</button>
+            </div>
+            <div id="thumbs-grid" class="thumbs-grid"></div>
           </section>
         </div>
       </main>

@@ -135,3 +135,79 @@ def write_json(project_id: str, name: str, data: Any) -> Path:
 def read_json(project_id: str, name: str) -> Any:
     p = project_dir(project_id) / name
     return json.loads(p.read_text())
+
+
+# ---- snapshots ---------------------------------------------------------------
+
+SNAPSHOT_FILES = (
+    "cuts.json",
+    "fillers.json",
+    "soundbites.json",
+    "story.json",
+    "roughcut.json",
+    "brand.json",
+    "broll_placement.json",
+)
+
+
+def list_snapshots(project_id: str) -> list[dict[str, Any]]:
+    snap_dir = project_dir(project_id) / "snapshots"
+    if not snap_dir.exists():
+        return []
+    out = []
+    for child in sorted(snap_dir.iterdir()):
+        if not child.is_dir():
+            continue
+        meta_path = child / "meta.json"
+        if meta_path.exists():
+            out.append(json.loads(meta_path.read_text()))
+    return out
+
+
+def take_snapshot(project_id: str, label: str) -> dict[str, Any]:
+    snap_dir = project_dir(project_id) / "snapshots"
+    snap_dir.mkdir(exist_ok=True)
+    snap_id = f"snap_{int(time.time())}_{secrets.token_hex(2)}"
+    out = snap_dir / snap_id
+    out.mkdir()
+    state = load(project_id)
+    captured: list[str] = []
+    for name in SNAPSHOT_FILES:
+        src = project_dir(project_id) / name
+        if src.exists():
+            (out / name).write_text(src.read_text())
+            captured.append(name)
+    meta = {
+        "id": snap_id,
+        "label": label or snap_id,
+        "created_at": _now(),
+        "captured_files": captured,
+        "fillers_count": state.fillers_count,
+        "has_cuts": state.has_cuts,
+        "has_soundbites": state.has_soundbites,
+        "has_story": state.has_story,
+        "has_roughcut": state.has_roughcut,
+    }
+    (out / "meta.json").write_text(json.dumps(meta, indent=2))
+    return meta
+
+
+def restore_snapshot(project_id: str, snap_id: str) -> dict[str, Any]:
+    snap_dir = project_dir(project_id) / "snapshots" / snap_id
+    if not snap_dir.exists():
+        raise FileNotFoundError(snap_id)
+    restored: list[str] = []
+    for name in SNAPSHOT_FILES:
+        src = snap_dir / name
+        if src.exists():
+            (project_dir(project_id) / name).write_text(src.read_text())
+            restored.append(name)
+    state = load(project_id)
+    state.has_cuts = (project_dir(project_id) / "cuts.json").exists()
+    state.has_fillers = (project_dir(project_id) / "fillers.json").exists()
+    state.has_soundbites = (project_dir(project_id) / "soundbites.json").exists()
+    state.has_story = (project_dir(project_id) / "story.json").exists()
+    state.has_roughcut = (project_dir(project_id) / "roughcut.json").exists()
+    state.has_brand = (project_dir(project_id) / "brand.json").exists()
+    save(state)
+    return {"id": snap_id, "restored_files": restored}

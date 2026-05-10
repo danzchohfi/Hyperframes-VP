@@ -29,6 +29,7 @@ class BrandBook(BaseModel):
     caption_position: str = "bottom"  # bottom | center
     caption_color: str | None = None  # defaults to palette.foreground
     caption_highlight: str | None = None  # defaults to palette.accent
+    caption_style: str = "minimal"    # minimal | tiktok | podcast
     intro_title: str | None = None
     intro_subtitle: str | None = None
     outro_text: str | None = None

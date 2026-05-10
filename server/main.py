@@ -34,6 +34,10 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+import json as _json
+
+from fastapi.responses import StreamingResponse
+
 from . import storage
 from .services import ffmpeg as ff
 from .services import whisper, silence, composer, render, fcpxml, music
@@ -43,6 +47,13 @@ from .services import story as story_svc
 from .services import vision as vision_svc
 from .services import premiere_xml
 from .services import roughcut as rc_svc
+from .services import broll_match as broll_svc
+from .services import smartcrop
+from .services import brand_presets
+from .services import bundle as bundle_svc
+from .services import speakers as speakers_svc
+from .services.events import bus, emit_stage, emit_log, emit_state_changed
+from .services import captions as captions_svc
 from .services.brand import BrandBook
 
 app = FastAPI(title="HyperFrames Video Pipeline", version="0.1.0")
@@ -67,9 +78,16 @@ class CutOptionsIn(BaseModel):
     pad: float = 0.08
 
 
+class ApplyIn(BaseModel):
+    loudnorm: bool = False
+    denoise: bool = False
+
+
 class RenderIn(BaseModel):
     aspect: str = "9:16"  # 9:16 | 16:9 | 1:1
     include_captions: bool = True
+    source: str = "graded"  # graded | roughcut | source
+    include_chapter_cards: bool = False  # show chapter title cards from the story
 
 
 class ExportIn(BaseModel):
@@ -81,6 +99,8 @@ class FcpxmlIn(BaseModel):
     primary_angle: int = 0
     include_word_markers: bool = True
     use_cuts: bool = True
+    use_roughcut: bool = False
+    include_broll: bool = False
 
 
 class AngleIn(BaseModel):
@@ -116,16 +136,52 @@ class RoughCutIn(BaseModel):
     soundbite_ids: list[str] | None = None  # override: explicit list
     aspect: str | None = None         # if set, also reframes
     apply_lut: bool = True
+    loudnorm: bool = False
+    denoise: bool = False
+    smart_crop: bool = False          # face-aware crop when aspect changes
 
 
 class PremiereXmlIn(BaseModel):
     use_cuts: bool = True
     use_roughcut: bool = False
+    include_broll: bool = False
+
+
+class FcpxmlMultitrackIn(BaseModel):
+    use_cuts: bool = True
+    use_roughcut: bool = False
+    include_broll: bool = True
+    include_word_markers: bool = True
+
+
+class BrollPlaceIn(BaseModel):
+    pass
+
+
+class SmartReframeIn(BaseModel):
+    aspect: str = "9:16"
+    use_roughcut: bool = True
+
+
+class SnapshotIn(BaseModel):
+    label: str = ""
+
+
+class BrandPresetIn(BaseModel):
+    name: str
+    brand: dict[str, Any]
 
 
 # ---- helpers -----------------------------------------------------------------
 
-def _stage(state: storage.ProjectState, name: str, status: str, msg: str | None = None) -> None:
+def _stage(
+    state: storage.ProjectState,
+    name: str,
+    status: str,
+    msg: str | None = None,
+    *,
+    progress: float | None = None,
+) -> None:
     s = state.stage(name)
     s.status = status
     if msg is not None:
@@ -135,6 +191,8 @@ def _stage(state: storage.ProjectState, name: str, status: str, msg: str | None 
     elif status in ("done", "error"):
         s.finished_at = storage._now()
     storage.save(state)
+    emit_stage(state.id, name, status, msg, progress=progress)
+    emit_state_changed(state.id)
 
 
 def _load(pid: str) -> storage.ProjectState:
@@ -312,7 +370,8 @@ async def get_brand(pid: str) -> dict[str, Any]:
 # ---- apply (silence-cut + LUT) ----------------------------------------------
 
 @app.post("/api/projects/{pid}/apply")
-async def apply_edits(pid: str) -> dict[str, Any]:
+async def apply_edits(pid: str, body: ApplyIn | None = None) -> dict[str, Any]:
+    body = body or ApplyIn()
     state = _load(pid)
     pdir = storage.project_dir(pid)
     src = pdir / "source.mp4"
@@ -335,17 +394,27 @@ async def apply_edits(pid: str) -> dict[str, Any]:
 
         lut_path = pdir / "lut.cube" if state.has_lut else None
         out_path = pdir / "graded.mp4"
-        await ff.cut_segments(src, out_path, keep, lut=lut_path)
+        await ff.cut_segments(
+            src, out_path, keep,
+            lut=lut_path, loudnorm=body.loudnorm, denoise=body.denoise,
+        )
         out_dur = await ff.duration(out_path)
     except Exception as e:
         _stage(state, "apply", "error", str(e))
         raise HTTPException(500, str(e))
 
-    _stage(state, "apply", "done", f"{out_dur:.2f}s edited · fillers={state.fillers_count}")
+    detail = f"{out_dur:.2f}s edited · fillers={state.fillers_count}"
+    if body.loudnorm:
+        detail += " · loudnorm"
+    if body.denoise:
+        detail += " · denoise"
+    _stage(state, "apply", "done", detail)
     return {
         "duration": out_dur,
         "lut_applied": state.has_lut,
         "fillers_removed": state.fillers_count if state.has_fillers else 0,
+        "loudnorm": body.loudnorm,
+        "denoise": body.denoise,
     }
 
 
@@ -356,9 +425,18 @@ async def do_render(pid: str, body: RenderIn) -> dict[str, Any]:
     state = _load(pid)
     pdir = storage.project_dir(pid)
 
-    edited = pdir / "graded.mp4"
+    candidates = {
+        "roughcut": pdir / "roughcut.mp4",
+        "graded": pdir / "graded.mp4",
+        "source": pdir / "source.mp4",
+    }
+    edited = candidates.get(body.source) or candidates["graded"]
     if not edited.exists():
-        edited = pdir / "source.mp4"
+        # fall back through preferences
+        for pick in ("roughcut", "graded", "source"):
+            if candidates[pick].exists():
+                edited = candidates[pick]
+                break
     if not edited.exists():
         raise HTTPException(400, "no video to render")
 
@@ -372,10 +450,26 @@ async def do_render(pid: str, body: RenderIn) -> dict[str, Any]:
         if (state.has_transcript and body.include_captions)
         else None
     )
+    if transcript and body.source == "roughcut" and state.has_roughcut:
+        rc_plan = storage.read_json(pid, "roughcut.json")
+        keep_for_words = [(r["start"], r["end"]) for r in rc_plan["ranges"]]
+        transcript = {
+            **transcript,
+            "words": captions_svc.retime_words(transcript.get("words") or [], keep_for_words),
+            "segments": captions_svc.retime_segments(transcript.get("segments") or [], keep_for_words),
+        }
 
     _stage(state, "render", "running", "building composition")
     try:
         dur = await ff.duration(edited)
+        chapters_for_render = None
+        if body.include_chapter_cards and state.has_story:
+            story = storage.read_json(pid, "story.json")
+            if state.has_soundbites:
+                analysis = storage.read_json(pid, "soundbites.json")
+                chapters_for_render = rc_svc.chapter_marker_plan(
+                    story["chapters"], analysis["soundbites"],
+                )
         comp_dir = composer.build_composition(
             project_dir=pdir,
             video_path=edited,
@@ -383,6 +477,7 @@ async def do_render(pid: str, body: RenderIn) -> dict[str, Any]:
             transcript=transcript,
             brand=brand,
             aspect=body.aspect,
+            chapters=chapters_for_render,
         )
     except Exception as e:
         _stage(state, "render", "error", f"compose: {e}")
@@ -484,7 +579,10 @@ async def export_fcpxml(pid: str, body: FcpxmlIn) -> dict[str, Any]:
         raise HTTPException(400, "no source video")
 
     keep: list[tuple[float, float]] | None = None
-    if body.use_cuts and state.has_cuts:
+    if body.use_roughcut and state.has_roughcut:
+        rc = storage.read_json(pid, "roughcut.json")
+        keep = [(seg["start"], seg["end"]) for seg in rc["ranges"]]
+    elif body.use_cuts and state.has_cuts:
         plan = storage.read_json(pid, "cuts.json")
         keep = [(seg["start"], seg["end"]) for seg in plan["keep"]]
 
@@ -494,8 +592,27 @@ async def export_fcpxml(pid: str, body: FcpxmlIn) -> dict[str, Any]:
         else None
     )
 
+    broll_angles_paths: list[tuple[str, Path]] = []
+    broll_placements: list[dict] = []
+    if body.include_broll and state.angles:
+        angles_dir = pdir / "angles"
+        broll_angles_paths = [(a["name"], angles_dir / a["filename"]) for a in state.angles]
+        plac_path = pdir / "broll_placement.json"
+        if plac_path.exists():
+            broll_placements = storage.read_json(pid, "broll_placement.json").get("placements", [])
+
     try:
-        if body.multicam and state.angles:
+        if body.include_broll and broll_placements:
+            xml = await fcpxml.build_multitrack_fcpxml(
+                project_name=state.name,
+                source=source,
+                cuts=keep,
+                transcript=transcript,
+                broll_angles=broll_angles_paths,
+                broll_placements=broll_placements,
+            )
+            kind = "multitrack"
+        elif body.multicam and state.angles:
             angles_dir = pdir / "angles"
             angle_paths = [(a["name"], angles_dir / a["filename"]) for a in state.angles]
             primary = max(0, min(body.primary_angle, len(angle_paths) - 1))
@@ -768,7 +885,10 @@ async def roughcut(pid: str, body: RoughCutIn) -> dict[str, Any]:
 
     _stage(state, "roughcut", "running", f"{len(ranges)} segments")
     try:
-        await ff.cut_segments(src, out_path, ranges, lut=lut)
+        await ff.cut_segments(
+            src, out_path, ranges,
+            lut=lut, loudnorm=body.loudnorm, denoise=body.denoise,
+        )
         out_dur = await ff.duration(out_path)
     except Exception as e:
         _stage(state, "roughcut", "error", str(e))
@@ -801,6 +921,284 @@ async def roughcut(pid: str, body: RoughCutIn) -> dict[str, Any]:
     return result
 
 
+# ---- speaker-turn hints -----------------------------------------------------
+
+@app.post("/api/projects/{pid}/speakers")
+async def detect_speakers(pid: str, gap: float = 1.2) -> dict[str, Any]:
+    state = _load(pid)
+    if not state.has_transcript:
+        raise HTTPException(400, "transcribe first")
+    transcript = storage.read_json(pid, "transcript.json")
+    turns = speakers_svc.segment_turns(transcript.get("words") or [], gap_threshold=gap)
+    storage.write_json(pid, "speakers.json", {"gap": gap, "turns": turns})
+    _stage(state, "speakers", "done", f"{len(turns)} turns")
+    return {"turns": turns}
+
+
+# ---- chapter thumbnails -----------------------------------------------------
+
+@app.post("/api/projects/{pid}/chapter-thumbs")
+async def chapter_thumbs(pid: str) -> dict[str, Any]:
+    state = _load(pid)
+    if not state.has_story:
+        raise HTTPException(400, "build story first")
+    pdir = storage.project_dir(pid)
+    src = pdir / "source.mp4"
+    if not src.exists():
+        raise HTTPException(400, "no source")
+    story = storage.read_json(pid, "story.json")
+    analysis = storage.read_json(pid, "soundbites.json") if state.has_soundbites else {"soundbites": []}
+    bite_by_id = {b["id"]: b for b in analysis.get("soundbites") or []}
+
+    out_dir = pdir / "thumbs"
+    out_dir.mkdir(exist_ok=True)
+    thumbs: list[dict[str, Any]] = []
+    for i, ch in enumerate(story.get("chapters") or []):
+        sids = ch.get("soundbite_ids") or []
+        if not sids:
+            continue
+        first = bite_by_id.get(sids[0])
+        if not first:
+            continue
+        at = max(0.05, float(first["start"]) + 0.4)
+        out = out_dir / f"chapter_{i + 1:02d}.jpg"
+        try:
+            await ff.grab_thumbnail(src, out, at=at, width=720)
+        except Exception:
+            continue
+        thumbs.append({
+            "chapter_id": ch.get("id"),
+            "name": ch.get("name"),
+            "url": f"/api/projects/{pid}/files/thumbs/{out.name}",
+            "at": at,
+        })
+    _stage(state, "chapter_thumbs", "done", f"{len(thumbs)} thumbs")
+    return {"thumbs": thumbs}
+
+
+# ---- bundle export ----------------------------------------------------------
+
+@app.post("/api/projects/{pid}/export/bundle")
+async def export_bundle(pid: str, include_source: bool = True) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    out = pdir / "exports" / f"{state.name.replace(' ', '_')}-bundle.zip"
+    out.parent.mkdir(exist_ok=True)
+    n = bundle_svc.build_bundle(pdir, out, include_source=include_source)
+    _stage(state, "bundle", "done", f"{n} files · {out.stat().st_size // 1024} KB")
+    return {
+        "export": out.name,
+        "url": f"/api/projects/{pid}/exports/{out.name}",
+        "files": n,
+        "bytes": out.stat().st_size,
+    }
+
+
+# ---- duplicate project ------------------------------------------------------
+
+@app.post("/api/projects/{pid}/duplicate")
+async def duplicate_project(pid: str) -> dict[str, Any]:
+    state = _load(pid)
+    new = storage.create(f"{state.name} (cópia)")
+    src_dir = storage.project_dir(pid)
+    dst_dir = storage.project_dir(new.id)
+
+    # copy plan/text artifacts + media
+    import shutil
+    for name in (
+        "transcript.json", "cuts.json", "fillers.json", "soundbites.json",
+        "story.json", "roughcut.json", "brand.json", "broll_placement.json",
+        "speakers.json", "source.mp4", "graded.mp4", "roughcut.mp4",
+        "lut.cube",
+    ):
+        sf = src_dir / name
+        if sf.exists():
+            shutil.copy2(sf, dst_dir / name)
+    angles_src = src_dir / "angles"
+    if angles_src.exists():
+        shutil.copytree(angles_src, dst_dir / "angles", dirs_exist_ok=True)
+
+    # carry over flags
+    new.source_filename = state.source_filename
+    new.source_duration = state.source_duration
+    new.has_transcript = state.has_transcript
+    new.has_cuts = state.has_cuts
+    new.has_lut = state.has_lut
+    new.lut_filename = state.lut_filename
+    new.has_brand = state.has_brand
+    new.angles = list(state.angles)
+    new.has_fillers = state.has_fillers
+    new.fillers_count = state.fillers_count
+    new.has_soundbites = state.has_soundbites
+    new.has_story = state.has_story
+    new.has_roughcut = state.has_roughcut
+    storage.save(new)
+    _stage(new, "duplicate", "done", f"from {state.name}")
+    return new.model_dump()
+
+
+# ---- B-roll contextual placement --------------------------------------------
+
+@app.post("/api/projects/{pid}/place-broll")
+async def place_broll(pid: str, _body: BrollPlaceIn | None = None) -> dict[str, Any]:
+    state = _load(pid)
+    if not state.has_soundbites:
+        raise HTTPException(400, "extract soundbites first")
+    if not state.angles:
+        raise HTTPException(400, "no angles")
+    if not any(a.get("tags") for a in state.angles):
+        raise HTTPException(400, "tag your angles first (POST /angles/{i}/tag)")
+
+    analysis = storage.read_json(pid, "soundbites.json")
+
+    _stage(state, "place_broll", "running", "matching B-roll")
+    try:
+        plan = await broll_svc.match(analysis["soundbites"], state.angles)
+    except Exception as e:
+        _stage(state, "place_broll", "error", str(e))
+        raise HTTPException(502, str(e))
+
+    # If we have a roughcut, project placements onto the roughcut timeline.
+    if state.has_roughcut:
+        rc_plan = storage.read_json(pid, "roughcut.json")
+        keep = [(r["start"], r["end"]) for r in rc_plan["ranges"]]
+        plan = broll_svc.overlay_plan(plan, analysis["soundbites"], keep)
+
+    storage.write_json(pid, "broll_placement.json", plan.model_dump())
+    _stage(state, "place_broll", "done", f"{len(plan.placements)} inserts")
+    return plan.model_dump()
+
+
+# ---- Smart reframe (face/subject-aware crop) --------------------------------
+
+@app.post("/api/projects/{pid}/smart-reframe")
+async def smart_reframe(pid: str, body: SmartReframeIn) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    src = pdir / ("roughcut.mp4" if body.use_roughcut and state.has_roughcut else "graded.mp4")
+    if not src.exists():
+        src = pdir / "source.mp4"
+    if not src.exists():
+        raise HTTPException(400, "no video")
+
+    _stage(state, "smart_reframe", "running", "detecting subject")
+    try:
+        anchor = await smartcrop.detect_anchor_x(src)
+        out = pdir / "exports" / f"smart-{body.aspect.replace(':', 'x')}.mp4"
+        out.parent.mkdir(exist_ok=True)
+        await ff.to_aspect_smart(src, out, body.aspect, anchor_x=anchor)
+        out_dur = await ff.duration(out)
+    except Exception as e:
+        _stage(state, "smart_reframe", "error", str(e))
+        raise HTTPException(500, str(e))
+
+    _stage(state, "smart_reframe", "done", f"anchor={anchor:.2f} · {out.name}")
+    return {
+        "aspect": body.aspect,
+        "anchor_x": anchor,
+        "url": f"/api/projects/{pid}/exports/{out.name}",
+        "duration": out_dur,
+    }
+
+
+# ---- snapshots --------------------------------------------------------------
+
+@app.get("/api/projects/{pid}/snapshots")
+async def list_snapshots_endpoint(pid: str) -> list[dict[str, Any]]:
+    _load(pid)
+    return storage.list_snapshots(pid)
+
+
+@app.post("/api/projects/{pid}/snapshots")
+async def take_snapshot_endpoint(pid: str, body: SnapshotIn) -> dict[str, Any]:
+    state = _load(pid)
+    snap = storage.take_snapshot(pid, body.label or storage._now())
+    _stage(state, "snapshot", "done", snap["label"])
+    return snap
+
+
+@app.post("/api/projects/{pid}/snapshots/{snap_id}/restore")
+async def restore_snapshot_endpoint(pid: str, snap_id: str) -> dict[str, Any]:
+    _load(pid)
+    try:
+        result = storage.restore_snapshot(pid, snap_id)
+    except FileNotFoundError:
+        raise HTTPException(404, "snapshot not found")
+    state = _load(pid)
+    _stage(state, "snapshot", "done", f"restored {snap_id}")
+    return result
+
+
+# ---- brand presets ----------------------------------------------------------
+
+@app.get("/api/brand-presets")
+async def list_brand_presets() -> list[dict[str, Any]]:
+    return brand_presets.list_presets()
+
+
+@app.post("/api/brand-presets")
+async def save_brand_preset(body: BrandPresetIn) -> dict[str, Any]:
+    return brand_presets.save_preset(body.name, body.brand)
+
+
+@app.delete("/api/brand-presets/{preset_id}")
+async def delete_brand_preset(preset_id: str) -> dict[str, bool]:
+    return {"deleted": brand_presets.delete_preset(preset_id)}
+
+
+@app.post("/api/projects/{pid}/brand/from-preset/{preset_id}")
+async def apply_brand_preset(pid: str, preset_id: str) -> dict[str, Any]:
+    state = _load(pid)
+    try:
+        preset = brand_presets.get_preset(preset_id)
+    except FileNotFoundError:
+        raise HTTPException(404, "preset not found")
+    preset.pop("_id", None)
+    brand = BrandBook.model_validate(preset)
+    storage.write_json(pid, "brand.json", brand.model_dump())
+    state.has_brand = True
+    storage.save(state)
+    _stage(state, "brand", "done", f"preset: {brand.name}")
+    return brand.model_dump()
+
+
+# ---- SRT / VTT export -------------------------------------------------------
+
+@app.post("/api/projects/{pid}/export/captions")
+async def export_captions(
+    pid: str,
+    fmt: str = "srt",
+    use_roughcut: bool = False,
+) -> dict[str, Any]:
+    state = _load(pid)
+    if not state.has_transcript:
+        raise HTTPException(400, "transcribe first")
+    if fmt not in ("srt", "vtt"):
+        raise HTTPException(400, "fmt must be srt or vtt")
+
+    transcript = storage.read_json(pid, "transcript.json")
+    segments = transcript.get("segments") or []
+
+    if use_roughcut:
+        if not state.has_roughcut:
+            raise HTTPException(400, "no roughcut")
+        plan = storage.read_json(pid, "roughcut.json")
+        ranges = [(r["start"], r["end"]) for r in plan["ranges"]]
+        segments = captions_svc.retime_segments(segments, ranges)
+
+    body = (captions_svc.render_srt if fmt == "srt" else captions_svc.render_vtt)(segments)
+    pdir = storage.project_dir(pid)
+    out = pdir / "exports" / f"{state.name.replace(' ', '_')}.{fmt}"
+    out.parent.mkdir(exist_ok=True)
+    out.write_text(body, encoding="utf-8")
+    _stage(state, "captions", "done", f"{out.name} · {len(segments)} cues")
+    return {
+        "export": out.name,
+        "url": f"/api/projects/{pid}/exports/{out.name}",
+        "cues": len(segments),
+    }
+
+
 # ---- Premiere/Resolve XML export --------------------------------------------
 
 @app.post("/api/projects/{pid}/export/premiere")
@@ -822,11 +1220,22 @@ async def export_premiere(pid: str, body: PremiereXmlIn) -> dict[str, Any]:
     else:
         keep = None
 
+    broll_angles_paths: list[tuple[Path, Path]] = []
+    broll_placements: list[dict] = []
+    if body.include_broll and state.angles:
+        angles_dir = pdir / "angles"
+        broll_angles_paths = [(a["name"], angles_dir / a["filename"]) for a in state.angles]
+        plac_path = pdir / "broll_placement.json"
+        if plac_path.exists():
+            broll_placements = storage.read_json(pid, "broll_placement.json").get("placements", [])
+
     try:
         xml = await premiere_xml.build_xmeml(
             project_name=state.name,
             source=src,
             cuts=keep,
+            broll_angles=broll_angles_paths,
+            broll_placements=broll_placements,
         )
     except Exception as e:
         _stage(state, "premiere_xml", "error", str(e))
@@ -854,6 +1263,15 @@ async def serve_file(pid: str, name: str):
     return FileResponse(fp)
 
 
+@app.get("/api/projects/{pid}/files/thumbs/{name}")
+async def serve_thumb(pid: str, name: str):
+    pdir = storage.project_dir(pid)
+    fp = (pdir / "thumbs" / name).resolve()
+    if not fp.exists() or (pdir / "thumbs").resolve() not in fp.parents:
+        raise HTTPException(404)
+    return FileResponse(fp)
+
+
 @app.get("/api/projects/{pid}/exports/{name}")
 async def serve_export(pid: str, name: str):
     pdir = storage.project_dir(pid)
@@ -877,6 +1295,35 @@ async def get_cuts(pid: str):
     if not state.has_cuts:
         raise HTTPException(404, "no cuts plan")
     return JSONResponse(storage.read_json(pid, "cuts.json"))
+
+
+@app.get("/api/projects/{pid}/events")
+async def project_events(pid: str):
+    """SSE stream of stage/log/state events for a project."""
+    _load(pid)  # 404 if not found
+
+    async def gen():
+        q = bus.subscribe(pid)
+        try:
+            yield f"data: {_json.dumps({'type': 'hello', 'pid': pid})}\n\n"
+            while True:
+                try:
+                    ev = await asyncio.wait_for(q.get(), timeout=15.0)
+                    yield f"data: {_json.dumps(ev)}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+        finally:
+            bus.unsubscribe(pid, q)
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @app.get("/api/health")
