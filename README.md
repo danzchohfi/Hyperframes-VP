@@ -578,6 +578,30 @@ curl localhost:8765/api/projects/$PID/history
 # → [{name, kind, url, bytes, ts, ...extra}, ...]
 ```
 
+## Wave 7 — speakers, waveform, archive
+
+### Speaker-aware captions
+Quando `speakers.json` existe (rode `🎤 Detectar falas` antes), a exportação
+de legendas pode prefixar cada cue com `[Speaker A]` / `[Speaker B]`:
+```bash
+curl -X POST "localhost:8765/api/projects/$PID/export/captions?fmt=srt&speaker_labels=true"
+```
+
+### Audio waveform
+SVG com peaks RMS desenhado embaixo da timeline visual. Ajuda a achar
+silêncios e momentos altos rapidamente.
+```bash
+curl "localhost:8765/api/projects/$PID/waveform?buckets=600"
+# → {duration, buckets, peaks: [0..1, ...]}
+```
+
+### Arquivar projeto
+Empacota tudo em zip (em `server/projects/_archive/`) e remove o projeto
+da lista. Útil quando ficou pesado no disco.
+```bash
+curl -X POST localhost:8765/api/projects/$PID/archive
+```
+
 ## Limitações conhecidas
 
 - Whisper é chamado uma vez por projeto, sem chunking — vídeos > 25MB precisam

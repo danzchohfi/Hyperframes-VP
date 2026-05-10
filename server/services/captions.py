@@ -27,6 +27,26 @@ def _ts_vtt(seconds: float) -> str:
     return _ts_srt(seconds).replace(",", ".")
 
 
+def attach_speakers(segments: list[dict], turns: list[dict]) -> list[dict]:
+    """Tag each segment with the speaker whose turn covers its midpoint."""
+    if not turns:
+        return segments
+    out: list[dict] = []
+    for seg in segments:
+        mid = (float(seg.get("start") or 0.0) + float(seg.get("end") or 0.0)) / 2.0
+        sp = None
+        for t in turns:
+            if mid >= float(t.get("start") or 0.0) and mid <= float(t.get("end") or 0.0):
+                sp = t.get("speaker")
+                break
+        if sp is None:
+            out.append(seg)
+        else:
+            text = (seg.get("text") or "").strip()
+            out.append({**seg, "text": f"[Speaker {sp}] {text}"})
+    return out
+
+
 def render_srt(segments: Iterable[dict]) -> str:
     out: list[str] = []
     for i, seg in enumerate(segments, start=1):

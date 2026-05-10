@@ -55,6 +55,11 @@
             </div>
             <div id="upload-status" class="status muted"></div>
             <svg id="cuts-timeline" class="cuts-timeline" viewBox="0 0 1000 60" preserveAspectRatio="none" hidden></svg>
+            <svg id="waveform" class="waveform" viewBox="0 0 1000 60" preserveAspectRatio="none" hidden></svg>
+            <div class="actions" style="margin-top:8px">
+              <button id="waveform-btn" class="btn-ghost">📈 Mostrar waveform</button>
+              <button id="archive-btn" class="btn-ghost danger">📥 Arquivar (zip + remover)</button>
+            </div>
             <div id="stale-warnings" class="stale-warnings"></div>
           </section>
 
@@ -321,6 +326,7 @@
                 <option value="podcast">Podcast</option>
               </select>
               <label class="cb"><input id="caps-roughcut" type="checkbox" /> usar rough cut</label>
+              <label class="cb"><input id="caps-speakers" type="checkbox" /> labels de speaker</label>
               <a id="caps-link" class="btn-primary" href="#" download style="display:none">⬇ Baixar legenda</a>
             </div>
             <div class="actions">

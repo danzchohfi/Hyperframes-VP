@@ -57,6 +57,7 @@ from .services import social_copy as social_svc
 from .services import templates as templates_svc
 from .services import hooks as hooks_svc
 from .services import emojify as emojify_svc
+from .services import waveform as waveform_svc
 from .services.events import bus, emit_stage, emit_log, emit_state_changed
 from .services import captions as captions_svc
 from .services.brand import BrandBook
@@ -1067,6 +1068,57 @@ async def social_copy(pid: str, body: SocialCopyIn) -> dict[str, Any]:
     return copy.model_dump()
 
 
+# ---- audio waveform peaks ---------------------------------------------------
+
+@app.get("/api/projects/{pid}/waveform")
+async def project_waveform(pid: str, buckets: int = 600) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    src = pdir / "source.mp4"
+    if not src.exists():
+        raise HTTPException(400, "no source")
+    cache = pdir / "waveform.json"
+    if cache.exists():
+        try:
+            existing = storage.read_json(pid, "waveform.json")
+            if existing.get("buckets") == buckets:
+                return existing
+        except Exception:
+            pass
+    peaks = await waveform_svc.peaks(src, buckets=buckets)
+    payload = {
+        "buckets": buckets,
+        "duration": state.source_duration or 0.0,
+        "peaks": peaks,
+    }
+    storage.write_json(pid, "waveform.json", payload)
+    return payload
+
+
+# ---- archive (zip + delete) -------------------------------------------------
+
+@app.post("/api/projects/{pid}/archive")
+async def archive_project(pid: str) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    archive_dir = storage.PROJECTS_DIR / "_archive"
+    archive_dir.mkdir(exist_ok=True)
+    out = archive_dir / f"{state.name.replace(' ', '_')}-{state.id}.zip"
+    n = bundle_svc.build_bundle(pdir, out, include_source=True)
+
+    # delete project after archiving
+    import shutil
+    shutil.rmtree(pdir)
+
+    return {
+        "archived": out.name,
+        "url": None,  # archive isn't served back; sits on disk
+        "files": n,
+        "bytes": out.stat().st_size,
+        "path": str(out),
+    }
+
+
 # ---- hook clip --------------------------------------------------------------
 
 class HookIn(BaseModel):
@@ -1514,6 +1566,7 @@ async def export_captions(
     fmt: str = "srt",
     use_roughcut: bool = False,
     style: str = "minimal",
+    speaker_labels: bool = False,
 ) -> dict[str, Any]:
     state = _load(pid)
     if not state.has_transcript:
@@ -1524,6 +1577,15 @@ async def export_captions(
     transcript = storage.read_json(pid, "transcript.json")
     segments = transcript.get("segments") or []
     words = transcript.get("words") or []
+
+    if speaker_labels:
+        spk_path = storage.project_dir(pid) / "speakers.json"
+        if spk_path.exists():
+            try:
+                turns = storage.read_json(pid, "speakers.json").get("turns") or []
+                segments = captions_svc.attach_speakers(segments, turns)
+            except Exception:
+                pass
 
     if use_roughcut:
         if not state.has_roughcut:

@@ -661,8 +661,9 @@ async function exportCaptions(fmt) {
   log(`▶ ${fmt}`);
   try {
     const useRoughcut = $("#caps-roughcut").checked;
+    const speakers = $("#caps-speakers")?.checked || false;
     const style = $("#ass-style")?.value || "minimal";
-    const url = `/api/projects/${state.current.id}/export/captions?fmt=${fmt}&use_roughcut=${useRoughcut}&style=${style}`;
+    const url = `/api/projects/${state.current.id}/export/captions?fmt=${fmt}&use_roughcut=${useRoughcut}&style=${style}&speaker_labels=${speakers}`;
     const res = await api(url, { method: "POST" });
     log(`✓ ${fmt} · ${res.cues} cues`, "ok");
     const link = $("#caps-link");
@@ -1167,6 +1168,51 @@ async function detectSpeakers() {
   }
 }
 
+async function showWaveform() {
+  if (!state.current) return;
+  const svg = $("#waveform");
+  svg.hidden = false;
+  svg.innerHTML = `<text x="6" y="18" fill="rgba(255,255,255,0.55)" font-size="10">carregando...</text>`;
+  try {
+    const wf = await api(`/api/projects/${state.current.id}/waveform?buckets=600`);
+    const W = 1000, H = 60;
+    const peaks = wf.peaks || [];
+    const N = peaks.length;
+    if (N === 0) {
+      svg.innerHTML = `<text x="6" y="18" fill="rgba(255,255,255,0.55)" font-size="10">sem áudio</text>`;
+      return;
+    }
+    const bw = W / N;
+    const parts = [];
+    for (let i = 0; i < N; i++) {
+      const h = Math.max(1, peaks[i] * (H - 4));
+      const x = i * bw;
+      const y = (H - h) / 2;
+      parts.push(`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${Math.max(0.6, bw - 0.4).toFixed(1)}" height="${h.toFixed(1)}" fill="rgba(167, 139, 250, 0.7)"/>`);
+    }
+    parts.push(`<text x="6" y="14" fill="rgba(255,255,255,0.55)" font-size="10">waveform · ${wf.duration.toFixed(1)}s</text>`);
+    svg.innerHTML = parts.join("");
+  } catch (e) {
+    svg.innerHTML = `<text x="6" y="18" fill="rgba(239,68,68,0.7)" font-size="10">${escapeHtml(e.message)}</text>`;
+  }
+}
+
+async function archiveProject() {
+  if (!state.current) return;
+  if (!confirm(`Arquivar "${state.current.name}"? Vai gerar zip e remover o projeto.`)) return;
+  try {
+    const r = await api(`/api/projects/${state.current.id}/archive`, { method: "POST" });
+    log(`✓ archived: ${r.archived}`, "ok");
+    toast(`Arquivado: ${r.archived}`, "ok");
+    state.current = null;
+    $("#project-view").classList.add("hidden");
+    $("#empty").classList.remove("hidden");
+    await refreshList();
+  } catch (e) {
+    log(`✗ archive: ${e.message}`, "err");
+  }
+}
+
 async function makeHook() {
   if (!state.current) return;
   log("▶ hook");
@@ -1495,6 +1541,8 @@ function bind() {
   $("#hook-btn").onclick = makeHook;
   $("#peak-thumb-btn").onclick = peakThumb;
   $("#emojify-btn").onclick = emojifyCaptions;
+  $("#waveform-btn").onclick = showWaveform;
+  $("#archive-btn").onclick = archiveProject;
   $("#search-q").addEventListener("input", (e) => {
     clearTimeout(_searchTimer);
     _searchTimer = setTimeout(() => runSearch(e.target.value.trim()), 200);
