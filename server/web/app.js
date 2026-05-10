@@ -106,8 +106,100 @@ async function loadProject(id) {
 
   renderAngles(p);
   renderMusicSuggestion(p.music_suggestion);
+  await loadSoundbitesAndStory(p);
 
   await refreshList();
+}
+
+async function loadSoundbitesAndStory(p) {
+  $("#topics-list").innerHTML = "";
+  $("#story-summary").classList.add("hidden");
+
+  if (p.has_soundbites) {
+    try {
+      const a = await api(`/api/projects/${p.id}/soundbites`);
+      renderSoundbites(a);
+    } catch {}
+  }
+  if (p.has_story) {
+    try {
+      const s = await api(`/api/projects/${p.id}/story`);
+      renderStory(s);
+    } catch {}
+  }
+  if (p.has_roughcut) {
+    const v = $("#roughcut-video");
+    v.classList.remove("hidden");
+    v.src = `/api/projects/${p.id}/files/roughcut.mp4`;
+    $("#roughcut-status").textContent = "rough cut pronto";
+    $("#roughcut-status").className = "status ok";
+  } else {
+    $("#roughcut-video").classList.add("hidden");
+    $("#roughcut-status").textContent = "";
+  }
+}
+
+function renderSoundbites(analysis) {
+  const root = $("#topics-list");
+  root.innerHTML = "";
+  const byTopic = {};
+  for (const sb of analysis.soundbites || []) {
+    (byTopic[sb.topic] = byTopic[sb.topic] || []).push(sb);
+  }
+  for (const t of analysis.topics || []) {
+    const card = document.createElement("div");
+    card.className = "topic-card";
+    const bites = (byTopic[t.id] || []).sort((a, b) => b.score - a.score);
+    card.innerHTML = `
+      <div class="topic-head">
+        <span class="topic-name">${escapeHtml(t.name)}</span>
+        <span class="topic-summary">${escapeHtml(t.summary || "")}</span>
+      </div>
+      <div class="bites-list">
+        ${bites.map(b => `
+          <label class="bite">
+            <input type="checkbox" data-bite="${b.id}" />
+            <div class="bite-body">
+              <div class="bite-meta">
+                <span>${b.start.toFixed(1)}s – ${b.end.toFixed(1)}s</span>
+                <span class="bite-score ${b.score >= 80 ? 'high' : b.score >= 60 ? 'mid' : 'low'}">${b.score}</span>
+                ${b.summary ? `<span>${escapeHtml(b.summary)}</span>` : ""}
+              </div>
+              <div class="bite-text">${escapeHtml(b.text)}</div>
+            </div>
+          </label>
+        `).join("")}
+      </div>
+    `;
+    root.appendChild(card);
+  }
+}
+
+function renderStory(s) {
+  const root = $("#story-summary");
+  root.classList.remove("hidden");
+  root.innerHTML = `
+    <div class="ss-title">${escapeHtml(s.title || "Roteiro")}</div>
+    <div class="ss-logline">${escapeHtml(s.logline || "")}</div>
+    <div class="chapters">
+      ${(s.chapters || []).map(c => `
+        <div class="chapter">
+          <div class="chapter-head">
+            <span class="chapter-name">${escapeHtml(c.name)}</span>
+            <span class="chapter-meta">${c.soundbite_ids.length} bites · ${escapeHtml(c.transition_note || "")}</span>
+          </div>
+          <div class="chapter-summary">${escapeHtml(c.summary || "")}</div>
+        </div>
+      `).join("")}
+    </div>
+  `;
+  // mark soundbites used by the story as checked
+  for (const c of s.chapters || []) {
+    for (const sid of c.soundbite_ids) {
+      const cb = document.querySelector(`input[data-bite="${sid}"]`);
+      if (cb) cb.checked = true;
+    }
+  }
 }
 
 function renderAngles(p) {
@@ -115,15 +207,34 @@ function renderAngles(p) {
   list.innerHTML = "";
   for (const a of p.angles || []) {
     const li = document.createElement("li");
+    const tags = a.tags?.tags || [];
     li.innerHTML = `
       <span class="a-name">${escapeHtml(a.name)}</span>
-      <span class="a-meta">${(a.duration || 0).toFixed(1)}s · ${a.filename}</span>
-      <button class="a-del" data-idx="${a.index}">Remover</button>
+      <span class="a-meta">${(a.duration || 0).toFixed(1)}s · ${a.filename}${a.tags?.summary ? ' · ' + escapeHtml(a.tags.summary) : ''}</span>
+      ${tags.length ? `<span class="a-tags">${tags.slice(0, 5).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join("")}</span>` : ""}
+      <span class="a-actions">
+        <button class="btn-ghost a-tag" data-idx="${a.index}">${a.tags ? "🔄 Re-taggear" : "🏷 Tag IA"}</button>
+        <button class="a-del" data-idx="${a.index}">×</button>
+      </span>
     `;
     li.querySelector(".a-del").onclick = async () => {
       await api(`/api/projects/${p.id}/angles/${a.index}`, { method: "DELETE" });
       log(`Ângulo ${a.name} removido`, "ok");
       await loadProject(p.id);
+    };
+    li.querySelector(".a-tag").onclick = async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      btn.textContent = "🤖 Analisando...";
+      try {
+        const updated = await api(`/api/projects/${p.id}/angles/${a.index}/tag`, { method: "POST" });
+        log(`✓ Ângulo "${updated.name}" → ${updated.tags.summary}`, "ok");
+        await loadProject(p.id);
+      } catch (err) {
+        log(`✗ tag: ${err.message}`, "err");
+        btn.disabled = false;
+        btn.textContent = "🏷 Tag IA";
+      }
     };
     list.appendChild(li);
   }
@@ -243,6 +354,7 @@ async function runStage(name) {
     let path = `/api/projects/${state.current.id}/${{
       transcribe: "transcribe",
       silence: "cut-silences",
+      fillers: "cut-fillers",
       apply: "apply",
       render: "render",
     }[name]}`;
@@ -252,6 +364,8 @@ async function runStage(name) {
         min_silence: parseFloat($("#opt-min").value),
         pad: 0.08,
       };
+    } else if (name === "fillers") {
+      body = { language: $("#opt-filler-lang").value, pad: 0.04 };
     } else if (name === "render") {
       body = { aspect: $("#render-aspect").value, include_captions: true };
     }
@@ -266,6 +380,105 @@ async function runStage(name) {
     stage?.classList.remove("running");
     stage?.classList.add("error");
     log(`✗ ${name}: ${e.message}`, "err");
+  }
+}
+
+async function extractSoundbites() {
+  if (!state.current) return;
+  const btn = $("#soundbites-btn");
+  btn.disabled = true;
+  btn.textContent = "🎯 Analisando...";
+  log("▶ soundbites");
+  try {
+    const a = await api(`/api/projects/${state.current.id}/soundbites`, { method: "POST" });
+    log(`✓ ${a.soundbites.length} soundbites · ${a.topics.length} tópicos`, "ok");
+    await loadProject(state.current.id);
+  } catch (e) {
+    log(`✗ soundbites: ${e.message}`, "err");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "🎯 Extrair soundbites";
+  }
+}
+
+async function buildStory() {
+  if (!state.current) return;
+  const btn = $("#story-btn");
+  btn.disabled = true;
+  btn.textContent = "📜 Pensando...";
+  log("▶ story");
+  try {
+    const s = await api(`/api/projects/${state.current.id}/story`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ structure: $("#story-structure").value }),
+    });
+    log(`✓ Roteiro: ${s.title} (${s.chapters.length} capítulos)`, "ok");
+    await loadProject(state.current.id);
+  } catch (e) {
+    log(`✗ story: ${e.message}`, "err");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "📜 Propor roteiro";
+  }
+}
+
+async function buildRoughCut() {
+  if (!state.current) return;
+  const btn = $("#roughcut-btn");
+  const status = $("#roughcut-status");
+  btn.disabled = true;
+  status.textContent = "encoding...";
+  status.className = "status warn";
+  log("▶ roughcut");
+
+  // Pick: if any checkboxes are manually checked beyond what the story has,
+  // use those as soundbite_ids; otherwise use the story.
+  const checked = $$("input[data-bite]").filter(c => c.checked).map(c => c.dataset.bite);
+  const useStory = state.current.has_story && checked.length === 0;
+
+  try {
+    const r = await api(`/api/projects/${state.current.id}/roughcut`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        use_story: useStory,
+        soundbite_ids: useStory ? null : checked,
+        apply_lut: true,
+      }),
+    });
+    status.textContent = `${r.duration.toFixed(1)}s · ${r.segments} segmentos · ${r.chapters} capítulos`;
+    status.className = "status ok";
+    log(`✓ rough cut · ${r.duration.toFixed(1)}s`, "ok");
+    await loadProject(state.current.id);
+  } catch (e) {
+    status.textContent = e.message;
+    status.className = "status error";
+    log(`✗ roughcut: ${e.message}`, "err");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function exportPremiere() {
+  if (!state.current) return;
+  log("▶ Premiere XML");
+  try {
+    const res = await api(`/api/projects/${state.current.id}/export/premiere`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        use_cuts: !$("#premiere-roughcut").checked,
+        use_roughcut: $("#premiere-roughcut").checked,
+      }),
+    });
+    log(`✓ Premiere XML · ${res.bytes}b`, "ok");
+    const link = $("#premiere-link");
+    link.href = res.url;
+    link.style.display = "inline-block";
+    link.textContent = `⬇ Baixar ${res.export}`;
+  } catch (e) {
+    log(`✗ Premiere XML: ${e.message}`, "err");
   }
 }
 
@@ -429,10 +642,14 @@ function bind() {
   });
   ai.addEventListener("change", () => ai.files[0] && uploadAngle(ai.files[0]));
 
-  // music + fcpxml
+  // music + fcpxml + premiere + soundbites + story + roughcut
   $("#music-suggest-btn").onclick = suggestMusic;
   $("#music-search-btn").onclick = searchMusic;
   $("#fcpxml-btn").onclick = exportFcpxml;
+  $("#premiere-btn").onclick = exportPremiere;
+  $("#soundbites-btn").onclick = extractSoundbites;
+  $("#story-btn").onclick = buildStory;
+  $("#roughcut-btn").onclick = buildRoughCut;
 
   for (const btn of $$("[data-run]")) {
     btn.addEventListener("click", () => runStage(btn.dataset.run));

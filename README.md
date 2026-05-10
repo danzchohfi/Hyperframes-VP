@@ -222,6 +222,73 @@ curl -X POST localhost:8765/api/projects/$PID/music/select \
 > e shape do retorno — ajuste `_endpoint`/`_params`/`_normalize` se a sua
 > conta tiver outro formato.
 
+## Inspirado no Eddie AI: soundbites, roteiro, rough cut
+
+O pipeline tem o núcleo do que o [Eddie AI](https://www.heyeddie.ai/) faz pra
+A-roll de entrevista — transcrição, soundbites, tópicos, framework de história
+e rough cut — adaptado pra rodar local.
+
+```bash
+# 1. Whisper já fez a transcrição (etapa 4 do pipeline).
+
+# 2. Remove muletas ("ãhh", "tipo", "né", "uhm"…)
+curl -X POST localhost:8765/api/projects/$PID/cut-fillers \
+  -H content-type:application/json -d '{"language":"pt"}'
+# → {count, duration}
+
+# 3. IA escolhe os melhores trechos e agrupa por tópico
+curl -X POST localhost:8765/api/projects/$PID/soundbites
+# → {soundbites: [{id, start, end, text, topic, score, summary}, ...],
+#    topics: [{id, name, summary, soundbite_ids}, ...]}
+
+# 4. IA propõe estrutura de roteiro
+curl -X POST localhost:8765/api/projects/$PID/story \
+  -H content-type:application/json \
+  -d '{"structure":"four_act"}'   # ou hero_journey | explainer | testimonial | before_after
+# → {title, logline, chapters: [{id, name, summary, soundbite_ids, transition_note}, ...]}
+
+# 5. Gera o rough cut (MP4 só com os trechos do roteiro, na ordem)
+curl -X POST localhost:8765/api/projects/$PID/roughcut \
+  -H content-type:application/json \
+  -d '{"use_story":true, "apply_lut":true}'
+# → roughcut.mp4 + chapter_markers
+```
+
+A etapa `apply` (cortes do silêncio + LUT) automaticamente subtrai os ranges
+de muletas se você rodou `cut-fillers` antes. É um único pass do ffmpeg.
+
+## B-roll com computer vision
+
+Pra cada ângulo extra (multicam) ou o próprio source, dá pra rodar
+auto-tagging via GPT-4o vision:
+
+```bash
+curl -X POST localhost:8765/api/projects/$PID/angles/0/tag
+# → {description, summary, tags, categories, quality, has_people}
+```
+
+Sample 4 frames distribuídos no clip → analisa → grava no `angles[].tags`.
+Os tags ficam na própria UI ao lado do nome do ângulo.
+
+## Export pra Premiere Pro / DaVinci Resolve
+
+Além do FCPXML (Final Cut), o sistema exporta **xmeml** (Final Cut Pro 7 XML)
+que tanto Premiere quanto Resolve importam diretamente:
+
+```bash
+# usar o plano de cortes do silêncio
+curl -X POST localhost:8765/api/projects/$PID/export/premiere \
+  -H content-type:application/json -d '{"use_cuts":true}'
+
+# ou usar o rough cut (do roteiro)
+curl -X POST localhost:8765/api/projects/$PID/export/premiere \
+  -H content-type:application/json -d '{"use_roughcut":true}'
+```
+
+No Premiere: **Arquivo → Importar → seleciona o .xml**. No Resolve: **File →
+Import → Timeline → AAF/EDL/XML**. Os clipes vêm com in/out points e referência
+ao `source.mp4` por path absoluto.
+
 ## Limitações conhecidas
 
 - Whisper é chamado uma vez por projeto, sem chunking — vídeos > 25MB precisam

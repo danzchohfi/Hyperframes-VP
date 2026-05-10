@@ -130,11 +130,24 @@
                 </div>
                 <button class="btn-ghost" data-run="silence">Rodar</button>
               </div>
+              <div class="stage" data-stage="fillers">
+                <div class="stage-check">○</div>
+                <div class="stage-body">
+                  <div class="stage-title">Remover muletas</div>
+                  <div class="stage-sub">"ãhh", "tipo", "né", "uhm"… (precisa transcrição)</div>
+                </div>
+                <select id="opt-filler-lang" class="inline-select">
+                  <option value="auto">auto</option>
+                  <option value="pt">pt</option>
+                  <option value="en">en</option>
+                </select>
+                <button class="btn-ghost" data-run="fillers">Rodar</button>
+              </div>
               <div class="stage" data-stage="apply">
                 <div class="stage-check">○</div>
                 <div class="stage-body">
                   <div class="stage-title">Aplicar edição</div>
-                  <div class="stage-sub">Cortes + LUT → graded.mp4</div>
+                  <div class="stage-sub">Cortes + muletas + LUT → graded.mp4</div>
                 </div>
                 <button class="btn-ghost" data-run="apply">Rodar</button>
               </div>
@@ -156,7 +169,25 @@
           </section>
 
           <section class="card">
-            <h3>5 · Multicam (opcional)</h3>
+            <h3>5 · Soundbites + roteiro (Eddie-style)</h3>
+            <p class="card-help">A IA escolhe os melhores trechos da transcrição, agrupa por tópico e propõe uma estrutura de roteiro. Depois você gera o rough cut só com os trechos selecionados.</p>
+            <div class="actions">
+              <button id="soundbites-btn" class="btn-primary">🎯 Extrair soundbites</button>
+              <select id="story-structure" class="inline-select">
+                <option value="four_act">4 atos (intro/conflito/resolução/conclusão)</option>
+                <option value="hero_journey">Jornada do herói</option>
+                <option value="explainer">Explicativo (hook/contexto/passos/takeaway)</option>
+                <option value="testimonial">Testemunho (antes/virada/depois/recomendação)</option>
+                <option value="before_after">Antes/depois</option>
+              </select>
+              <button id="story-btn" class="btn-ghost">📜 Propor roteiro</button>
+            </div>
+            <div id="story-summary" class="story-summary hidden"></div>
+            <div id="topics-list" class="topics-list"></div>
+          </section>
+
+          <section class="card">
+            <h3>6 · Multicam (opcional)</h3>
             <p class="card-help">Suba ângulos extras pra exportar como multicam pro Final Cut. O vídeo principal vira o ângulo 1.</p>
             <div class="row">
               <label class="dropzone small" id="angle-zone">
@@ -171,7 +202,7 @@
           </section>
 
           <section class="card">
-            <h3>6 · Música por IA</h3>
+            <h3>7 · Música por IA</h3>
             <p class="card-help">A IA analisa a transcrição e sugere mood, gênero, BPM. Se você tiver token da Epidemic Sound em <code>.env</code>, o sistema busca faixas direto.</p>
             <div class="actions">
               <button id="music-suggest-btn" class="btn-primary">✨ Sugerir música</button>
@@ -183,7 +214,13 @@
           </section>
 
           <section class="card" id="export-card">
-            <h3>7 · Exportar</h3>
+            <h3>8 · Exportar</h3>
+            <div class="roughcut-bar">
+              <button id="roughcut-btn" class="btn-primary">⚡ Gerar rough cut do roteiro</button>
+              <span id="roughcut-status" class="status muted"></span>
+            </div>
+            <video id="roughcut-video" controls playsinline class="preview wide hidden"></video>
+            <div class="export-divider"></div>
             <video id="result" controls playsinline class="preview wide"></video>
             <div class="actions">
               <select id="export-aspect" class="inline-select">
@@ -199,10 +236,13 @@
               <label class="cb"><input id="fcpxml-multicam" type="checkbox" /> Multicam</label>
               <label class="cb"><input id="fcpxml-cuts" type="checkbox" checked /> Aplicar cortes do silêncio</label>
               <label class="cb"><input id="fcpxml-markers" type="checkbox" checked /> Marcadores por palavra</label>
-              <button id="fcpxml-btn" class="btn-ghost">📄 Exportar FCPXML</button>
+              <button id="fcpxml-btn" class="btn-ghost">📄 FCPXML</button>
               <a id="fcpxml-link" class="btn-primary" href="#" download style="display:none">⬇ Baixar FCPXML</a>
+              <button id="premiere-btn" class="btn-ghost">📄 Premiere/Resolve XML</button>
+              <a id="premiere-link" class="btn-primary" href="#" download style="display:none">⬇ Baixar Premiere XML</a>
+              <label class="cb"><input id="premiere-roughcut" type="checkbox" /> usar rough cut</label>
             </div>
-            <p class="card-help">Abra no Final Cut Pro: <em>Arquivo → Importar → XML</em>. Os cortes ficam não-destrutivos.</p>
+            <p class="card-help">FCPXML abre no Final Cut Pro (<em>Arquivo → Importar → XML</em>). O Premiere/Resolve XML (xmeml) abre no Premiere Pro e DaVinci Resolve. Os cortes ficam não-destrutivos.</p>
           </section>
         </div>
       </main>

@@ -53,9 +53,14 @@ class ProjectState(BaseModel):
     has_brand: bool = False
     has_render: bool = False
     last_export: str | None = None
-    angles: list[dict[str, Any]] = Field(default_factory=list)  # [{name, filename, duration}, ...]
+    angles: list[dict[str, Any]] = Field(default_factory=list)  # [{name, filename, duration, tags?}, ...]
     music_suggestion: dict[str, Any] | None = None
     music_track: dict[str, Any] | None = None
+    has_fillers: bool = False
+    fillers_count: int = 0
+    has_soundbites: bool = False
+    has_story: bool = False
+    has_roughcut: bool = False
     stages: dict[str, Stage] = Field(default_factory=dict)
 
     def stage(self, name: str) -> Stage:

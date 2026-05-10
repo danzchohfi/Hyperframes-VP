@@ -37,6 +37,12 @@ from pydantic import BaseModel
 from . import storage
 from .services import ffmpeg as ff
 from .services import whisper, silence, composer, render, fcpxml, music
+from .services import fillers as fillers_svc
+from .services import soundbites as sb_svc
+from .services import story as story_svc
+from .services import vision as vision_svc
+from .services import premiere_xml
+from .services import roughcut as rc_svc
 from .services.brand import BrandBook
 
 app = FastAPI(title="HyperFrames Video Pipeline", version="0.1.0")
@@ -88,6 +94,33 @@ class MusicSearchIn(BaseModel):
 
 class MusicSelectIn(BaseModel):
     track: dict[str, Any]
+
+
+class FillersIn(BaseModel):
+    language: str | None = "auto"  # auto | pt | en
+    custom: list[str] | None = None
+    pad: float = 0.04
+
+
+class SoundbitesIn(BaseModel):
+    pass  # no params yet
+
+
+class StoryIn(BaseModel):
+    structure: str = "four_act"  # four_act | hero_journey | explainer | testimonial | before_after
+    style_note: str | None = None
+
+
+class RoughCutIn(BaseModel):
+    use_story: bool = True            # build from story chapters
+    soundbite_ids: list[str] | None = None  # override: explicit list
+    aspect: str | None = None         # if set, also reframes
+    apply_lut: bool = True
+
+
+class PremiereXmlIn(BaseModel):
+    use_cuts: bool = True
+    use_roughcut: bool = False
 
 
 # ---- helpers -----------------------------------------------------------------
@@ -295,6 +328,11 @@ async def apply_edits(pid: str) -> dict[str, Any]:
         else:
             keep = [(0.0, state.source_duration or await ff.duration(src))]
 
+        if state.has_fillers:
+            filler_plan = storage.read_json(pid, "fillers.json")
+            drop = [(r["start"], r["end"]) for r in filler_plan.get("ranges", [])]
+            keep = fillers_svc.subtract_ranges(keep, drop)
+
         lut_path = pdir / "lut.cube" if state.has_lut else None
         out_path = pdir / "graded.mp4"
         await ff.cut_segments(src, out_path, keep, lut=lut_path)
@@ -303,8 +341,12 @@ async def apply_edits(pid: str) -> dict[str, Any]:
         _stage(state, "apply", "error", str(e))
         raise HTTPException(500, str(e))
 
-    _stage(state, "apply", "done", f"{out_dur:.2f}s edited")
-    return {"duration": out_dur, "lut_applied": state.has_lut}
+    _stage(state, "apply", "done", f"{out_dur:.2f}s edited · fillers={state.fillers_count}")
+    return {
+        "duration": out_dur,
+        "lut_applied": state.has_lut,
+        "fillers_removed": state.fillers_count if state.has_fillers else 0,
+    }
 
 
 # ---- render via Hyperframes --------------------------------------------------
@@ -550,6 +592,255 @@ async def music_select(pid: str, body: MusicSelectIn) -> dict[str, Any]:
     storage.save(state)
     _stage(state, "music_select", "done", body.track.get("title", "track"))
     return {"track": body.track}
+
+
+# ---- filler-word removal -----------------------------------------------------
+
+@app.post("/api/projects/{pid}/cut-fillers")
+async def cut_fillers(pid: str, body: FillersIn) -> dict[str, Any]:
+    state = _load(pid)
+    if not state.has_transcript:
+        raise HTTPException(400, "transcribe first")
+    transcript = storage.read_json(pid, "transcript.json")
+    words = transcript.get("words") or []
+    if not words:
+        raise HTTPException(400, "transcript has no word timings")
+
+    lang = body.language if body.language and body.language != "auto" else (transcript.get("language") or "auto")
+    ranges = fillers_svc.detect_filler_ranges(words, language=lang, custom=body.custom, pad=body.pad)
+    storage.write_json(pid, "fillers.json", {
+        "language": lang,
+        "ranges": [{"start": s, "end": e} for s, e in ranges],
+        "stats": fillers_svc.stats(ranges),
+    })
+    state.has_fillers = True
+    state.fillers_count = len(ranges)
+    storage.save(state)
+    _stage(state, "fillers", "done", f"{len(ranges)} ranges · {fillers_svc.stats(ranges)['duration']:.2f}s")
+    return {"count": len(ranges), "duration": fillers_svc.stats(ranges)["duration"]}
+
+
+# ---- soundbites + topics -----------------------------------------------------
+
+@app.post("/api/projects/{pid}/soundbites")
+async def soundbites(pid: str, _body: SoundbitesIn | None = None) -> dict[str, Any]:
+    state = _load(pid)
+    if not state.has_transcript:
+        raise HTTPException(400, "transcribe first")
+    transcript = storage.read_json(pid, "transcript.json")
+
+    _stage(state, "soundbites", "running", "asking the model")
+    try:
+        analysis = await sb_svc.analyze(transcript)
+    except Exception as e:
+        _stage(state, "soundbites", "error", str(e))
+        raise HTTPException(502, str(e))
+
+    storage.write_json(pid, "soundbites.json", analysis.model_dump())
+    state.has_soundbites = True
+    storage.save(state)
+    _stage(
+        state,
+        "soundbites",
+        "done",
+        f"{len(analysis.soundbites)} bites · {len(analysis.topics)} topics",
+    )
+    return analysis.model_dump()
+
+
+@app.get("/api/projects/{pid}/soundbites")
+async def get_soundbites(pid: str):
+    state = _load(pid)
+    if not state.has_soundbites:
+        raise HTTPException(404, "no soundbites")
+    return JSONResponse(storage.read_json(pid, "soundbites.json"))
+
+
+# ---- story framework ---------------------------------------------------------
+
+@app.post("/api/projects/{pid}/story")
+async def build_story(pid: str, body: StoryIn) -> dict[str, Any]:
+    state = _load(pid)
+    if not state.has_soundbites:
+        raise HTTPException(400, "extract soundbites first")
+    analysis = storage.read_json(pid, "soundbites.json")
+
+    _stage(state, "story", "running", body.structure)
+    try:
+        story = await story_svc.propose(
+            analysis["soundbites"], analysis["topics"],
+            structure=body.structure, style_note=body.style_note,
+        )
+    except Exception as e:
+        _stage(state, "story", "error", str(e))
+        raise HTTPException(502, str(e))
+
+    storage.write_json(pid, "story.json", story.model_dump())
+    state.has_story = True
+    storage.save(state)
+    _stage(state, "story", "done", f"{len(story.chapters)} chapters · {story.title}")
+    return story.model_dump()
+
+
+@app.get("/api/projects/{pid}/story")
+async def get_story(pid: str):
+    state = _load(pid)
+    if not state.has_story:
+        raise HTTPException(404, "no story")
+    return JSONResponse(storage.read_json(pid, "story.json"))
+
+
+# ---- B-roll vision tagging ---------------------------------------------------
+
+@app.post("/api/projects/{pid}/angles/{idx}/tag")
+async def tag_angle(pid: str, idx: int) -> dict[str, Any]:
+    state = _load(pid)
+    if idx < 0 or idx >= len(state.angles):
+        raise HTTPException(404, "angle not found")
+    pdir = storage.project_dir(pid)
+    angle = state.angles[idx]
+    src = pdir / "angles" / angle["filename"]
+    if not src.exists():
+        raise HTTPException(404, "angle file missing")
+
+    _stage(state, "vision_tag", "running", angle["name"])
+    try:
+        tags = await vision_svc.tag_clip(src)
+    except Exception as e:
+        _stage(state, "vision_tag", "error", str(e))
+        raise HTTPException(502, str(e))
+
+    angle["tags"] = tags.model_dump()
+    storage.save(state)
+    _stage(state, "vision_tag", "done", tags.summary or angle["name"])
+    return angle
+
+
+@app.post("/api/projects/{pid}/source/tag")
+async def tag_source(pid: str) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    src = pdir / "source.mp4"
+    if not src.exists():
+        raise HTTPException(400, "no source")
+    _stage(state, "vision_tag", "running", "source.mp4")
+    try:
+        tags = await vision_svc.tag_clip(src)
+    except Exception as e:
+        _stage(state, "vision_tag", "error", str(e))
+        raise HTTPException(502, str(e))
+    storage.write_json(pid, "source_tags.json", tags.model_dump())
+    _stage(state, "vision_tag", "done", tags.summary or "source")
+    return tags.model_dump()
+
+
+# ---- rough-cut assembly ------------------------------------------------------
+
+@app.post("/api/projects/{pid}/roughcut")
+async def roughcut(pid: str, body: RoughCutIn) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    src = pdir / "source.mp4"
+    if not src.exists():
+        raise HTTPException(400, "no source uploaded")
+    if not state.has_soundbites:
+        raise HTTPException(400, "extract soundbites first")
+
+    analysis = storage.read_json(pid, "soundbites.json")
+
+    if body.use_story:
+        if not state.has_story:
+            raise HTTPException(400, "build story first or set use_story=false with explicit soundbite_ids")
+        story = storage.read_json(pid, "story.json")
+        ranges = rc_svc.chapter_ranges(story["chapters"], analysis["soundbites"])
+        chapter_markers = rc_svc.chapter_marker_plan(story["chapters"], analysis["soundbites"])
+    else:
+        if not body.soundbite_ids:
+            raise HTTPException(400, "soundbite_ids required when use_story=false")
+        ranges = rc_svc.selected_ranges(body.soundbite_ids, analysis["soundbites"])
+        chapter_markers = []
+
+    if not ranges:
+        raise HTTPException(400, "no ranges resolved")
+
+    lut = pdir / "lut.cube" if (state.has_lut and body.apply_lut) else None
+    out_path = pdir / "roughcut.mp4"
+
+    _stage(state, "roughcut", "running", f"{len(ranges)} segments")
+    try:
+        await ff.cut_segments(src, out_path, ranges, lut=lut)
+        out_dur = await ff.duration(out_path)
+    except Exception as e:
+        _stage(state, "roughcut", "error", str(e))
+        raise HTTPException(500, str(e))
+
+    storage.write_json(pid, "roughcut.json", {
+        "ranges": [{"start": s, "end": e} for s, e in ranges],
+        "duration": out_dur,
+        "chapter_markers": chapter_markers,
+    })
+    state.has_roughcut = True
+    storage.save(state)
+    _stage(state, "roughcut", "done", f"{out_dur:.2f}s · {len(chapter_markers)} chapters")
+
+    result: dict[str, Any] = {
+        "duration": out_dur,
+        "segments": len(ranges),
+        "chapters": len(chapter_markers),
+        "url": f"/api/projects/{pid}/files/roughcut.mp4",
+    }
+    if body.aspect:
+        try:
+            reframed = pdir / "exports" / f"roughcut-{body.aspect.replace(':', 'x')}.mp4"
+            reframed.parent.mkdir(exist_ok=True)
+            await ff.to_aspect(out_path, reframed, body.aspect)
+            result["reframed_url"] = f"/api/projects/{pid}/exports/{reframed.name}"
+        except Exception as e:
+            result["reframe_error"] = str(e)
+
+    return result
+
+
+# ---- Premiere/Resolve XML export --------------------------------------------
+
+@app.post("/api/projects/{pid}/export/premiere")
+async def export_premiere(pid: str, body: PremiereXmlIn) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    src = pdir / "source.mp4"
+    if not src.exists():
+        raise HTTPException(400, "no source")
+
+    if body.use_roughcut:
+        if not state.has_roughcut:
+            raise HTTPException(400, "no roughcut")
+        plan = storage.read_json(pid, "roughcut.json")
+        keep = [(seg["start"], seg["end"]) for seg in plan["ranges"]]
+    elif body.use_cuts and state.has_cuts:
+        plan = storage.read_json(pid, "cuts.json")
+        keep = [(seg["start"], seg["end"]) for seg in plan["keep"]]
+    else:
+        keep = None
+
+    try:
+        xml = await premiere_xml.build_xmeml(
+            project_name=state.name,
+            source=src,
+            cuts=keep,
+        )
+    except Exception as e:
+        _stage(state, "premiere_xml", "error", str(e))
+        raise HTTPException(500, str(e))
+
+    out = pdir / "exports" / f"{state.name.replace(' ', '_')}.xml"
+    out.parent.mkdir(exist_ok=True)
+    out.write_text(xml, encoding="utf-8")
+    _stage(state, "premiere_xml", "done", out.name)
+    return {
+        "export": out.name,
+        "url": f"/api/projects/{pid}/exports/{out.name}",
+        "bytes": out.stat().st_size,
+    }
 
 
 # ---- file serving ------------------------------------------------------------
