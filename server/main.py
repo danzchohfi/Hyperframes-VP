@@ -64,9 +64,12 @@ from .services import jobs as jobs_svc
 from .services import speaker_levels as levels_svc
 from .services import quality as quality_svc
 from .services import face_analysis as face_svc
+from .services import face_identity as face_id_svc
+from .services import subject_timeline as subj_tl_svc
 from .services import camera_picker as cam_picker_svc
 from .services import multicam_render as mc_render_svc
 from .services import vlog as vlog_svc
+from .services import vlog_pipeline as vlog_pipeline_svc
 from .services import podcast_pipeline as podcast_pipeline_svc
 from .services import shorts as shorts_svc
 from .services import yt_thumbnail as yt_thumb_svc
@@ -1961,6 +1964,116 @@ async def angle_face_analysis(pid: str, idx: int) -> dict[str, Any]:
     return angle
 
 
+# ---- cross-clip face identity clustering ------------------------------------
+
+@app.post("/api/projects/{pid}/face-identities")
+async def face_identities(pid: str) -> dict[str, Any]:
+    """Fingerprint every clip + angle + source, cluster them, return who's
+    in what."""
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    fingerprints: dict[str, list[list[float]]] = {}
+
+    src = pdir / "source.mp4"
+    if src.exists():
+        try:
+            fingerprints["source"] = face_id_svc.fingerprint_clip(src)
+        except Exception:
+            pass
+
+    for a in state.angles:
+        path = pdir / "angles" / a["filename"]
+        if path.exists():
+            try:
+                key = f"angle:{a['index']}:{a['name']}"
+                fingerprints[key] = face_id_svc.fingerprint_clip(path)
+            except Exception:
+                continue
+
+    for c in state.clips:
+        path = pdir / "clips" / c["filename"]
+        if path.exists():
+            try:
+                key = f"clip:{c['id']}:{c.get('name', c['id'])}"
+                fingerprints[key] = face_id_svc.fingerprint_clip(path)
+            except Exception:
+                continue
+
+    if not fingerprints:
+        raise HTTPException(400, "no faces found in any source")
+
+    _stage(state, "face_identities", "running",
+           f"clustering {sum(len(v) for v in fingerprints.values())} faces from {len(fingerprints)} sources")
+    try:
+        result = face_id_svc.cluster_identities(fingerprints)
+    except Exception as e:
+        _stage(state, "face_identities", "error", str(e))
+        raise HTTPException(500, str(e))
+
+    storage.write_json(pid, "face_identities.json", result)
+
+    # Annotate each clip / angle with their cluster ids
+    for a in state.angles:
+        key = f"angle:{a['index']}:{a['name']}"
+        a["face_clusters"] = result["presence"].get(key, [])
+    for c in state.clips:
+        key = f"clip:{c['id']}:{c.get('name', c['id'])}"
+        c["face_clusters"] = result["presence"].get(key, [])
+    storage.save(state)
+
+    _stage(state, "face_identities", "done",
+           f"{len(result['clusters'])} pessoas detectadas")
+    return result
+
+
+# ---- subject timeline (within-clip) -----------------------------------------
+
+@app.post("/api/projects/{pid}/subject-timeline")
+async def subject_timeline_endpoint(pid: str, target: str = "source", angle_index: int = 0,
+                                    step_seconds: float = 0.5) -> dict[str, Any]:
+    """Build a fine-grained subject-presence timeline.
+
+    target: "source" | "angle" | "clip"
+    """
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    if target == "source":
+        src = pdir / "source.mp4"
+        out_name = "source"
+    elif target == "angle":
+        if angle_index < 0 or angle_index >= len(state.angles):
+            raise HTTPException(404, "angle not found")
+        a = state.angles[angle_index]
+        src = pdir / "angles" / a["filename"]
+        out_name = f"angle_{angle_index}"
+    elif target == "clip":
+        # angle_index parameter overloaded as clip-index
+        if angle_index < 0 or angle_index >= len(state.clips):
+            raise HTTPException(404, "clip not found")
+        c = state.clips[angle_index]
+        src = pdir / "clips" / c["filename"]
+        out_name = f"clip_{c['id']}"
+    else:
+        raise HTTPException(400, "target must be source | angle | clip")
+
+    if not src.exists():
+        raise HTTPException(404, "file missing")
+
+    _stage(state, "subject_timeline", "running", out_name)
+    try:
+        timeline = subj_tl_svc.build(src, step_seconds=step_seconds)
+        changes = subj_tl_svc.detect_changes(timeline["events"])
+    except Exception as e:
+        _stage(state, "subject_timeline", "error", str(e))
+        raise HTTPException(500, str(e))
+
+    payload = {**timeline, "changes": changes}
+    storage.write_json(pid, f"subject_timeline_{out_name}.json", payload)
+    _stage(state, "subject_timeline", "done",
+           f"{out_name} · {len(timeline['events'])} samples · {len(changes)} mudanças")
+    return payload
+
+
 @app.post("/api/projects/{pid}/source/analyze-faces")
 async def source_face_analysis(pid: str) -> dict[str, Any]:
     state = _load(pid)
@@ -1982,6 +2095,8 @@ async def source_face_analysis(pid: str) -> dict[str, Any]:
 class CameraPickIn(BaseModel):
     intervals: str = "turns"     # turns | bites
     min_dur: float = 1.4
+    split_on_subject_change: bool = True
+    min_subspan: float = 1.8
 
 
 @app.post("/api/projects/{pid}/multicam-pick")
@@ -2026,6 +2141,21 @@ async def multicam_pick(pid: str, body: CameraPickIn) -> dict[str, Any]:
 
     if not intervals:
         raise HTTPException(400, "no intervals to score")
+
+    # Optionally split intervals at subject-change points pulled from any
+    # cached subject_timeline_*.json (source preferred).
+    if body.split_on_subject_change:
+        change_points: list[float] = []
+        for path in pdir.glob("subject_timeline_*.json"):
+            try:
+                tl = storage.read_json(pid, path.name)
+                change_points += [float(c["t"]) for c in tl.get("changes", [])]
+            except Exception:
+                continue
+        if change_points:
+            intervals = cam_picker_svc.split_intervals_at_changes(
+                intervals, change_points, min_subspan=body.min_subspan,
+            )
 
     raw = cam_picker_svc.pick_cameras(angle_pool, intervals, min_dur=body.min_dur)
     merged = cam_picker_svc.merge_adjacent(raw)
@@ -2236,6 +2366,32 @@ async def transcribe_all_clips(pid: str, body: ClipTranscribeIn | None = None) -
     return {"job_id": job_id, "status": "pending"}
 
 
+class VlogPipelineIn(BaseModel):
+    language: str | None = None
+    aspect: str = "9:16"
+    apply_brand: bool = True
+    chapter_cards: bool = True
+    do_face_clustering: bool = True
+
+
+@app.post("/api/projects/{pid}/vlog/auto-pipeline")
+async def vlog_auto_pipeline(pid: str, body: VlogPipelineIn) -> dict[str, Any]:
+    _load(pid)
+
+    async def _run(ctx: jobs_svc.JobContext) -> dict[str, Any]:
+        return await vlog_pipeline_svc.run(
+            ctx,
+            language=body.language,
+            aspect=body.aspect,
+            apply_brand=body.apply_brand,
+            chapter_cards=body.chapter_cards,
+            do_face_clustering=body.do_face_clustering,
+        )
+
+    job_id = await jobs_svc.manager.submit(pid, "vlog_pipeline", _run)
+    return {"job_id": job_id, "status": "pending"}
+
+
 @app.post("/api/projects/{pid}/vlog/narratives")
 async def vlog_narratives(pid: str) -> dict[str, Any]:
     state = _load(pid)
@@ -2280,6 +2436,42 @@ class VlogAssembleIn(BaseModel):
     narrative_id: str
     aspect: str = "9:16"
     loudnorm: bool = True
+    apply_brand: bool = True
+    chapter_cards: bool = True
+
+
+@app.post("/api/projects/{pid}/vlog/music-suggest")
+async def vlog_music_suggest(pid: str, language: str = "pt") -> dict[str, Any]:
+    """Suggest music for a vlog by combining all clip transcripts."""
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    if not state.clips:
+        raise HTTPException(400, "no clips")
+    combined: list[str] = []
+    total_dur = 0.0
+    for c in state.clips:
+        tp = pdir / "clips" / f"{c['id']}_transcript.json"
+        if not tp.exists():
+            continue
+        try:
+            t = _json.loads(tp.read_text())
+            combined.append(t.get("text") or "")
+            total_dur += float(c.get("duration") or 0.0)
+        except Exception:
+            continue
+    text = " ".join(combined).strip()
+    if not text:
+        raise HTTPException(400, "no transcripts available")
+    _stage(state, "vlog_music", "running", f"{len(combined)} clips · {total_dur:.0f}s")
+    try:
+        suggestion = await music.suggest_music(text, duration=total_dur)
+    except Exception as e:
+        _stage(state, "vlog_music", "error", str(e))
+        raise HTTPException(502, str(e))
+    state.music_suggestion = suggestion.model_dump()
+    storage.save(state)
+    _stage(state, "vlog_music", "done", suggestion.description[:80])
+    return suggestion.model_dump()
 
 
 @app.post("/api/projects/{pid}/vlog/assemble")
@@ -2309,28 +2501,93 @@ async def vlog_assemble(pid: str, body: VlogAssembleIn) -> dict[str, Any]:
     presets = {"9:16": (1080, 1920), "16:9": (1920, 1080), "1:1": (1080, 1080)}
     w, h = presets.get(body.aspect, (1920, 1080))
 
-    out = pdir / "exports" / f"{state.name.replace(' ', '_')}-vlog-{narrative.id}.mp4"
-    out.parent.mkdir(exist_ok=True)
+    raw = pdir / "exports" / f"{state.name.replace(' ', '_')}-vlog-{narrative.id}-raw.mp4"
+    raw.parent.mkdir(exist_ok=True)
     _stage(state, "vlog_assemble", "running", f"{len(items)} segments")
     try:
-        await ff.concat_segments_from_multiple(items, out, width=w, height=h, loudnorm=body.loudnorm)
+        await ff.concat_segments_from_multiple(items, raw, width=w, height=h, loudnorm=body.loudnorm)
     except Exception as e:
         _stage(state, "vlog_assemble", "error", str(e))
         raise HTTPException(500, str(e))
 
-    _stage(state, "vlog_assemble", "done", f"{out.name} · {out.stat().st_size // 1024} KB")
-    storage.append_render_history(pid, name=out.name, kind="vlog",
-                                  url=f"/api/projects/{pid}/exports/{out.name}",
-                                  bytes=out.stat().st_size,
+    final_url = f"/api/projects/{pid}/exports/{raw.name}"
+    final_path = raw
+
+    # Optional brand wrap via Hyperframes composer
+    if body.apply_brand:
+        # Build the unified transcript on the assembled timeline
+        clip_transcripts: dict[str, dict] = {}
+        for c in state.clips:
+            tp = pdir / "clips" / f"{c['id']}_transcript.json"
+            if tp.exists():
+                try:
+                    clip_transcripts[c["id"]] = _json.loads(tp.read_text())
+                except Exception:
+                    continue
+        unified = vlog_svc.build_vlog_transcript(narrative, clip_transcripts) if clip_transcripts else None
+        chapters = vlog_svc.build_chapter_markers(narrative, state.clips) if body.chapter_cards else None
+
+        brand = (
+            BrandBook.model_validate(storage.read_json(pid, "brand.json"))
+            if state.has_brand else BrandBook()
+        )
+        comp_parent = pdir / f"vlog_comp_{narrative.id}"
+        comp_parent.mkdir(exist_ok=True)
+        try:
+            comp_dir = composer.build_composition(
+                project_dir=comp_parent,
+                video_path=raw,
+                video_duration=await ff.duration(raw),
+                transcript=unified,
+                brand=brand,
+                aspect=body.aspect,
+                chapters=chapters,
+            )
+            _stage(state, "vlog_assemble", "running", "rendering brand wrap")
+
+            def _on_event(ev: dict) -> None:
+                pct = ev.get("progress")
+                emit_stage(pid, "vlog_assemble", "running",
+                           f"render {pct}% · {ev.get('label', '')}",
+                           progress=float(pct) / 100.0 if pct is not None else None)
+
+            rendered = await render.render(
+                comp_dir,
+                output_dir=pdir / "exports",
+                name=f"{state.name.replace(' ', '_')}-vlog-{narrative.id}",
+                on_event=_on_event,
+                project_id=None,
+            )
+            final_path = rendered
+            final_url = f"/api/projects/{pid}/exports/{rendered.name}"
+            # cleanup raw + composition dir
+            try:
+                raw.unlink()
+                import shutil; shutil.rmtree(comp_parent)
+            except Exception:
+                pass
+        except Exception as e:
+            _stage(state, "vlog_assemble", "error", f"brand wrap failed: {e}")
+            # fall back to the raw cut
+            final_url = f"/api/projects/{pid}/exports/{raw.name}"
+            final_path = raw
+
+    _stage(state, "vlog_assemble", "done",
+           f"{final_path.name} · {final_path.stat().st_size // 1024} KB")
+    storage.append_render_history(pid, name=final_path.name, kind="vlog",
+                                  url=final_url,
+                                  bytes=final_path.stat().st_size,
                                   extra={"narrative": narrative.name,
                                          "genre": narrative.genre,
-                                         "clips": len(items)})
+                                         "clips": len(items),
+                                         "branded": body.apply_brand})
     return {
         "narrative": narrative.model_dump(),
         "plan": plan,
-        "export": out.name,
-        "url": f"/api/projects/{pid}/exports/{out.name}",
-        "bytes": out.stat().st_size,
+        "export": final_path.name,
+        "url": final_url,
+        "bytes": final_path.stat().st_size,
+        "branded": body.apply_brand,
     }
 
 

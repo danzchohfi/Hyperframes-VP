@@ -415,6 +415,28 @@ function attachEventStream(pid) {
     } else if (data.type === "log") {
       log(data.message, data.level === "error" ? "err" : data.level === "ok" ? "ok" : "");
     } else if (data.type === "job") {
+      // vlog 1-click pipeline
+      if (state.vlogPipelineJobId && data.job_id === state.vlogPipelineJobId) {
+        const status = $("#vlog-status");
+        const btn = $("#vlog-auto-btn");
+        if (status) {
+          status.textContent = data.message || data.status;
+          status.className = data.status === "error" ? "status error" :
+                            data.status === "done" ? "status ok" : "status warn";
+        }
+        if (data.status === "done") {
+          if (btn) btn.disabled = false;
+          state.vlogPipelineJobId = null;
+          loadClips();
+          // narratives.json now persisted — refetch
+          api(`/api/projects/${state.current.id}/files/vlog_narratives.json`)
+            .then(n => renderNarratives(n.narratives || [])).catch(() => {});
+          toast("Pipeline pronto — escolha uma narrativa", "ok");
+        } else if (data.status === "error" || data.status === "cancelled") {
+          if (btn) btn.disabled = false;
+          state.vlogPipelineJobId = null;
+        }
+      }
       // vlog batch transcribe
       if (state.vlogTranscribeJobId && data.job_id === state.vlogTranscribeJobId) {
         if (data.status === "done") {
@@ -1540,6 +1562,88 @@ async function multicamRender() {
   }
 }
 
+async function vlogAutoPipeline() {
+  if (!state.current) return;
+  const btn = $("#vlog-auto-btn");
+  const status = $("#vlog-status");
+  btn.disabled = true;
+  status.textContent = "iniciando…";
+  status.className = "status warn";
+  log("▶ vlog 1-click");
+  try {
+    const r = await api(`/api/projects/${state.current.id}/vlog/auto-pipeline`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        aspect: "9:16",
+        apply_brand: true,
+        chapter_cards: true,
+        do_face_clustering: true,
+      }),
+    });
+    state.vlogPipelineJobId = r.job_id;
+    toast("Vlog pipeline rodando…", "ok");
+  } catch (e) {
+    log(`✗ vlog pipeline: ${e.message}`, "err");
+    btn.disabled = false;
+    status.textContent = e.message;
+    status.className = "status error";
+  }
+}
+
+async function vlogMusicSuggest() {
+  if (!state.current) return;
+  log("▶ vlog music suggest");
+  try {
+    const s = await api(`/api/projects/${state.current.id}/vlog/music-suggest?language=pt`, { method: "POST" });
+    log(`✓ ${s.description}`, "ok");
+    renderMusicSuggestion(s);
+  } catch (e) {
+    log(`✗ vlog music: ${e.message}`, "err");
+  }
+}
+
+async function detectFaceIdentities() {
+  if (!state.current) return;
+  log("▶ face identities");
+  try {
+    const r = await api(`/api/projects/${state.current.id}/face-identities`, { method: "POST" });
+    renderPeople(r.clusters || [], r.presence || {});
+    toast(`${r.clusters?.length || 0} pessoas detectadas`, "ok");
+  } catch (e) {
+    log(`✗ face-ids: ${e.message}`, "err");
+  }
+}
+
+function renderPeople(clusters, presence) {
+  const root = $("#people-list");
+  if (!root) return;
+  root.innerHTML = "";
+  for (const c of clusters) {
+    const div = document.createElement("div");
+    div.className = "person";
+    const where = (c.sources || []).map(s => s.split(":").slice(-1)[0] || s).join(", ") || "—";
+    div.innerHTML = `
+      <span class="pid">${escapeHtml(c.id)}</span>
+      <span class="sources">aparece em: ${escapeHtml(where)}</span>
+      <span class="count">${c.size} samples</span>
+    `;
+    root.appendChild(div);
+  }
+}
+
+async function buildSourceSubjectTimeline() {
+  if (!state.current) return;
+  log("▶ subject timeline (source)");
+  try {
+    const r = await api(`/api/projects/${state.current.id}/subject-timeline?target=source&step_seconds=0.5`, { method: "POST" });
+    log(`✓ ${r.events?.length || 0} samples · ${r.changes?.length || 0} mudanças`, "ok");
+    toast(`${r.changes?.length || 0} mudanças de sujeito detectadas`, "ok");
+  } catch (e) {
+    log(`✗ subject timeline: ${e.message}`, "err");
+  }
+}
+
 async function multicamSync() {
   if (!state.current) return;
   log("▶ multicam sync");
@@ -1983,6 +2087,10 @@ function bind() {
   $("#shorts-btn").onclick = generateShorts;
   $("#vlog-transcribe-all").onclick = vlogTranscribeAll;
   $("#vlog-narratives-btn").onclick = vlogProposeNarratives;
+  $("#vlog-auto-btn").onclick = vlogAutoPipeline;
+  $("#vlog-music-btn").onclick = vlogMusicSuggest;
+  $("#face-ids-btn").onclick = detectFaceIdentities;
+  $("#subject-tl-btn").onclick = buildSourceSubjectTimeline;
   $("#multicam-pick-btn").onclick = multicamPick;
   $("#multicam-render-btn").onclick = multicamRender;
   const ci = $("#clip-input");

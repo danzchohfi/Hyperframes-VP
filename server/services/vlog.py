@@ -167,6 +167,73 @@ async def propose(
     return NarrativeSet(narratives=narratives)
 
 
+def build_vlog_transcript(
+    narrative: Narrative,
+    clip_transcripts: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Walk the narrative sequence and assemble a unified transcript whose
+    timestamps live on the assembled timeline.
+
+    `clip_transcripts` maps clip_id → loaded transcript JSON.
+    """
+    new_words: list[dict[str, Any]] = []
+    new_segments: list[dict[str, Any]] = []
+    cursor = 0.0
+    for b in narrative.sequence:
+        t = clip_transcripts.get(b.clip_id)
+        if not t:
+            cursor += b.end - b.start
+            continue
+        # Words: keep those inside [b.start, b.end] and shift to cursor.
+        for w in t.get("words") or []:
+            ws = float(w.get("start", 0))
+            we = float(w.get("end", ws))
+            if we <= b.start or ws >= b.end:
+                continue
+            new_words.append({
+                "word": (w.get("word") or "").strip(),
+                "start": cursor + max(0.0, ws - b.start),
+                "end": cursor + min(b.end - b.start, we - b.start),
+            })
+        for s in t.get("segments") or []:
+            ss = float(s.get("start", 0))
+            se = float(s.get("end", ss))
+            if se <= b.start or ss >= b.end:
+                continue
+            new_segments.append({
+                "start": cursor + max(0.0, ss - b.start),
+                "end": cursor + min(b.end - b.start, se - b.start),
+                "text": (s.get("text") or "").strip(),
+            })
+        cursor += b.end - b.start
+    return {"words": new_words, "segments": new_segments,
+            "duration": cursor, "language": next(
+                (v.get("language") for v in clip_transcripts.values() if v.get("language")),
+                None,
+            )}
+
+
+def build_chapter_markers(narrative: Narrative, clips: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """One chapter per clip in the narrative — with the clip's name and the
+    LLM-supplied `reason` as the summary."""
+    clip_by_id = {c["id"]: c for c in clips}
+    out: list[dict[str, Any]] = []
+    cursor = 0.0
+    for i, b in enumerate(narrative.sequence):
+        c = clip_by_id.get(b.clip_id)
+        dur = b.end - b.start
+        if not c or dur <= 0.0:
+            cursor += max(0.0, dur)
+            continue
+        out.append({
+            "name": (c.get("name") or f"Clip {i + 1}"),
+            "start": cursor,
+            "duration": min(2.2, max(1.4, dur * 0.18)),
+        })
+        cursor += dur
+    return out
+
+
 def assembly_plan(narrative: Narrative, clips: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Convert a Narrative into a list of `(clip_path, start, end)` instructions
     the renderer can feed to ffmpeg. Drops bites whose clip_id is unknown."""

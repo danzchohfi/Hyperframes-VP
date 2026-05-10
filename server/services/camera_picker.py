@@ -97,3 +97,28 @@ def merge_adjacent(cuts: list[dict[str, Any]]) -> list[dict[str, Any]]:
         else:
             out.append(dict(c))
     return out
+
+
+def split_intervals_at_changes(
+    intervals: list[tuple[float, float]],
+    change_points: list[float],
+    *,
+    min_subspan: float = 1.5,
+) -> list[tuple[float, float]]:
+    """Subdivide each interval at any change point that falls inside it,
+    keeping subspans >= min_subspan seconds. The result is fed back into
+    pick_cameras so a long speaker turn can switch cameras when the subject
+    changes mid-turn."""
+    out: list[tuple[float, float]] = []
+    cps = sorted({float(t) for t in change_points})
+    for s, e in intervals:
+        cuts_here = [t for t in cps if s + min_subspan <= t <= e - min_subspan]
+        if not cuts_here:
+            out.append((s, e))
+            continue
+        prev = s
+        for t in cuts_here:
+            out.append((prev, t))
+            prev = t
+        out.append((prev, e))
+    return out

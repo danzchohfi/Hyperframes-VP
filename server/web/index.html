@@ -223,9 +223,16 @@
                 <div class="dz-sub">vários ao mesmo tempo · MP4 / MOV</div>
               </label>
               <button id="vlog-transcribe-all" class="btn-ghost">📝 Transcrever todos</button>
-              <button id="vlog-narratives-btn" class="btn-primary">🧭 Sugerir narrativas</button>
+              <button id="vlog-narratives-btn" class="btn-ghost">🧭 Sugerir narrativas</button>
+              <button id="vlog-auto-btn" class="btn-primary">⚡ Vlog 1-click (transcribe + narrativas + montagem)</button>
+            </div>
+            <div class="actions">
+              <button id="vlog-music-btn" class="btn-ghost">🎵 Sugerir música pro vlog</button>
+              <button id="face-ids-btn" class="btn-ghost">👥 Identificar pessoas</button>
+              <span id="vlog-status" class="status muted"></span>
             </div>
             <ul id="clips-list" class="angle-list"></ul>
+            <div id="people-list" class="people-list"></div>
             <div id="narratives-list" class="narratives-list"></div>
           </section>
 
@@ -323,6 +330,7 @@
             </div>
             <div class="actions">
               <button id="place-broll-btn" class="btn-primary">🎯 Posicionar B-roll automaticamente</button>
+              <button id="subject-tl-btn" class="btn-ghost">🧭 Linha de tempo do sujeito</button>
               <button id="multicam-pick-btn" class="btn-ghost">🎬 Escolher câmera por turno</button>
               <button id="multicam-render-btn" class="btn-ghost">🎞 Renderizar multicam</button>
               <a id="multicam-link" class="btn-ghost" href="#" download style="display:none">⬇ multicam.mp4</a>
