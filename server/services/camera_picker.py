@@ -60,6 +60,8 @@ def pick_cameras(
     intervals: list[tuple[float, float]],
     *,
     min_dur: float = 1.4,
+    speaker_per_interval: list[str | None] | None = None,
+    speaker_to_cluster: dict[str, str | None] | None = None,
 ) -> list[dict[str, Any]]:
     """For each interval, pick the best angle.
 
@@ -67,12 +69,26 @@ def pick_cameras(
     """
     cuts: list[dict[str, Any]] = []
     last_angle: int | None = None
-    for s, e in intervals:
+    for k, (s, e) in enumerate(intervals):
         if e - s < min_dur and last_angle is not None:
             cuts.append({"start": s, "end": e, "angle_index": last_angle, "reason": "hold"})
             continue
-        # Rank angles
-        scored = [(i, *_score_for_interval(a, i)) for i, a in enumerate(angles)]
+
+        speaker = (speaker_per_interval or [None] * len(intervals))[k]
+        target_cluster = (speaker_to_cluster or {}).get(speaker) if speaker else None
+
+        scored: list[tuple[int, float, str]] = []
+        for i, a in enumerate(angles):
+            base, reason = _score_for_interval(a, i)
+            # Bonus when this angle has the target speaker's face cluster.
+            if target_cluster:
+                clusters_in_a = a.get("face_clusters") or []
+                if target_cluster in clusters_in_a:
+                    base += 4.0
+                    reason += " · shows speaker"
+                else:
+                    base -= 1.0  # penalize cameras that DON'T show the speaker
+            scored.append((i, base, reason))
         scored.sort(key=lambda x: -x[1])
         best_idx, best_score, best_reason = scored[0]
         cuts.append({

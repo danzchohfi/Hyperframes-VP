@@ -67,6 +67,7 @@ from .services import face_analysis as face_svc
 from .services import face_identity as face_id_svc
 from .services import subject_timeline as subj_tl_svc
 from .services import camera_picker as cam_picker_svc
+from .services import speaker_camera as speaker_cam_svc
 from .services import multicam_render as mc_render_svc
 from .services import vlog as vlog_svc
 from .services import vlog_pipeline as vlog_pipeline_svc
@@ -2014,6 +2015,72 @@ async def cull_takes(pid: str) -> dict[str, Any]:
     return {"kept": list(bests), "hidden": list(inactive)}
 
 
+@app.post("/api/projects/{pid}/speakers/map-to-faces")
+async def map_speakers_to_faces(pid: str) -> dict[str, Any]:
+    """Map each diarized speaker to the face cluster that's visible during
+    their turns. Result powers smarter camera-picking that follows the
+    actual current speaker."""
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    sp_path = pdir / "speakers.json"
+    fp_path = pdir / "face_identities.json"
+    if not sp_path.exists():
+        raise HTTPException(400, "run /speakers first")
+    if not fp_path.exists():
+        raise HTTPException(400, "run /face-identities first")
+
+    speakers_data = storage.read_json(pid, "speakers.json") or {}
+    turns = speakers_data.get("turns") or []
+    if not turns:
+        raise HTTPException(400, "no speaker turns")
+
+    identities = storage.read_json(pid, "face_identities.json")
+
+    # Reconstruct cluster centroids from the original cluster sources.
+    # We re-fingerprint a sample for each cluster's first source.
+    import numpy as _np  # local
+    centroids: list[tuple[str, _np.ndarray]] = []
+    for cluster in identities.get("clusters", []):
+        for src_id in cluster.get("sources", [])[:1]:
+            sp_path_resolved = None
+            if src_id == "source":
+                sp_path_resolved = pdir / "source.mp4"
+            elif src_id.startswith("angle:"):
+                try:
+                    idx = int(src_id.split(":")[1])
+                    sp_path_resolved = pdir / "angles" / state.angles[idx]["filename"]
+                except Exception:
+                    pass
+            elif src_id.startswith("clip:"):
+                cid = src_id.split(":")[1]
+                clip = next((c for c in state.clips if c["id"] == cid), None)
+                if clip:
+                    sp_path_resolved = pdir / "clips" / clip["filename"]
+            if sp_path_resolved and sp_path_resolved.exists():
+                fps = face_id_svc.fingerprint_clip(sp_path_resolved, k_representatives=3)
+                if fps:
+                    arr = _np.mean([_np.array(f) for f in fps], axis=0)
+                    arr /= _np.linalg.norm(arr) + 1e-9
+                    centroids.append((cluster["id"], arr))
+                    break
+
+    if not centroids:
+        raise HTTPException(400, "no cluster centroids could be reconstructed")
+
+    sources: list[tuple[str, Path]] = [("source", pdir / "source.mp4")]
+    for a in state.angles:
+        sources.append((a["name"], pdir / "angles" / a["filename"]))
+
+    _stage(state, "speaker_camera_map", "running", f"{len(turns)} turns × {len(sources)} cams")
+    mapping = speaker_cam_svc.map_speakers_to_clusters(
+        turns=turns, sources=sources, cluster_centroids=centroids,
+    )
+    storage.write_json(pid, "speaker_face_map.json", {"mapping": mapping})
+    _stage(state, "speaker_camera_map", "done",
+           " · ".join(f"{sp}→{cid or '?'}" for sp, cid in mapping.items()))
+    return {"mapping": mapping}
+
+
 @app.post("/api/projects/{pid}/face-identities/thumbnails")
 async def face_identity_thumbnails(pid: str) -> dict[str, Any]:
     """For each detected person cluster, grab the best face crop from the
@@ -2252,6 +2319,14 @@ async def multicam_pick(pid: str, body: CameraPickIn) -> dict[str, Any]:
     if not intervals:
         raise HTTPException(400, "no intervals to score")
 
+    # Cache the original speaker-per-interval mapping by interval boundaries
+    # before we potentially split. We re-attribute splits below.
+    original_speaker_by_interval: dict[tuple[float, float], str | None] = {}
+    if body.intervals == "turns":
+        turns_full = (storage.read_json(pid, "speakers.json") or {}).get("turns") or []
+        for t in turns_full:
+            original_speaker_by_interval[(float(t["start"]), float(t["end"]))] = t.get("speaker")
+
     # Optionally split intervals at subject-change points pulled from any
     # cached subject_timeline_*.json (source preferred).
     if body.split_on_subject_change:
@@ -2267,7 +2342,28 @@ async def multicam_pick(pid: str, body: CameraPickIn) -> dict[str, Any]:
                 intervals, change_points, min_subspan=body.min_subspan,
             )
 
-    raw = cam_picker_svc.pick_cameras(angle_pool, intervals, min_dur=body.min_dur)
+    # Re-attribute speakers to (possibly split) intervals based on midpoint.
+    speaker_per_interval: list[str | None] | None = None
+    speaker_to_cluster: dict[str, str | None] | None = None
+    if body.intervals == "turns":
+        speaker_per_interval = []
+        for s, e in intervals:
+            mid = (s + e) / 2.0
+            sp = None
+            for (ts, te), spk in original_speaker_by_interval.items():
+                if ts <= mid <= te:
+                    sp = spk
+                    break
+            speaker_per_interval.append(sp)
+        sm_path = pdir / "speaker_face_map.json"
+        if sm_path.exists():
+            speaker_to_cluster = storage.read_json(pid, "speaker_face_map.json").get("mapping")
+
+    raw = cam_picker_svc.pick_cameras(
+        angle_pool, intervals, min_dur=body.min_dur,
+        speaker_per_interval=speaker_per_interval,
+        speaker_to_cluster=speaker_to_cluster,
+    )
     merged = cam_picker_svc.merge_adjacent(raw)
     storage.write_json(pid, "camera_plan.json", {
         "intervals": body.intervals,
