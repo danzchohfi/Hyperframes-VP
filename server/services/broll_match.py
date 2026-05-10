@@ -80,7 +80,11 @@ async def match(
     usable_angles = []
     for a in angles:
         tags = a.get("tags") or {}
+        qc = a.get("quality_check") or {}
+        # bail on bad quality from either tags (LLM-vision) or quality_check (OpenCV)
         if tags.get("quality") and tags["quality"] not in ("ok",):
+            continue
+        if qc.get("quality") and qc["quality"] not in ("ok",):
             continue
         usable_angles.append(a)
 

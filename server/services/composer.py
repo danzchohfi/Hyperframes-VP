@@ -22,31 +22,48 @@ MAX_LINE_CHARS = 28
 
 
 def _group_words_into_lines(words: list[dict]) -> list[dict]:
-    """Group word objects into caption lines of <= MAX_LINE_CHARS, preserving timing."""
+    """Group word objects into caption lines of <= MAX_LINE_CHARS, preserving timing.
+
+    If words carry a `_speaker` field, lines never span more than one speaker.
+    """
     lines: list[dict] = []
     cur: list[dict] = []
     cur_len = 0
+    cur_speaker: str | None | object = object()  # sentinel
     for w in words:
         text = (w.get("word") or "").strip()
         if not text:
             continue
-        if cur and cur_len + 1 + len(text) > MAX_LINE_CHARS:
-            lines.append(_finalize_line(cur))
+        wsp = w.get("_speaker")
+        speaker_changed = cur and cur_speaker is not object() and wsp != cur_speaker
+        if cur and (speaker_changed or cur_len + 1 + len(text) > MAX_LINE_CHARS):
+            lines.append(_finalize_line(cur, cur_speaker if cur_speaker is not object() else None))
             cur, cur_len = [], 0
         cur.append({"word": text, "start": float(w["start"]), "end": float(w["end"])})
         cur_len += (1 if cur_len else 0) + len(text)
+        cur_speaker = wsp
     if cur:
-        lines.append(_finalize_line(cur))
+        lines.append(_finalize_line(cur, cur_speaker if cur_speaker is not object() else None))
     return lines
 
 
-def _finalize_line(words: list[dict]) -> dict:
+def _finalize_line(words: list[dict], speaker: str | None = None) -> dict:
     return {
         "start": words[0]["start"],
         "end": words[-1]["end"],
         "words": words,
         "text": " ".join(w["word"] for w in words),
+        "speaker": speaker,
     }
+
+
+def _find_speaker(turns: list[dict] | None, t: float) -> str | None:
+    if not turns:
+        return None
+    for turn in turns:
+        if t >= float(turn.get("start") or 0.0) and t <= float(turn.get("end") or 0.0):
+            return turn.get("speaker")
+    return None
 
 
 def _aspect_dims(aspect: str) -> tuple[int, int]:
@@ -66,6 +83,7 @@ def build_composition(
     brand: BrandBook,
     aspect: str = "9:16",
     chapters: list[dict] | None = None,  # if set → "Eddie cut" mode
+    speaker_turns: list[dict] | None = None,  # [{speaker, start, end}, ...]
 ) -> Path:
     """Materialize a Hyperframes project at project_dir/composition. Returns path."""
     comp_dir = project_dir / "composition"
@@ -97,11 +115,17 @@ def build_composition(
     # Captions inside the main segment, time-shifted by intro_dur.
     caption_lines: list[dict] = []
     if transcript and transcript.get("words"):
-        for line in _group_words_into_lines(transcript["words"]):
+        words_with_speaker = []
+        for w in transcript["words"]:
+            mid = (float(w["start"]) + float(w["end"])) / 2.0
+            words_with_speaker.append({**w, "_speaker": _find_speaker(speaker_turns, mid)})
+        for line in _group_words_into_lines(words_with_speaker):
+            speaker = line.get("speaker")
             shifted = {
                 "start": round(line["start"] + intro_dur, 3),
                 "duration": round(max(line["end"] - line["start"], 0.4), 3),
                 "text": line["text"],
+                "speaker": speaker,
                 "words": [
                     {
                         "word": w["word"],
@@ -152,6 +176,27 @@ def build_composition(
     intro_subtitle = html.escape(brand.intro_subtitle or (brand.tagline or ""))
     outro_text = html.escape(brand.outro_text or "")
 
+    # Per-speaker color map (from BrandBook or auto-derived)
+    speaker_colors: dict[str, str] = {}
+    auto_palette = [palette.foreground, palette.accent, palette.primary, palette.secondary]
+    seen_speakers: list[str] = []
+    for ln in caption_lines:
+        sp = ln.get("speaker")
+        if sp and sp not in seen_speakers:
+            seen_speakers.append(sp)
+    for i, sp in enumerate(seen_speakers):
+        # explicit brand override wins; else cycle through the auto palette
+        if brand.speakers and sp in brand.speakers:
+            speaker_colors[sp] = brand.speakers[sp].color
+        else:
+            speaker_colors[sp] = auto_palette[i % len(auto_palette)]
+    speaker_names: dict[str, str] = {}
+    for sp in seen_speakers:
+        if brand.speakers and sp in brand.speakers:
+            speaker_names[sp] = brand.speakers[sp].name
+        else:
+            speaker_names[sp] = f"Speaker {sp}"
+
     # Build caption HTML
     caption_html_parts: list[str] = []
     for i, line in enumerate(caption_lines):
@@ -159,12 +204,26 @@ def build_composition(
             f'<span class="cw" data-w-start="{w["start"]}" data-w-end="{w["end"]}">{html.escape(w["word"])}</span>'
             for w in line["words"]
         )
+        sp = line.get("speaker")
+        sp_class = f' data-speaker="{html.escape(sp)}"' if sp else ""
+        label_html = ""
+        if sp and brand.speakers:
+            label_html = f'<span class="cs-label">{html.escape(speaker_names.get(sp, "?"))}</span>'
         caption_html_parts.append(
-            f'<div class="caption clip" id="cap{i}" '
+            f'<div class="caption clip" id="cap{i}"{sp_class} '
             f'data-start="{line["start"]}" data-duration="{line["duration"]}" '
-            f'data-track-index="3">{word_spans}</div>'
+            f'data-track-index="3">{label_html}{word_spans}</div>'
         )
     caption_html = "\n      ".join(caption_html_parts)
+
+    # Speaker-color CSS overrides
+    speaker_css = ""
+    if speaker_colors:
+        speaker_css = "\n".join(
+            f'.caption[data-speaker="{sp}"] {{ color: {col}; }} '
+            f'.caption[data-speaker="{sp}"] .cs-label {{ color: {col}; border-color: {col}55; }}'
+            for sp, col in speaker_colors.items()
+        )
 
     # Build segments
     intro_html = ""
@@ -288,6 +347,19 @@ def build_composition(
         text-shadow: 0 0 20px {caption_highlight}aa, 0 4px 28px rgba(0,0,0,0.85);
         {'transform: scale(1.15);' if brand.caption_style == 'tiktok' else ''}
       }}
+      .cs-label {{
+        display: inline-block;
+        font-size: {int(width * 0.022)}px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        padding: 4px 10px;
+        margin-right: 10px;
+        border: 1px solid rgba(255,255,255,0.25);
+        border-radius: 999px;
+        vertical-align: middle;
+      }}
+      {speaker_css}
       .chapter-card {{
         position: absolute;
         top: 8%; left: 6%;

@@ -215,10 +215,9 @@ def retime_segments(
             clipped_e = min(ke, se)
             new_s = cursor + (clipped_s - ks)
             new_e = cursor + (clipped_e - ks)
-            out.append({
-                "start": new_s,
-                "end": new_e,
-                "text": (seg.get("text") or "").strip(),
-            })
+            # preserve any extra fields (speaker, word_count, etc.)
+            extra = {k: v for k, v in seg.items() if k not in ("start", "end", "text")}
+            out.append({**extra, "start": new_s, "end": new_e,
+                        "text": (seg.get("text") or "").strip()})
         cursor += (ke - ks)
     return out

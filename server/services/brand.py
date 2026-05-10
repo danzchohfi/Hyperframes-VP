@@ -20,6 +20,12 @@ class BrandTypography(BaseModel):
     body_weight: str = "300"
 
 
+class SpeakerStyle(BaseModel):
+    name: str = "Speaker"
+    color: str = "#ffffff"
+    chip_bg: str | None = None  # optional pill background; defaults to palette.background
+
+
 class BrandBook(BaseModel):
     name: str = "Brand"
     tagline: str | None = None
@@ -30,6 +36,7 @@ class BrandBook(BaseModel):
     caption_color: str | None = None  # defaults to palette.foreground
     caption_highlight: str | None = None  # defaults to palette.accent
     caption_style: str = "minimal"    # minimal | tiktok | podcast
+    speakers: dict[str, SpeakerStyle] = Field(default_factory=dict)  # {"A": {...}, "B": {...}}
     intro_title: str | None = None
     intro_subtitle: str | None = None
     outro_text: str | None = None

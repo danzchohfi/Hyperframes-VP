@@ -57,6 +57,36 @@ TEMPLATES: dict[str, dict[str, Any]] = {
                 "title_family": "Inter", "title_weight": "600",
                 "body_family": "Inter", "body_weight": "300",
             },
+            "speakers": {
+                "A": {"name": "Host", "color": "#f59e0b"},
+                "B": {"name": "Convidado", "color": "#06b6d4"},
+            },
+        },
+    },
+    "podcast_clip_vertical": {
+        "label": "Podcast clip 9:16 (Reels)",
+        "aspect": "9:16",
+        "render_source": "roughcut",
+        "include_chapter_cards": False,
+        "brand": {
+            "name": "Podcast",
+            "caption_position": "bottom",
+            "caption_style": "tiktok",
+            "palette": {
+                "primary": "#facc15",
+                "secondary": "#a78bfa",
+                "accent": "#ef4444",
+                "background": "#08080f",
+                "foreground": "#ffffff",
+            },
+            "typography": {
+                "title_family": "Inter", "title_weight": "800",
+                "body_family": "Inter", "body_weight": "500",
+            },
+            "speakers": {
+                "A": {"name": "A", "color": "#facc15"},
+                "B": {"name": "B", "color": "#a78bfa"},
+            },
         },
     },
     "tutorial_clean": {

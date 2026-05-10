@@ -208,6 +208,19 @@ async def apply_lut(src: Path, dst: Path, lut: Path) -> None:
     )
 
 
+async def apply_audio_filter(src: Path, dst: Path, audio_filter: str) -> None:
+    """Re-encode `src` to `dst` applying `audio_filter` to its audio. Video
+    is stream-copied."""
+    await run([
+        "ffmpeg", "-y", "-i", str(src),
+        "-af", audio_filter,
+        "-c:v", "copy",
+        "-c:a", "aac", "-b:a", "192k",
+        "-movflags", "+faststart",
+        str(dst),
+    ])
+
+
 async def mix_music(
     voice_src: Path,
     music_src: Path,

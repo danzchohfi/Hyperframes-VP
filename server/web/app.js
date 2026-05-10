@@ -262,9 +262,13 @@ function renderAngles(p) {
   for (const a of p.angles || []) {
     const li = document.createElement("li");
     const tags = a.tags?.tags || [];
+    const qc = a.quality_check || {};
+    const qcBadge = qc.quality && qc.quality !== "ok"
+      ? ` <span class="tag warn">⚠ ${qc.quality}</span>` : (qc.quality === "ok" ? ' <span class="tag ok">✓ ok</span>' : '');
+    const offset = a.audio_offset != null ? ` · sync ${a.audio_offset > 0 ? "+" : ""}${a.audio_offset.toFixed(2)}s` : '';
     li.innerHTML = `
-      <span class="a-name">${escapeHtml(a.name)}</span>
-      <span class="a-meta">${(a.duration || 0).toFixed(1)}s · ${a.filename}${a.tags?.summary ? ' · ' + escapeHtml(a.tags.summary) : ''}</span>
+      <span class="a-name">${escapeHtml(a.name)}${qcBadge}</span>
+      <span class="a-meta">${(a.duration || 0).toFixed(1)}s · ${a.filename}${a.tags?.summary ? ' · ' + escapeHtml(a.tags.summary) : ''}${offset}</span>
       ${tags.length ? `<span class="a-tags">${tags.slice(0, 5).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join("")}</span>` : ""}
       <span class="a-actions">
         <button class="btn-ghost a-tag" data-idx="${a.index}">${a.tags ? "🔄 Re-taggear" : "🏷 Tag IA"}</button>
@@ -1160,11 +1164,64 @@ async function duplicateProject() {
 async function detectSpeakers() {
   if (!state.current) return;
   try {
-    const r = await api(`/api/projects/${state.current.id}/speakers`, { method: "POST" });
-    log(`✓ falas · ${r.turns.length} turnos`, "ok");
-    toast(`${r.turns.length} turnos detectados`, "ok");
+    const r = await api(`/api/projects/${state.current.id}/speakers`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ backend: "auto" }),
+    });
+    const stats = r.stats || {};
+    const speakers = Object.entries(stats.by_speaker || {})
+      .map(([sp, s]) => `${sp}: ${(s.share * 100).toFixed(0)}%`)
+      .join("  ·  ");
+    log(`✓ ${r.backend} · ${r.turns.length} turnos · ${speakers}`, "ok");
+    toast(`${r.stats?.speaker_count || 0} speakers detectados (${r.backend})`, "ok");
   } catch (e) {
     log(`✗ speakers: ${e.message}`, "err");
+  }
+}
+
+async function levelSpeakers() {
+  if (!state.current) return;
+  log("▶ leveling speakers");
+  try {
+    const r = await api(`/api/projects/${state.current.id}/speaker-levels`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ target_dbfs: -18.0, source: "graded" }),
+    });
+    const gains = Object.entries(r.gains).map(([sp, g]) => `${sp}:${g > 0 ? "+" : ""}${g}dB`).join("  ");
+    log(`✓ gains: ${gains}`, "ok");
+    toast(`Nivelado: ${gains}`, "ok");
+    await refreshHistory();
+  } catch (e) {
+    log(`✗ speaker-levels: ${e.message}`, "err");
+  }
+}
+
+async function detectChapters() {
+  if (!state.current) return;
+  log("▶ chapters");
+  try {
+    const r = await api(`/api/projects/${state.current.id}/chapters`, { method: "POST" });
+    log(`✓ ${r.chapters.length} capítulos`, "ok");
+    toast(`${r.chapters.length} capítulos detectados`, "ok");
+    console.log("YouTube chapters:\n" + r.youtube_markdown);
+  } catch (e) {
+    log(`✗ chapters: ${e.message}`, "err");
+  }
+}
+
+async function multicamSync() {
+  if (!state.current) return;
+  log("▶ multicam sync");
+  try {
+    const r = await api(`/api/projects/${state.current.id}/multicam-sync`, { method: "POST" });
+    const desc = r.offsets.slice(1).map(o => `${o.name}: ${o.offset > 0 ? "+" : ""}${o.offset.toFixed(2)}s (${(o.score * 100).toFixed(0)}%)`).join(", ");
+    log(`✓ ${r.offsets.length - 1} angles → ${desc}`, "ok");
+    toast(`Sync: ${desc || "no offsets"}`, "ok");
+    await loadProject(state.current.id);
+  } catch (e) {
+    log(`✗ sync: ${e.message}`, "err");
   }
 }
 
@@ -1565,6 +1622,9 @@ function bind() {
   $("#bundle-btn").onclick = exportBundle;
   $("#dup-btn").onclick = duplicateProject;
   $("#speakers-btn").onclick = detectSpeakers;
+  $("#speakers-level-btn").onclick = levelSpeakers;
+  $("#chapters-btn").onclick = detectChapters;
+  $("#multicam-sync-btn").onclick = multicamSync;
   $("#thumbs-btn").onclick = chapterThumbs;
   $("#tx-clear-btn").onclick = txClear;
   $("#tx-keep-btn").onclick = txKeep;

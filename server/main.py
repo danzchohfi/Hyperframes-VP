@@ -60,6 +60,9 @@ from .services import emojify as emojify_svc
 from .services import waveform as waveform_svc
 from .services import chapters as chapters_svc
 from .services import audio_sync as audio_sync_svc
+from .services import jobs as jobs_svc
+from .services import speaker_levels as levels_svc
+from .services import quality as quality_svc
 from .services.events import bus, emit_stage, emit_log, emit_state_changed
 from .services import captions as captions_svc
 from .services.brand import BrandBook
@@ -510,6 +513,20 @@ async def do_render(pid: str, body: RenderIn) -> dict[str, Any]:
                 chapters_for_render = rc_svc.chapter_marker_plan(
                     story["chapters"], analysis["soundbites"],
                 )
+        speaker_turns = None
+        sp_file = pdir / "speakers.json"
+        if sp_file.exists():
+            try:
+                sp_data = storage.read_json(pid, "speakers.json")
+                speaker_turns = sp_data.get("turns")
+                # When rendering the rough cut, re-time speaker turns too
+                if body.source == "roughcut" and state.has_roughcut:
+                    rc_plan = storage.read_json(pid, "roughcut.json")
+                    keep_for_turns = [(r["start"], r["end"]) for r in rc_plan["ranges"]]
+                    # use the same retime logic from captions for segments
+                    speaker_turns = captions_svc.retime_segments(speaker_turns, keep_for_turns)
+            except Exception:
+                speaker_turns = None
         comp_dir = composer.build_composition(
             project_dir=pdir,
             video_path=edited,
@@ -518,6 +535,7 @@ async def do_render(pid: str, body: RenderIn) -> dict[str, Any]:
             brand=brand,
             aspect=body.aspect,
             chapters=chapters_for_render,
+            speaker_turns=speaker_turns,
         )
     except Exception as e:
         _stage(state, "render", "error", f"compose: {e}")
@@ -600,9 +618,15 @@ async def add_angle(pid: str, name: str = Form("Angle"), file: UploadFile = File
         "filename": norm.name,
         "duration": dur,
     }
+    # auto-assess quality on upload (fast, ~50ms)
+    try:
+        angle_record["quality_check"] = quality_svc.assess(norm)
+    except Exception:
+        pass
     state.angles.append(angle_record)
     storage.save(state)
-    _stage(state, "angle", "done", f"{angle_record['name']} ({dur:.2f}s)")
+    qlabel = (angle_record.get("quality_check") or {}).get("quality", "?")
+    _stage(state, "angle", "done", f"{angle_record['name']} ({dur:.2f}s · {qlabel})")
     return angle_record
 
 
@@ -1422,6 +1446,135 @@ async def detect_speakers(pid: str, body: SpeakersIn | None = None) -> dict[str,
         f"{result['backend']} · {len(result['turns'])} turns · {result['stats']['speaker_count']} speakers",
     )
     return result
+
+
+# ---- jobs -------------------------------------------------------------------
+
+@app.get("/api/projects/{pid}/jobs")
+async def list_jobs(pid: str) -> list[dict[str, Any]]:
+    _load(pid)
+    return jobs_svc.manager.list(pid)
+
+
+@app.get("/api/projects/{pid}/jobs/{jid}")
+async def get_job(pid: str, jid: str) -> dict[str, Any]:
+    _load(pid)
+    snap = jobs_svc.manager.get(pid, jid)
+    if not snap:
+        raise HTTPException(404, "job not found")
+    return snap
+
+
+@app.post("/api/projects/{pid}/jobs/{jid}/cancel")
+async def cancel_job(pid: str, jid: str) -> dict[str, bool]:
+    _load(pid)
+    cancelled = await jobs_svc.manager.cancel(jid)
+    return {"cancelled": cancelled}
+
+
+@app.post("/api/projects/{pid}/render/async")
+async def render_async(pid: str, body: RenderIn) -> dict[str, Any]:
+    state = _load(pid)
+
+    async def _run(ctx: jobs_svc.JobContext) -> dict[str, Any]:
+        ctx.log("preparing")
+        # Reuse the sync render endpoint logic by calling do_render directly
+        # is awkward because of HTTPExceptions; just invoke the FastAPI handler:
+        return await do_render(pid, body)
+
+    job_id = await jobs_svc.manager.submit(pid, "render", _run)
+    return {"job_id": job_id, "status": "pending"}
+
+
+@app.post("/api/projects/{pid}/roughcut/async")
+async def roughcut_async(pid: str, body: RoughCutIn) -> dict[str, Any]:
+    _load(pid)
+
+    async def _run(ctx: jobs_svc.JobContext) -> dict[str, Any]:
+        return await roughcut(pid, body)
+
+    job_id = await jobs_svc.manager.submit(pid, "roughcut", _run)
+    return {"job_id": job_id, "status": "pending"}
+
+
+# ---- frame-quality assessment -----------------------------------------------
+
+@app.post("/api/projects/{pid}/angles/{idx}/assess-quality")
+async def angle_quality(pid: str, idx: int) -> dict[str, Any]:
+    state = _load(pid)
+    if idx < 0 or idx >= len(state.angles):
+        raise HTTPException(404, "angle not found")
+    pdir = storage.project_dir(pid)
+    angle = state.angles[idx]
+    src = pdir / "angles" / angle["filename"]
+    if not src.exists():
+        raise HTTPException(404, "file missing")
+    try:
+        q = quality_svc.assess(src)
+    except Exception as e:
+        raise HTTPException(500, str(e))
+    angle["quality_check"] = q
+    storage.save(state)
+    _stage(state, "quality", "done", f"{angle['name']} → {q['quality']}")
+    return angle
+
+
+# ---- per-speaker volume normalization ---------------------------------------
+
+class SpeakerLevelsIn(BaseModel):
+    target_dbfs: float = -18.0
+    source: str = "graded"  # graded | roughcut | source | highlights
+
+
+@app.post("/api/projects/{pid}/speaker-levels")
+async def speaker_levels(pid: str, body: SpeakerLevelsIn) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    sp_file = pdir / "speakers.json"
+    if not sp_file.exists():
+        raise HTTPException(400, "run /speakers first")
+    turns = (storage.read_json(pid, "speakers.json") or {}).get("turns") or []
+    if not turns:
+        raise HTTPException(400, "no speaker turns")
+
+    candidates = {
+        "graded": pdir / "graded.mp4",
+        "roughcut": pdir / "roughcut.mp4",
+        "source": pdir / "source.mp4",
+        "highlights": pdir / "highlights.mp4",
+    }
+    src = candidates.get(body.source)
+    if not src or not src.exists():
+        raise HTTPException(400, f"{body.source} not available")
+
+    _stage(state, "speaker_levels", "running", "measuring")
+    try:
+        levels = await levels_svc.measure_per_speaker(src, turns)
+        gains = levels_svc.gain_plan(levels, target_dbfs=body.target_dbfs)
+        af = levels_svc.build_filter(turns, gains)
+        out = pdir / "exports" / f"{state.name.replace(' ', '_')}-levelled.mp4"
+        out.parent.mkdir(exist_ok=True)
+        await ff.apply_audio_filter(src, out, af)
+    except Exception as e:
+        _stage(state, "speaker_levels", "error", str(e))
+        raise HTTPException(500, str(e))
+
+    storage.write_json(pid, "speaker_levels.json", {
+        "target_dbfs": body.target_dbfs,
+        "source": body.source,
+        "levels": levels,
+        "gains": gains,
+    })
+    _stage(state, "speaker_levels", "done", f"target={body.target_dbfs}dBFS · gains={gains}")
+    storage.append_render_history(pid, name=out.name, kind="speaker_levels",
+                                  url=f"/api/projects/{pid}/exports/{out.name}",
+                                  bytes=out.stat().st_size,
+                                  extra={"gains": gains})
+    return {
+        "levels": levels,
+        "gains": gains,
+        "url": f"/api/projects/{pid}/exports/{out.name}",
+    }
 
 
 # ---- multicam audio sync ----------------------------------------------------
