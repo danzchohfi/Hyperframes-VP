@@ -374,6 +374,25 @@ function attachEventStream(pid) {
       }
     } else if (data.type === "log") {
       log(data.message, data.level === "error" ? "err" : data.level === "ok" ? "ok" : "");
+    } else if (data.type === "job") {
+      // job snapshot — keep the podcast pipeline UI in sync if it's ours
+      if (state.podcastJobId && data.job_id === state.podcastJobId) {
+        const fill = $("#podcast-fill");
+        const label = $("#podcast-label");
+        const btn = $("#podcast-pipeline-btn");
+        if (fill && typeof data.progress === "number") fill.style.width = `${Math.round(data.progress * 100)}%`;
+        if (label) label.textContent = data.message || data.status;
+        if (data.status === "done") {
+          btn.disabled = false;
+          toast("Pipeline pronto", "ok");
+          loadProject(state.current.id);
+          state.podcastJobId = null;
+        } else if (data.status === "error" || data.status === "cancelled") {
+          btn.disabled = false;
+          toast(`Pipeline ${data.status}: ${data.message || ""}`, "error");
+          state.podcastJobId = null;
+        }
+      }
     } else if (data.type === "state") {
       // refresh state.current debounced — avoid hammering on bursts
       if (stateRefreshTimer) return;
@@ -1211,6 +1230,46 @@ async function detectChapters() {
   }
 }
 
+async function runPodcastPipeline() {
+  if (!state.current) return;
+  const btn = $("#podcast-pipeline-btn");
+  const progress = $("#podcast-progress");
+  const fill = $("#podcast-fill");
+  const label = $("#podcast-label");
+  btn.disabled = true;
+  progress.classList.remove("hidden");
+  fill.style.width = "0%";
+  label.textContent = "iniciando…";
+  log("▶ podcast pipeline");
+  try {
+    const lang = $("#podcast-lang").value || null;
+    const r = await api(`/api/projects/${state.current.id}/podcast-pipeline`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ language: lang }),
+    });
+    state.podcastJobId = r.job_id;
+    label.textContent = "rodando…";
+    toast(`Pipeline iniciado · ${r.job_id}`, "ok");
+  } catch (e) {
+    log(`✗ pipeline: ${e.message}`, "err");
+    btn.disabled = false;
+    label.textContent = e.message;
+    label.className = "podcast-label";
+  }
+}
+
+async function downloadYoutubeDescription() {
+  if (!state.current) return;
+  try {
+    const r = await api(`/api/projects/${state.current.id}/export/youtube-description`, { method: "POST" });
+    log("✓ YouTube description gerada", "ok");
+    window.open(r.url, "_blank");
+  } catch (e) {
+    log(`✗ youtube: ${e.message}`, "err");
+  }
+}
+
 async function multicamSync() {
   if (!state.current) return;
   log("▶ multicam sync");
@@ -1625,6 +1684,8 @@ function bind() {
   $("#speakers-level-btn").onclick = levelSpeakers;
   $("#chapters-btn").onclick = detectChapters;
   $("#multicam-sync-btn").onclick = multicamSync;
+  $("#podcast-pipeline-btn").onclick = runPodcastPipeline;
+  $("#yt-desc-btn").onclick = (e) => { e.preventDefault(); downloadYoutubeDescription(); };
   $("#thumbs-btn").onclick = chapterThumbs;
   $("#tx-clear-btn").onclick = txClear;
   $("#tx-keep-btn").onclick = txKeep;

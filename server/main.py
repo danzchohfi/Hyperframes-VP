@@ -63,6 +63,7 @@ from .services import audio_sync as audio_sync_svc
 from .services import jobs as jobs_svc
 from .services import speaker_levels as levels_svc
 from .services import quality as quality_svc
+from .services import podcast_pipeline as podcast_pipeline_svc
 from .services.events import bus, emit_stage, emit_log, emit_state_changed
 from .services import captions as captions_svc
 from .services.brand import BrandBook
@@ -1519,6 +1520,23 @@ async def angle_quality(pid: str, idx: int) -> dict[str, Any]:
     return angle
 
 
+# ---- one-click podcast pipeline ---------------------------------------------
+
+class PodcastPipelineIn(BaseModel):
+    language: str | None = None  # auto-detect when None
+
+
+@app.post("/api/projects/{pid}/podcast-pipeline")
+async def podcast_pipeline_endpoint(pid: str, body: PodcastPipelineIn) -> dict[str, Any]:
+    _load(pid)
+
+    async def _run(ctx: jobs_svc.JobContext) -> dict[str, Any]:
+        return await podcast_pipeline_svc.run(ctx, language=body.language)
+
+    job_id = await jobs_svc.manager.submit(pid, "podcast_pipeline", _run)
+    return {"job_id": job_id, "status": "pending"}
+
+
 # ---- per-speaker volume normalization ---------------------------------------
 
 class SpeakerLevelsIn(BaseModel):
@@ -1611,6 +1629,60 @@ async def multicam_sync(pid: str) -> dict[str, Any]:
     storage.write_json(pid, "multicam_sync.json", {"offsets": offsets})
     _stage(state, "multicam_sync", "done", f"offsets={[round(e['offset'], 2) for e in offsets[1:]]}")
     return {"offsets": offsets}
+
+
+# ---- YouTube description bundle --------------------------------------------
+
+@app.post("/api/projects/{pid}/export/youtube-description")
+async def export_youtube_description(pid: str) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    lines: list[str] = []
+
+    social_file = pdir / "social_copy.json"
+    chapters_file = pdir / "chapters.json"
+    speakers_file = pdir / "speakers.json"
+
+    title = state.name
+    if social_file.exists():
+        social = storage.read_json(pid, "social_copy.json")
+        title = social.get("youtube_title") or title
+        if social.get("youtube_description"):
+            lines.append(social["youtube_description"].strip())
+            lines.append("")
+        if social.get("hashtags"):
+            lines.append(" ".join(social["hashtags"]))
+            lines.append("")
+
+    if chapters_file.exists():
+        ch = storage.read_json(pid, "chapters.json")
+        if ch.get("youtube_markdown"):
+            lines.append("⏱ Chapters:")
+            lines.append(ch["youtube_markdown"])
+            lines.append("")
+
+    if speakers_file.exists():
+        sj = storage.read_json(pid, "speakers.json")
+        stats = (sj or {}).get("stats") or {}
+        by_sp = stats.get("by_speaker") or {}
+        if by_sp:
+            lines.append("🎤 Speakers:")
+            for sp, s in by_sp.items():
+                share = (s.get("share") or 0) * 100
+                lines.append(f"  • {sp}: {share:.0f}% of talk time, {s.get('words', 0)} words")
+            lines.append("")
+
+    body = "\n".join(lines).strip() + "\n"
+    out = pdir / "exports" / f"{state.name.replace(' ', '_')}-youtube.txt"
+    out.parent.mkdir(exist_ok=True)
+    out.write_text(body, encoding="utf-8")
+    _stage(state, "yt_description", "done", out.name)
+    return {
+        "title": title,
+        "export": out.name,
+        "url": f"/api/projects/{pid}/exports/{out.name}",
+        "body": body,
+    }
 
 
 # ---- topic-shift chapter detection ------------------------------------------

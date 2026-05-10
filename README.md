@@ -602,6 +602,51 @@ da lista. Útil quando ficou pesado no disco.
 curl -X POST localhost:8765/api/projects/$PID/archive
 ```
 
+## Waves 9-11 — virando editor de podcast a sério
+
+Quando pediram pra fechar o gap com o Eddie pra **podcast**, o sistema ganhou:
+
+**Diarização real** (`POST /speakers`)
+- 3 backends, escolhidos por ordem de disponibilidade:
+  1. `pyannote.audio` (set `HF_TOKEN` + `pip install pyannote.audio`)
+  2. MFCC + k-means fallback (numpy/scipy)
+  3. Heurística adaptativa por P90 dos gaps
+- Retorna `{backend, turns, stats: {speaker_count, by_speaker: {A: {talk_time, share, words}, B: {...}}}}`
+
+**Audio sync multicam** (`POST /multicam-sync`)
+- Cross-correlation FFT entre source + cada ângulo, detecta offset em segundos
+- O offset vai pro FCPXML multicam automaticamente
+
+**Capítulos por mudança de tópico** (`POST /chapters`)
+- Linear, não destrutivo, devolve `youtube_markdown` pronto pra colar no YouTube
+
+**Legendas por speaker** (`BrandBook.speakers = {"A": {color: "#fbbf24"}, "B": {color: "#06b6d4"}}`)
+- Cada linha vira `data-speaker="A|B"`, recebe cor específica, e opcionalmente um chip `[Host]`
+
+**Normalização por speaker** (`POST /speaker-levels`)
+- Mede `mean_volume` por turno via `volumedetect`, calcula gain pra hit -18 dBFS,
+  aplica `volume=enable='between(t,a,b)':volume=NdB` por turno num só pass
+
+**Detecção de qualidade OpenCV** (`POST /angles/{i}/assess-quality`)
+- Laplacian variance (blur), mean brightness (escuro), inter-frame absdiff (shake)
+- Roda automaticamente em todo angle uploadado
+- B-roll matching pula clips com `quality != ok`
+
+**Job queue assíncrona** (`POST /render/async`, `/roughcut/async`)
+- In-process, persiste em `jobs.json`, eventos via SSE, `/jobs/{id}/cancel`
+
+**Pipeline 1-click pro podcast** (`POST /podcast-pipeline`)
+- Transcribe → diarize → chapters → silences + fillers → apply (LUT + loudnorm) → speaker levels → social copy num único job
+- UI tem barra de progresso ao vivo + idioma override
+
+**YouTube description bundle** (`POST /export/youtube-description`)
+- Junta `social_copy.youtube_description`, hashtags, chapters em `mm:ss Name`,
+  e share de fala por speaker num único `.txt`
+
+**Templates Podcast**
+- `podcast_horizontal` (16:9, chapter cards, speaker colors Host/Convidado)
+- `podcast_clip_vertical` (9:16, captions TikTok, A/B amarelo/violeta)
+
 ## Wave 8 — música com ducking
 
 Suba uma trilha sonora e o sistema mixa com a voz aplicando ducking

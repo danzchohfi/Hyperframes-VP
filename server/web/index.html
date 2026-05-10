@@ -212,6 +212,26 @@
             <div id="pipeline-log" class="log"></div>
           </section>
 
+          <section class="card" id="podcast-card">
+            <h3>4a · Podcast — pipeline 1-click</h3>
+            <p class="card-help">Roda transcrição → diarização → capítulos → cortes de silêncio → muletas → LUT → loudnorm → nivelamento por speaker → social copy num único job.</p>
+            <div class="actions">
+              <select id="podcast-lang" class="inline-select">
+                <option value="">auto</option>
+                <option value="pt">pt</option>
+                <option value="en">en</option>
+                <option value="es">es</option>
+              </select>
+              <button id="podcast-pipeline-btn" class="btn-primary">⚡ Editar podcast (auto)</button>
+              <span id="podcast-status" class="status muted"></span>
+              <a id="yt-desc-btn" class="btn-ghost" href="#">📺 YouTube description</a>
+            </div>
+            <div id="podcast-progress" class="podcast-progress hidden">
+              <div class="bar"><div class="bar-fill" id="podcast-fill"></div></div>
+              <div id="podcast-label" class="podcast-label">aguardando…</div>
+            </div>
+          </section>
+
           <section class="card" id="transcript-card">
             <h3>4b · Transcrição interativa</h3>
             <p class="card-help">Clique numa palavra pra pular o vídeo. Selecione um range e clique <strong>Keep</strong> pra construir cortes manualmente (sobrescreve <code>cuts.json</code>).</p>
