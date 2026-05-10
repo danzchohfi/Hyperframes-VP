@@ -97,6 +97,8 @@ async def run(
     ctx.progress(0.55, "proposing narratives")
     payload = []
     for c in state.clips:
+        if c.get("inactive"):
+            continue
         tp = pdir / "clips" / f"{c['id']}_transcript.json"
         if not tp.exists():
             continue

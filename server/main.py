@@ -1967,6 +1967,53 @@ async def angle_face_analysis(pid: str, idx: int) -> dict[str, Any]:
 
 # ---- cross-clip face identity clustering ------------------------------------
 
+class IdentityRenameIn(BaseModel):
+    name: str
+
+
+@app.put("/api/projects/{pid}/face-identities/{cluster_id}")
+async def rename_identity(pid: str, cluster_id: str, body: IdentityRenameIn) -> dict[str, Any]:
+    """Rename a face cluster (e.g. person_1 → Marina)."""
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    fpath = pdir / "face_identities.json"
+    if not fpath.exists():
+        raise HTTPException(400, "run /face-identities first")
+    data = storage.read_json(pid, "face_identities.json")
+    target = next((c for c in data["clusters"] if c["id"] == cluster_id), None)
+    if not target:
+        raise HTTPException(404, "cluster not found")
+    target["display_name"] = body.name
+    storage.write_json(pid, "face_identities.json", data)
+    _stage(state, "face_identity", "done", f"{cluster_id} → {body.name}")
+    return target
+
+
+@app.post("/api/projects/{pid}/vlog/cull-takes")
+async def cull_takes(pid: str) -> dict[str, Any]:
+    """Mark every clip in a take-group as inactive EXCEPT the best one,
+    so narratives won't include redundant takes."""
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    tpath = pdir / "vlog_takes.json"
+    if not tpath.exists():
+        raise HTTPException(400, "run /vlog/group-takes first")
+    data = storage.read_json(pid, "vlog_takes.json")
+    bests = {g["best"] for g in data.get("groups", [])}
+    grouped_all = {cid for g in data.get("groups", []) for cid in g["group"]}
+    inactive = grouped_all - bests
+    for c in state.clips:
+        if c["id"] in inactive:
+            c["inactive"] = True
+        elif c["id"] in bests:
+            c["inactive"] = False
+            c["chosen_take"] = True
+    storage.save(state)
+    _stage(state, "vlog_cull", "done",
+           f"mantidos {len(bests)} takes, escondidos {len(inactive)}")
+    return {"kept": list(bests), "hidden": list(inactive)}
+
+
 @app.post("/api/projects/{pid}/face-identities")
 async def face_identities(pid: str) -> dict[str, Any]:
     """Fingerprint every clip + angle + source, cluster them, return who's
@@ -2503,6 +2550,8 @@ async def vlog_narratives(pid: str) -> dict[str, Any]:
 
     payload = []
     for c in state.clips:
+        if c.get("inactive"):
+            continue
         if not c.get("has_transcript"):
             continue
         t_path = pdir / "clips" / f"{c['id']}_transcript.json"
