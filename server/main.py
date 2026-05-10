@@ -1398,15 +1398,17 @@ async def export_captions(
     pid: str,
     fmt: str = "srt",
     use_roughcut: bool = False,
+    style: str = "minimal",
 ) -> dict[str, Any]:
     state = _load(pid)
     if not state.has_transcript:
         raise HTTPException(400, "transcribe first")
-    if fmt not in ("srt", "vtt"):
-        raise HTTPException(400, "fmt must be srt or vtt")
+    if fmt not in ("srt", "vtt", "ass"):
+        raise HTTPException(400, "fmt must be srt | vtt | ass")
 
     transcript = storage.read_json(pid, "transcript.json")
     segments = transcript.get("segments") or []
+    words = transcript.get("words") or []
 
     if use_roughcut:
         if not state.has_roughcut:
@@ -1414,17 +1416,116 @@ async def export_captions(
         plan = storage.read_json(pid, "roughcut.json")
         ranges = [(r["start"], r["end"]) for r in plan["ranges"]]
         segments = captions_svc.retime_segments(segments, ranges)
+        words = captions_svc.retime_words(words, ranges)
 
-    body = (captions_svc.render_srt if fmt == "srt" else captions_svc.render_vtt)(segments)
+    if fmt == "srt":
+        body = captions_svc.render_srt(segments)
+    elif fmt == "vtt":
+        body = captions_svc.render_vtt(segments)
+    else:  # ass
+        # attach words to each segment
+        if words and segments:
+            segs_with_words: list[dict] = []
+            for seg in segments:
+                ss = float(seg.get("start") or 0.0)
+                se = float(seg.get("end") or ss)
+                seg_words = [
+                    {"word": w["word"], "start": float(w["start"]), "end": float(w["end"])}
+                    for w in words
+                    if float(w.get("start", 0.0)) >= ss and float(w.get("end", 0.0)) <= se + 0.05
+                ]
+                segs_with_words.append({**seg, "words": seg_words})
+            segments = segs_with_words
+        body = captions_svc.render_ass(segments, style=style)
+
     pdir = storage.project_dir(pid)
     out = pdir / "exports" / f"{state.name.replace(' ', '_')}.{fmt}"
     out.parent.mkdir(exist_ok=True)
     out.write_text(body, encoding="utf-8")
-    _stage(state, "captions", "done", f"{out.name} · {len(segments)} cues")
+    _stage(state, "captions", "done", f"{out.name} · {len(segments)} cues · {style}")
     return {
         "export": out.name,
         "url": f"/api/projects/{pid}/exports/{out.name}",
         "cues": len(segments),
+        "fmt": fmt,
+    }
+
+
+class BurnIn(BaseModel):
+    source: str = "graded"   # graded | roughcut | source | highlights
+    style: str = "tiktok"
+
+
+@app.post("/api/projects/{pid}/export/burn-captions")
+async def burn_captions(pid: str, body: BurnIn) -> dict[str, Any]:
+    state = _load(pid)
+    if not state.has_transcript:
+        raise HTTPException(400, "transcribe first")
+    pdir = storage.project_dir(pid)
+
+    candidates = {
+        "graded": pdir / "graded.mp4",
+        "roughcut": pdir / "roughcut.mp4",
+        "source": pdir / "source.mp4",
+        "highlights": pdir / "highlights.mp4",
+    }
+    src = candidates.get(body.source)
+    if not src or not src.exists():
+        raise HTTPException(400, f"{body.source} not available")
+
+    transcript = storage.read_json(pid, "transcript.json")
+    segments = transcript.get("segments") or []
+    words = transcript.get("words") or []
+
+    use_roughcut = body.source == "roughcut" and state.has_roughcut
+    if use_roughcut:
+        rc = storage.read_json(pid, "roughcut.json")
+        ranges = [(r["start"], r["end"]) for r in rc["ranges"]]
+        segments = captions_svc.retime_segments(segments, ranges)
+        words = captions_svc.retime_words(words, ranges)
+    elif body.source == "graded" and state.has_cuts:
+        plan = storage.read_json(pid, "cuts.json")
+        ranges = [(r["start"], r["end"]) for r in plan["keep"]]
+        segments = captions_svc.retime_segments(segments, ranges)
+        words = captions_svc.retime_words(words, ranges)
+    elif body.source == "highlights":
+        h = pdir / "highlights.json"
+        if h.exists():
+            ranges = [(r["start"], r["end"]) for r in storage.read_json(pid, "highlights.json")["ranges"]]
+            segments = captions_svc.retime_segments(segments, ranges)
+            words = captions_svc.retime_words(words, ranges)
+
+    # attach words
+    if words and segments:
+        segs_with_words = []
+        for seg in segments:
+            ss = float(seg.get("start") or 0.0)
+            se = float(seg.get("end") or ss)
+            seg_words = [
+                {"word": w["word"], "start": float(w["start"]), "end": float(w["end"])}
+                for w in words
+                if float(w.get("start", 0.0)) >= ss and float(w.get("end", 0.0)) <= se + 0.05
+            ]
+            segs_with_words.append({**seg, "words": seg_words})
+        segments = segs_with_words
+
+    ass_text = captions_svc.render_ass(segments, style=body.style)
+    ass_path = pdir / "captions.ass"
+    ass_path.write_text(ass_text, encoding="utf-8")
+
+    out = pdir / "exports" / f"{state.name.replace(' ', '_')}-burned-{body.source}.mp4"
+    out.parent.mkdir(exist_ok=True)
+    _stage(state, "burn_captions", "running", f"{body.source} · {body.style}")
+    try:
+        await ff.burn_subtitles(src, out, ass_path)
+    except Exception as e:
+        _stage(state, "burn_captions", "error", str(e))
+        raise HTTPException(500, str(e))
+    _stage(state, "burn_captions", "done", out.name)
+    return {
+        "export": out.name,
+        "url": f"/api/projects/{pid}/exports/{out.name}",
+        "bytes": out.stat().st_size,
     }
 
 
@@ -1596,6 +1697,76 @@ async def project_events(pid: str):
             "Connection": "keep-alive",
         },
     )
+
+
+@app.get("/api/search")
+async def search_soundbites(q: str = "", limit: int = 25) -> list[dict[str, Any]]:
+    """Search soundbites across all projects."""
+    if not q.strip():
+        return []
+    needle = q.strip().lower()
+    out: list[dict[str, Any]] = []
+    for proj_meta in storage.list_projects():
+        pid = proj_meta["id"]
+        try:
+            sb_path = storage.project_dir(pid) / "soundbites.json"
+            if not sb_path.exists():
+                continue
+            data = storage.read_json(pid, "soundbites.json")
+        except Exception:
+            continue
+        for bite in data.get("soundbites", []):
+            text = (bite.get("text") or "") + " " + (bite.get("summary") or "")
+            if needle in text.lower():
+                out.append({
+                    "project_id": pid,
+                    "project_name": proj_meta["name"],
+                    "soundbite": bite,
+                })
+                if len(out) >= limit:
+                    return out
+    return out
+
+
+@app.get("/api/stats")
+async def stats() -> dict[str, Any]:
+    """Server-wide stats: project count, total disk usage, presets count."""
+    import shutil as _sh
+    total_bytes = 0
+    project_count = 0
+    bites_total = 0
+    renders_total = 0
+    for child in storage.PROJECTS_DIR.iterdir():
+        if not child.is_dir() or child.name.startswith("_") or child.name.startswith("."):
+            continue
+        project_count += 1
+        for f in child.rglob("*"):
+            if f.is_file():
+                try:
+                    total_bytes += f.stat().st_size
+                except OSError:
+                    pass
+        try:
+            sb = child / "soundbites.json"
+            if sb.exists():
+                data = _json.loads(sb.read_text())
+                bites_total += len(data.get("soundbites") or [])
+        except Exception:
+            pass
+        renders_total += len(list((child / "exports").glob("*.mp4")) if (child / "exports").exists() else [])
+
+    presets = brand_presets.list_presets()
+    disk = _sh.disk_usage(str(storage.PROJECTS_DIR))
+    return {
+        "projects": project_count,
+        "soundbites": bites_total,
+        "renders": renders_total,
+        "presets": len(presets),
+        "bytes_used": total_bytes,
+        "disk_total": disk.total,
+        "disk_free": disk.free,
+        "version": app.version,
+    }
 
 
 @app.get("/api/health")

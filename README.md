@@ -508,6 +508,41 @@ No card "Pipeline → Remover muletas", input de texto pra adicionar
 muletas customizadas (ex.: `ah,ehh,sabe`). Adicionadas à lista padrão
 do idioma.
 
+## Wave 5 — captions burned in, ASS karaoke, server search
+
+### Burned-in captions (sem precisar do Hyperframes render)
+Caminho rápido pra Reels/TikTok: gera ASS com `\\kf` (karaoke por palavra)
++ chama `ffmpeg -vf ass`. Sai um MP4 já com legenda animada queimada.
+
+```bash
+curl -X POST localhost:8765/api/projects/$PID/export/burn-captions \
+  -H content-type:application/json \
+  -d '{"source":"roughcut","style":"tiktok"}'
+```
+Estilos: `tiktok` (uppercase + outline), `minimal` (branco com sombra),
+`podcast` (chip discreto).
+
+### ASS / SRT / VTT
+```bash
+curl -X POST "localhost:8765/api/projects/$PID/export/captions?fmt=ass&style=tiktok"
+curl -X POST "localhost:8765/api/projects/$PID/export/captions?fmt=srt&use_roughcut=true"
+curl -X POST "localhost:8765/api/projects/$PID/export/captions?fmt=vtt"
+```
+
+### Multi-project soundbite search
+```bash
+curl "localhost:8765/api/search?q=marketing&limit=20"
+# → [{project_id, project_name, soundbite: {id, start, end, text, score, ...}}, ...]
+```
+Search bar na sidebar busca em tempo real (debounced).
+
+### Server stats
+```bash
+curl localhost:8765/api/stats
+# → {projects, soundbites, renders, presets, bytes_used, disk_total, disk_free, version}
+```
+Renderizado no rodapé da sidebar.
+
 ## Limitações conhecidas
 
 - Whisper é chamado uma vez por projeto, sem chunking — vídeos > 25MB precisam

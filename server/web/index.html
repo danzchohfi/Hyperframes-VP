@@ -17,7 +17,10 @@
           </div>
         </header>
         <button id="new-project" class="btn-primary">+ Novo projeto</button>
+        <input id="search-q" type="search" placeholder="🔎 Buscar soundbites" class="search-input" />
+        <div id="search-results" class="search-results"></div>
         <div id="project-list" class="project-list"></div>
+        <div id="stats-bar" class="stats-bar"></div>
       </aside>
 
       <main class="main">
@@ -311,8 +314,29 @@
             <div class="actions">
               <button id="srt-btn" class="btn-ghost">📝 SRT</button>
               <button id="vtt-btn" class="btn-ghost">📝 VTT</button>
+              <button id="ass-btn" class="btn-ghost">📝 ASS (karaoke)</button>
+              <select id="ass-style" class="inline-select">
+                <option value="minimal">Minimal</option>
+                <option value="tiktok">TikTok</option>
+                <option value="podcast">Podcast</option>
+              </select>
               <label class="cb"><input id="caps-roughcut" type="checkbox" /> usar rough cut</label>
               <a id="caps-link" class="btn-primary" href="#" download style="display:none">⬇ Baixar legenda</a>
+            </div>
+            <div class="actions">
+              <button id="burn-btn" class="btn-primary">🔥 Queimar legenda no MP4</button>
+              <select id="burn-source" class="inline-select">
+                <option value="graded">graded</option>
+                <option value="roughcut">roughcut</option>
+                <option value="source">source</option>
+                <option value="highlights">highlights</option>
+              </select>
+              <select id="burn-style" class="inline-select">
+                <option value="tiktok">TikTok</option>
+                <option value="minimal">Minimal</option>
+                <option value="podcast">Podcast</option>
+              </select>
+              <a id="burn-link" class="btn-ghost" href="#" download style="display:none">⬇ MP4 com legenda</a>
             </div>
             <div class="export-divider"></div>
             <div class="actions">

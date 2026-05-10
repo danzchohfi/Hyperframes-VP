@@ -44,6 +44,89 @@ def render_srt(segments: Iterable[dict]) -> str:
     return "\n".join(out).strip() + "\n"
 
 
+def _ts_ass(seconds: float) -> str:
+    if seconds < 0:
+        seconds = 0.0
+    h = int(seconds // 3600)
+    m = int((seconds % 3600) // 60)
+    s = seconds - (h * 3600 + m * 60)
+    return f"{h}:{m:02d}:{s:05.2f}"
+
+
+def render_ass(
+    segments: Iterable[dict],
+    *,
+    style: str = "minimal",
+    width: int = 1080,
+    height: int = 1920,
+    primary: str = "&H00FFFFFF",   # ASS BGR (white)
+    highlight: str = "&H0070DBFC",  # tiktok-ish yellow
+    font_family: str = "Inter",
+) -> str:
+    """ASS subtitles. If `segments` carry a `words` list each with start/end,
+    we emit `\\k` karaoke timing tags so the active word highlights live."""
+    if style == "tiktok":
+        font_size = int(height * 0.055)
+        border = 5
+        weight = -1   # bold
+    elif style == "podcast":
+        font_size = int(height * 0.038)
+        border = 3
+        weight = 0
+    else:  # minimal
+        font_size = int(height * 0.045)
+        border = 4
+        weight = 0
+
+    ass = []
+    ass.append("[Script Info]")
+    ass.append("ScriptType: v4.00+")
+    ass.append(f"PlayResX: {width}")
+    ass.append(f"PlayResY: {height}")
+    ass.append("WrapStyle: 0")
+    ass.append("ScaledBorderAndShadow: yes")
+    ass.append("")
+    ass.append("[V4+ Styles]")
+    ass.append("Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding")
+    ass.append(
+        f"Style: Default,{font_family},{font_size},{primary},{highlight},&H00000000,&H80000000,"
+        f"{1 if weight else 0},0,0,0,100,100,0,0,1,{border},2,2,80,80,180,1"
+    )
+    ass.append("")
+    ass.append("[Events]")
+    ass.append("Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text")
+
+    for seg in segments:
+        start = float(seg.get("start") or 0.0)
+        end = float(seg.get("end") or start + 0.5)
+        if end <= start:
+            end = start + 0.5
+        text = (seg.get("text") or "").strip()
+        if not text:
+            continue
+        # If seg has per-word timings, emit karaoke; else plain text
+        words = seg.get("words")
+        if words:
+            parts = []
+            for w in words:
+                ws = float(w.get("start") or start)
+                we = float(w.get("end") or ws + 0.2)
+                cs = max(0.0, we - ws)
+                centiseconds = max(1, int(round(cs * 100)))
+                wt = (w.get("word") or w.get("text") or "").strip()
+                if not wt:
+                    continue
+                parts.append(f"{{\\kf{centiseconds}}}{wt}")
+            text_ass = " ".join(parts)
+        else:
+            text_ass = text.replace("\n", "\\N")
+        layer = "0"
+        ass.append(
+            f"Dialogue: {layer},{_ts_ass(start)},{_ts_ass(end)},Default,,0,0,0,,{text_ass}"
+        )
+    return "\n".join(ass) + "\n"
+
+
 def render_vtt(segments: Iterable[dict]) -> str:
     out: list[str] = ["WEBVTT", ""]
     for seg in segments:

@@ -208,6 +208,21 @@ async def apply_lut(src: Path, dst: Path, lut: Path) -> None:
     )
 
 
+async def burn_subtitles(src: Path, dst: Path, ass_path: Path) -> None:
+    """Burn an ASS subtitle file into the video via ffmpeg's subtitles filter."""
+    # ffmpeg's subtitles filter requires : and ' escaped in the path
+    ass_arg = str(ass_path).replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
+    await run([
+        "ffmpeg", "-y", "-i", str(src),
+        "-vf", f"ass='{ass_arg}'",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "copy",
+        "-movflags", "+faststart",
+        str(dst),
+    ])
+
+
 async def extract_audio(src: Path, dst: Path, *, format: str = "mp3", bitrate: str = "192k") -> None:
     """Extract the audio stream as MP3 (default) or WAV."""
     if format == "mp3":

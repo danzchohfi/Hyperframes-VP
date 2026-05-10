@@ -46,11 +46,52 @@ async function refreshList() {
     const btn = document.createElement("button");
     btn.className = "project-item" + (state.current?.id === p.id ? " active" : "");
     btn.innerHTML = `
-      <div class="pi-name">${p.name}</div>
+      <div class="pi-name">${escapeHtml(p.name)}</div>
       <div class="pi-meta"><span class="dot ${p.has_render ? "ok" : ""}"></span>${new Date(p.updated_at).toLocaleString()}</div>
     `;
     btn.onclick = () => loadProject(p.id);
     root.appendChild(btn);
+  }
+  refreshStats();
+}
+
+async function refreshStats() {
+  try {
+    const s = await api("/api/stats");
+    const gb = (b) => `${(b / 1024 / 1024 / 1024).toFixed(2)} GB`;
+    $("#stats-bar").innerHTML = `
+      <div class="row"><span>Projetos</span><strong>${s.projects}</strong></div>
+      <div class="row"><span>Soundbites</span><strong>${s.soundbites}</strong></div>
+      <div class="row"><span>Renders</span><strong>${s.renders}</strong></div>
+      <div class="row"><span>Em uso</span><strong>${gb(s.bytes_used)}</strong></div>
+      <div class="row"><span>Disco livre</span><strong>${gb(s.disk_free)}</strong></div>
+    `;
+  } catch {}
+}
+
+let _searchTimer = null;
+async function runSearch(q) {
+  const root = $("#search-results");
+  if (!q || q.length < 2) {
+    root.innerHTML = "";
+    return;
+  }
+  try {
+    const results = await api(`/api/search?q=${encodeURIComponent(q)}&limit=20`);
+    root.innerHTML = "";
+    for (const r of results) {
+      const div = document.createElement("div");
+      div.className = "sr-item";
+      div.innerHTML = `
+        <div class="sr-proj">${escapeHtml(r.project_name)}</div>
+        <div class="sr-text">${escapeHtml(r.soundbite.text || r.soundbite.summary || "")}</div>
+        <div class="sr-meta">${r.soundbite.start.toFixed(1)}s · score ${r.soundbite.score}</div>
+      `;
+      div.onclick = () => loadProject(r.project_id);
+      root.appendChild(div);
+    }
+  } catch (e) {
+    root.innerHTML = `<div class="sr-item">${escapeHtml(e.message)}</div>`;
   }
 }
 
@@ -619,7 +660,9 @@ async function exportCaptions(fmt) {
   log(`▶ ${fmt}`);
   try {
     const useRoughcut = $("#caps-roughcut").checked;
-    const res = await api(`/api/projects/${state.current.id}/export/captions?fmt=${fmt}&use_roughcut=${useRoughcut}`, { method: "POST" });
+    const style = $("#ass-style")?.value || "minimal";
+    const url = `/api/projects/${state.current.id}/export/captions?fmt=${fmt}&use_roughcut=${useRoughcut}&style=${style}`;
+    const res = await api(url, { method: "POST" });
     log(`✓ ${fmt} · ${res.cues} cues`, "ok");
     const link = $("#caps-link");
     link.href = res.url;
@@ -627,6 +670,28 @@ async function exportCaptions(fmt) {
     link.textContent = `⬇ ${res.export}`;
   } catch (e) {
     log(`✗ ${fmt}: ${e.message}`, "err");
+  }
+}
+
+async function burnCaptions() {
+  if (!state.current) return;
+  log("▶ burn captions");
+  try {
+    const r = await api(`/api/projects/${state.current.id}/export/burn-captions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        source: $("#burn-source").value,
+        style: $("#burn-style").value,
+      }),
+    });
+    log(`✓ burned · ${(r.bytes / 1024).toFixed(0)} KB`, "ok");
+    const a = $("#burn-link");
+    a.href = r.url;
+    a.style.display = "inline-block";
+    a.textContent = `⬇ ${r.export}`;
+  } catch (e) {
+    log(`✗ burn: ${e.message}`, "err");
   }
 }
 
@@ -1355,6 +1420,12 @@ function bind() {
   $("#apply-template-btn").onclick = applyTemplate;
   $("#audio-btn").onclick = exportAudio;
   $("#cancel-render-btn").onclick = cancelRender;
+  $("#ass-btn").onclick = () => exportCaptions("ass");
+  $("#burn-btn").onclick = burnCaptions;
+  $("#search-q").addEventListener("input", (e) => {
+    clearTimeout(_searchTimer);
+    _searchTimer = setTimeout(() => runSearch(e.target.value.trim()), 200);
+  });
   attachVideoSync();
 
   for (const btn of $$("[data-run]")) {
