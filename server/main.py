@@ -71,6 +71,7 @@ from .services import speaker_camera as speaker_cam_svc
 from .services import multicam_render as mc_render_svc
 from .services import vlog as vlog_svc
 from .services import vlog_pipeline as vlog_pipeline_svc
+from .services import vlog_broll as vlog_broll_svc
 from .services import take_grouping as take_grouping_svc
 from .services import podcast_pipeline as podcast_pipeline_svc
 from .services import shorts as shorts_svc
@@ -1990,6 +1991,35 @@ async def rename_identity(pid: str, cluster_id: str, body: IdentityRenameIn) -> 
     return target
 
 
+@app.post("/api/projects/{pid}/vlog/place-broll")
+async def vlog_place_broll(pid: str, narrative_id: str) -> dict[str, Any]:
+    """Match tagged angles as B-roll inserts over a chosen vlog narrative."""
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    if not state.angles:
+        raise HTTPException(400, "no angles to use as B-roll")
+    if not any(a.get("tags") or a.get("face_analysis") for a in state.angles):
+        raise HTTPException(400, "tag or analyze your angles first")
+    npath = pdir / "vlog_narratives.json"
+    if not npath.exists():
+        raise HTTPException(400, "no narratives")
+    data = storage.read_json(pid, "vlog_narratives.json")
+    target = next((n for n in data["narratives"] if n["id"] == narrative_id), None)
+    if not target:
+        raise HTTPException(404, "narrative not found")
+
+    _stage(state, "vlog_broll", "running", target["name"])
+    try:
+        plan = await vlog_broll_svc.match_vlog(target.get("sequence", []), state.angles)
+    except Exception as e:
+        _stage(state, "vlog_broll", "error", str(e))
+        raise HTTPException(502, str(e))
+
+    storage.write_json(pid, f"vlog_broll_{narrative_id}.json", plan.model_dump())
+    _stage(state, "vlog_broll", "done", f"{len(plan.placements)} inserts")
+    return plan.model_dump()
+
+
 @app.post("/api/projects/{pid}/vlog/cull-takes")
 async def cull_takes(pid: str) -> dict[str, Any]:
     """Mark every clip in a take-group as inactive EXCEPT the best one,
@@ -2537,6 +2567,51 @@ async def serve_clip_thumb(pid: str, name: str):
 
 class ClipTranscribeIn(BaseModel):
     language: str | None = None
+
+
+class ClipTranscriptEditIn(BaseModel):
+    text: str | None = None
+    segments: list[dict[str, Any]] | None = None
+
+
+@app.put("/api/projects/{pid}/clips/{cid}/transcript")
+async def edit_clip_transcript(pid: str, cid: str, body: ClipTranscriptEditIn) -> dict[str, Any]:
+    """Patch a clip's transcript — useful for correcting Whisper mistakes
+    before generating narratives or assembling."""
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    clip = next((c for c in state.clips if c["id"] == cid), None)
+    if not clip:
+        raise HTTPException(404, "clip not found")
+    tp = pdir / "clips" / f"{cid}_transcript.json"
+    if not tp.exists():
+        raise HTTPException(400, "transcribe first")
+    transcript = _json.loads(tp.read_text())
+
+    if body.text is not None:
+        transcript["text"] = body.text
+        clip["transcript_text"] = body.text[:300]
+    if body.segments is not None:
+        transcript["segments"] = body.segments
+
+    tp.write_text(_json.dumps(transcript, ensure_ascii=False, indent=2))
+    storage.save(state)
+    _stage(state, "clip_transcript_edit", "done", clip["name"])
+    return {"clip_id": cid,
+            "text_length": len(transcript.get("text") or ""),
+            "segments": len(transcript.get("segments") or [])}
+
+
+@app.get("/api/projects/{pid}/clips/{cid}/transcript")
+async def get_clip_transcript(pid: str, cid: str):
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    if not any(c["id"] == cid for c in state.clips):
+        raise HTTPException(404, "clip not found")
+    tp = pdir / "clips" / f"{cid}_transcript.json"
+    if not tp.exists():
+        raise HTTPException(404, "no transcript")
+    return JSONResponse(_json.loads(tp.read_text()))
 
 
 @app.post("/api/projects/{pid}/clips/{cid}/transcribe")
