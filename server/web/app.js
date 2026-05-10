@@ -1630,12 +1630,45 @@ function renderPeople(clusters, presence) {
     const div = document.createElement("div");
     div.className = "person";
     const where = (c.sources || []).map(s => s.split(":").slice(-1)[0] || s).join(", ") || "—";
+    const thumb = c.thumbnail
+      ? `<img class="bite-thumb" src="${escapeHtml(c.thumbnail)}" alt=""/>`
+      : "";
+    const display = c.display_name || c.id;
     div.innerHTML = `
+      ${thumb}
       <span class="pid">${escapeHtml(c.id)}</span>
-      <span class="sources">aparece em: ${escapeHtml(where)}</span>
-      <span class="count">${c.size} samples</span>
+      <input class="snap-input p-name" type="text" value="${escapeHtml(display === c.id ? '' : display)}" placeholder="Nome (ex.: Marina)" style="max-width:160px" />
+      <span class="sources">${escapeHtml(where)}</span>
+      <span class="count">${c.size}</span>
+      <button class="btn-ghost p-save" data-cid="${c.id}">Salvar</button>
     `;
+    div.querySelector(".p-save").onclick = async () => {
+      const name = div.querySelector(".p-name").value.trim();
+      if (!name) return;
+      try {
+        await api(`/api/projects/${state.current.id}/face-identities/${c.id}`, {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name }),
+        });
+        toast(`${c.id} → ${name}`, "ok");
+      } catch (e) { log(`✗ rename: ${e.message}`, "err"); }
+    };
     root.appendChild(div);
+  }
+}
+
+async function generatePeopleThumbs() {
+  if (!state.current) return;
+  log("▶ people thumbs");
+  try {
+    const r = await api(`/api/projects/${state.current.id}/face-identities/thumbnails`, { method: "POST" });
+    log(`✓ ${r.thumbs.length} thumbs gerados`, "ok");
+    // refresh people list
+    const ids = await api(`/api/projects/${state.current.id}/files/face_identities.json`);
+    renderPeople(ids.clusters || [], ids.presence || {});
+  } catch (e) {
+    log(`✗ people thumbs: ${e.message}`, "err");
   }
 }
 
@@ -2097,6 +2130,7 @@ function bind() {
   $("#vlog-auto-btn").onclick = vlogAutoPipeline;
   $("#vlog-music-btn").onclick = vlogMusicSuggest;
   $("#face-ids-btn").onclick = detectFaceIdentities;
+  $("#people-thumbs-btn").onclick = generatePeopleThumbs;
   $("#subject-tl-btn").onclick = buildSourceSubjectTimeline;
   $("#multicam-pick-btn").onclick = multicamPick;
   $("#multicam-render-btn").onclick = multicamRender;

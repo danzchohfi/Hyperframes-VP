@@ -2014,6 +2014,68 @@ async def cull_takes(pid: str) -> dict[str, Any]:
     return {"kept": list(bests), "hidden": list(inactive)}
 
 
+@app.post("/api/projects/{pid}/face-identities/thumbnails")
+async def face_identity_thumbnails(pid: str) -> dict[str, Any]:
+    """For each detected person cluster, grab the best face crop from the
+    first source it appears in. Saved to thumbs/people/<cluster>.jpg."""
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    fpath = pdir / "face_identities.json"
+    if not fpath.exists():
+        raise HTTPException(400, "run /face-identities first")
+    data = storage.read_json(pid, "face_identities.json")
+    out_dir = pdir / "thumbs" / "people"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    def _resolve_source(src_id: str) -> Path | None:
+        if src_id == "source":
+            return pdir / "source.mp4"
+        if src_id.startswith("angle:"):
+            try:
+                idx = int(src_id.split(":")[1])
+                ang = state.angles[idx]
+                return pdir / "angles" / ang["filename"]
+            except Exception:
+                return None
+        if src_id.startswith("clip:"):
+            cid = src_id.split(":")[1]
+            for c in state.clips:
+                if c["id"] == cid:
+                    return pdir / "clips" / c["filename"]
+        return None
+
+    results: list[dict[str, Any]] = []
+    for cluster in data.get("clusters", []):
+        thumb_url = None
+        for src_id in cluster.get("sources", []):
+            sp = _resolve_source(src_id)
+            if not sp or not sp.exists():
+                continue
+            try:
+                jpg = face_id_svc.crop_for_cluster(sp)
+            except Exception:
+                jpg = None
+            if jpg:
+                out = out_dir / f"{cluster['id']}.jpg"
+                out.write_bytes(jpg)
+                thumb_url = f"/api/projects/{pid}/files/thumbs/people/{out.name}"
+                break
+        cluster["thumbnail"] = thumb_url
+        results.append({"id": cluster["id"], "thumbnail": thumb_url})
+    storage.write_json(pid, "face_identities.json", data)
+    _stage(state, "face_identity_thumbs", "done", f"{len(results)} thumbs")
+    return {"thumbs": results}
+
+
+@app.get("/api/projects/{pid}/files/thumbs/people/{name}")
+async def serve_person_thumb(pid: str, name: str):
+    pdir = storage.project_dir(pid)
+    fp = (pdir / "thumbs" / "people" / name).resolve()
+    if not fp.exists() or (pdir / "thumbs" / "people").resolve() not in fp.parents:
+        raise HTTPException(404)
+    return FileResponse(fp)
+
+
 @app.post("/api/projects/{pid}/face-identities")
 async def face_identities(pid: str) -> dict[str, Any]:
     """Fingerprint every clip + angle + source, cluster them, return who's

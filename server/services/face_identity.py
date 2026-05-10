@@ -104,6 +104,58 @@ def fingerprint_clip(src: Path, *, k_representatives: int = 5, max_frames: int =
     return [embeds[i].tolist() for i in keep_idx]
 
 
+def crop_for_cluster(
+    src_path: Path,
+    *,
+    min_face_size: int = 100,
+    max_frames: int = 24,
+) -> bytes | None:
+    """Find the best face crop in `src_path` (largest, most-centered) and
+    return it as JPEG bytes. Returns None if no face is found."""
+    cap = cv2.VideoCapture(str(src_path))
+    if not cap.isOpened():
+        return None
+    cascade = cv2.CascadeClassifier(_CASCADE_PATH)
+    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+    if total <= 0:
+        cap.release()
+        return None
+    step = max(1, total // max_frames)
+    best = None
+    best_score = 0.0
+    for i in range(0, total, step):
+        cap.set(cv2.CAP_PROP_POS_FRAMES, i)
+        ok, frame = cap.read()
+        if not ok or frame is None:
+            continue
+        gray = cv2.equalizeHist(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY))
+        rects = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5,
+                                         minSize=(min_face_size, min_face_size))
+        for (x, y, w, h) in rects:
+            cx = (x + w / 2) / max(1, frame.shape[1])
+            cy = (y + h / 2) / max(1, frame.shape[0])
+            # Centered + large = better
+            centering = 1.0 - (abs(cx - 0.5) + abs(cy - 0.5))
+            score = (w * h) * (0.5 + 0.5 * centering)
+            if score > best_score:
+                best_score = score
+                pad_x = int(w * 0.4)
+                pad_y = int(h * 0.4)
+                x0 = max(0, x - pad_x); y0 = max(0, y - pad_y)
+                x1 = min(frame.shape[1], x + w + pad_x); y1 = min(frame.shape[0], y + h + pad_y)
+                best = frame[y0:y1, x0:x1].copy()
+    cap.release()
+    if best is None:
+        return None
+    # Resize to 256
+    h, w = best.shape[:2]
+    if max(h, w) > 256:
+        scale = 256 / max(h, w)
+        best = cv2.resize(best, (int(w * scale), int(h * scale)))
+    ok, buf = cv2.imencode(".jpg", best, [cv2.IMWRITE_JPEG_QUALITY, 88])
+    return bytes(buf) if ok else None
+
+
 def cluster_identities(
     fingerprints_per_source: dict[str, list[list[float]]],
     *,
