@@ -405,6 +405,69 @@ curl -X POST localhost:8765/api/projects/$PID/duplicate
 # clona transcript + cuts + soundbites + story + brand + media. Renders não.
 ```
 
+## Wave 3 — text-driven editing + reels + templates
+
+### Render progress em tempo real
+O endpoint `/render` agora streamea progresso (parsing do stdout do
+`hyperframes render`). A UI pega via SSE e mostra `Capturing frame 90/240
+(37%)` enquanto roda — em vez de só "running".
+
+### Transcrição interativa (estilo Descript / Eddie)
+Card "4b · Transcrição interativa". Cada palavra é clicável:
+- **Click** → vídeo pula pra aquele timecode + começa a tocar
+- **Shift-click** → estende seleção até essa palavra
+- **Cmd/Ctrl-click** → adiciona/remove a palavra da seleção
+- A palavra atualmente tocando recebe destaque automaticamente
+- **✓ Manter seleção como cuts** → constrói `cuts.json` a partir das palavras
+  marcadas. Sobrescreve qualquer plano de silêncio, vira o "manual cut".
+
+```bash
+curl -X POST localhost:8765/api/projects/$PID/cut-from-words \
+  -H content-type:application/json \
+  -d '{"keep":[{"start":1.0,"end":3.5},{"start":7.2,"end":9.0}],"pad":0.05}'
+```
+
+### Highlights reel
+Auto-monta um teaser dos top soundbites totalizando ~30s:
+```bash
+curl -X POST localhost:8765/api/projects/$PID/highlights \
+  -H content-type:application/json \
+  -d '{"target_seconds":30,"apply_lut":true}'
+# → highlights.mp4 + highlights.json
+```
+
+### Social copy (caption, hashtags, hook)
+Gera copy pronto pra Instagram/TikTok/YouTube:
+```bash
+curl -X POST localhost:8765/api/projects/$PID/social-copy \
+  -H content-type:application/json -d '{"language":"pt"}'
+# → {hook, caption, long_caption, hashtags, thumbnail_title,
+#    youtube_title, youtube_description}
+```
+UI tem botão "copiar" em cada campo.
+
+### Templates Hyperframes
+4 presets prontos (BrandBook + caption_style + aspect + chapter cards):
+
+| ID | Aspect | Caption | Chapter cards |
+|---|---|---|---|
+| `talking_head_vertical` | 9:16 | tiktok | — |
+| `podcast_horizontal` | 16:9 | podcast | sim |
+| `tutorial_clean` | 9:16 | minimal | sim |
+| `testimonial_square` | 1:1 | minimal (centro) | — |
+
+```bash
+curl localhost:8765/api/templates
+curl -X POST localhost:8765/api/projects/$PID/template \
+  -H content-type:application/json -d '{"template_id":"podcast_horizontal"}'
+```
+
+### Whisper com idioma explícito
+```bash
+curl -X POST localhost:8765/api/projects/$PID/transcribe \
+  -H content-type:application/json -d '{"language":"pt"}'
+```
+
 ## Limitações conhecidas
 
 - Whisper é chamado uma vez por projeto, sem chunking — vídeos > 25MB precisam

@@ -52,6 +52,9 @@ from .services import smartcrop
 from .services import brand_presets
 from .services import bundle as bundle_svc
 from .services import speakers as speakers_svc
+from .services import highlights as highlights_svc
+from .services import social_copy as social_svc
+from .services import templates as templates_svc
 from .services.events import bus, emit_stage, emit_log, emit_state_changed
 from .services import captions as captions_svc
 from .services.brand import BrandBook
@@ -261,17 +264,22 @@ async def upload_source(pid: str, file: UploadFile = File(...)) -> dict[str, Any
 
 # ---- transcribe --------------------------------------------------------------
 
+class TranscribeIn(BaseModel):
+    language: str | None = None
+
+
 @app.post("/api/projects/{pid}/transcribe")
-async def transcribe(pid: str) -> dict[str, Any]:
+async def transcribe(pid: str, body: TranscribeIn | None = None) -> dict[str, Any]:
+    body = body or TranscribeIn()
     state = _load(pid)
     pdir = storage.project_dir(pid)
     src = pdir / "source.mp4"
     if not src.exists():
         raise HTTPException(400, "no source uploaded")
 
-    _stage(state, "transcribe", "running", "calling Whisper API")
+    _stage(state, "transcribe", "running", f"Whisper · lang={body.language or 'auto'}")
     try:
-        result = await whisper.transcribe(src)
+        result = await whisper.transcribe(src, language=body.language)
     except Exception as e:
         _stage(state, "transcribe", "error", str(e))
         raise HTTPException(502, f"transcription failed: {e}")
@@ -485,7 +493,16 @@ async def do_render(pid: str, body: RenderIn) -> dict[str, Any]:
 
     try:
         _stage(state, "render", "running", "running hyperframes render")
-        out = await render.render(comp_dir, output_dir=pdir / "exports", name="render")
+        def _render_event(ev: dict) -> None:
+            pct = ev.get("progress")
+            label = ev.get("label", "")
+            emit_stage(pid, "render", "running", f"{label} ({pct}%)" if pct is not None else label, progress=float(pct) / 100.0 if pct is not None else None)
+        out = await render.render(
+            comp_dir,
+            output_dir=pdir / "exports",
+            name="render",
+            on_event=_render_event,
+        )
     except Exception as e:
         _stage(state, "render", "error", f"render: {e}")
         raise HTTPException(500, str(e))
@@ -921,6 +938,134 @@ async def roughcut(pid: str, body: RoughCutIn) -> dict[str, Any]:
     return result
 
 
+# ---- highlights reel --------------------------------------------------------
+
+class HighlightsIn(BaseModel):
+    target_seconds: float = 30.0
+    apply_lut: bool = True
+    aspect: str | None = None
+
+
+@app.post("/api/projects/{pid}/highlights")
+async def highlights(pid: str, body: HighlightsIn) -> dict[str, Any]:
+    state = _load(pid)
+    if not state.has_soundbites:
+        raise HTTPException(400, "extract soundbites first")
+    pdir = storage.project_dir(pid)
+    src = pdir / "source.mp4"
+    if not src.exists():
+        raise HTTPException(400, "no source")
+    analysis = storage.read_json(pid, "soundbites.json")
+    ranges = highlights_svc.select(analysis["soundbites"], target_seconds=body.target_seconds)
+    if not ranges:
+        raise HTTPException(400, "no usable soundbites")
+    lut = pdir / "lut.cube" if (state.has_lut and body.apply_lut) else None
+    out = pdir / "highlights.mp4"
+    _stage(state, "highlights", "running", f"{len(ranges)} segments")
+    try:
+        await ff.cut_segments(src, out, ranges, lut=lut)
+        dur = await ff.duration(out)
+    except Exception as e:
+        _stage(state, "highlights", "error", str(e))
+        raise HTTPException(500, str(e))
+    storage.write_json(pid, "highlights.json", {
+        "target_seconds": body.target_seconds,
+        "ranges": [{"start": s, "end": e} for s, e in ranges],
+        "duration": dur,
+    })
+    _stage(state, "highlights", "done", f"{dur:.1f}s · {len(ranges)} bites")
+
+    result: dict[str, Any] = {
+        "duration": dur,
+        "segments": len(ranges),
+        "url": f"/api/projects/{pid}/files/highlights.mp4",
+    }
+    if body.aspect:
+        out_re = pdir / "exports" / f"highlights-{body.aspect.replace(':', 'x')}.mp4"
+        out_re.parent.mkdir(exist_ok=True)
+        try:
+            await ff.to_aspect(out, out_re, body.aspect)
+            result["reframed_url"] = f"/api/projects/{pid}/exports/{out_re.name}"
+        except Exception as e:
+            result["reframe_error"] = str(e)
+    return result
+
+
+# ---- social-media copy ------------------------------------------------------
+
+class SocialCopyIn(BaseModel):
+    language: str = "pt"
+
+
+@app.post("/api/projects/{pid}/social-copy")
+async def social_copy(pid: str, body: SocialCopyIn) -> dict[str, Any]:
+    state = _load(pid)
+    if not state.has_transcript:
+        raise HTTPException(400, "transcribe first")
+    transcript = storage.read_json(pid, "transcript.json")
+    title = None
+    logline = None
+    if state.has_story:
+        story = storage.read_json(pid, "story.json")
+        title = story.get("title")
+        logline = story.get("logline")
+    brand_name = state.name
+    if state.has_brand:
+        try:
+            brand_name = storage.read_json(pid, "brand.json").get("name") or state.name
+        except Exception:
+            pass
+
+    _stage(state, "social_copy", "running", body.language)
+    try:
+        copy = await social_svc.generate(
+            transcript_text=transcript.get("text") or "",
+            title=title,
+            logline=logline,
+            brand_name=brand_name,
+            language=body.language,
+        )
+    except Exception as e:
+        _stage(state, "social_copy", "error", str(e))
+        raise HTTPException(502, str(e))
+    storage.write_json(pid, "social_copy.json", copy.model_dump())
+    _stage(state, "social_copy", "done", copy.hook[:60] or "ok")
+    return copy.model_dump()
+
+
+# ---- Hyperframes preset templates -------------------------------------------
+
+@app.get("/api/templates")
+async def list_templates() -> list[dict[str, Any]]:
+    return templates_svc.list_templates()
+
+
+class ApplyTemplateIn(BaseModel):
+    template_id: str
+
+
+@app.post("/api/projects/{pid}/template")
+async def apply_template(pid: str, body: ApplyTemplateIn) -> dict[str, Any]:
+    state = _load(pid)
+    try:
+        tpl = templates_svc.get(body.template_id)
+    except KeyError:
+        raise HTTPException(404, "template not found")
+    brand = BrandBook.model_validate(tpl["brand"])
+    storage.write_json(pid, "brand.json", brand.model_dump())
+    state.has_brand = True
+    storage.save(state)
+    _stage(state, "template", "done", tpl["label"])
+    return {
+        "applied": body.template_id,
+        "label": tpl["label"],
+        "aspect": tpl["aspect"],
+        "render_source": tpl["render_source"],
+        "include_chapter_cards": tpl["include_chapter_cards"],
+        "brand": brand.model_dump(),
+    }
+
+
 # ---- speaker-turn hints -----------------------------------------------------
 
 @app.post("/api/projects/{pid}/speakers")
@@ -1287,6 +1432,49 @@ async def get_transcript(pid: str):
     if not state.has_transcript:
         raise HTTPException(404, "no transcript")
     return JSONResponse(storage.read_json(pid, "transcript.json"))
+
+
+class CutsFromWordsIn(BaseModel):
+    """Time ranges to keep, derived from the user's selection in the transcript."""
+    keep: list[dict[str, float]]   # [{"start": 0.0, "end": 1.5}, ...]
+    pad: float = 0.05
+
+
+@app.post("/api/projects/{pid}/cut-from-words")
+async def cut_from_words(pid: str, body: CutsFromWordsIn) -> dict[str, Any]:
+    state = _load(pid)
+    if not state.source_duration:
+        raise HTTPException(400, "no source duration; upload first")
+
+    # normalize, sort, merge
+    ranges: list[tuple[float, float]] = []
+    for r in body.keep:
+        s = max(0.0, float(r.get("start", 0.0)) - body.pad)
+        e = min(state.source_duration, float(r.get("end", 0.0)) + body.pad)
+        if e > s:
+            ranges.append((s, e))
+    ranges.sort()
+    merged: list[tuple[float, float]] = []
+    for s, e in ranges:
+        if merged and s <= merged[-1][1] + 0.01:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], e))
+        else:
+            merged.append((s, e))
+    if not merged:
+        raise HTTPException(400, "no ranges to keep")
+
+    plan = {
+        "options": {"manual": True, "pad": body.pad},
+        "source_duration": state.source_duration,
+        "silences": [],
+        "keep": [{"start": s, "end": e} for s, e in merged],
+        "kept_duration": sum(e - s for s, e in merged),
+    }
+    storage.write_json(pid, "cuts.json", plan)
+    state.has_cuts = True
+    storage.save(state)
+    _stage(state, "silence", "done", f"manual cut · kept {plan['kept_duration']:.2f}s")
+    return plan
 
 
 @app.get("/api/projects/{pid}/cuts")

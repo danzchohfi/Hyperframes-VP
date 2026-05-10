@@ -200,6 +200,17 @@
             <div id="pipeline-log" class="log"></div>
           </section>
 
+          <section class="card" id="transcript-card">
+            <h3>4b · Transcrição interativa</h3>
+            <p class="card-help">Clique numa palavra pra pular o vídeo. Selecione um range e clique <strong>Keep</strong> pra construir cortes manualmente (sobrescreve <code>cuts.json</code>).</p>
+            <div class="actions" style="margin-bottom:8px">
+              <button id="tx-clear-btn" class="btn-ghost">Limpar seleção</button>
+              <button id="tx-keep-btn" class="btn-primary">✓ Manter seleção como cuts</button>
+              <span id="tx-status" class="status muted"></span>
+            </div>
+            <div id="transcript-words" class="tx-words"></div>
+          </section>
+
           <section class="card">
             <h3>5 · Soundbites + roteiro (Eddie-style)</h3>
             <p class="card-help">A IA escolhe os melhores trechos da transcrição, agrupa por tópico e propõe uma estrutura de roteiro. Depois você gera o rough cut só com os trechos selecionados.</p>
@@ -216,6 +227,27 @@
             </div>
             <div id="story-summary" class="story-summary hidden"></div>
             <div id="topics-list" class="topics-list"></div>
+            <div class="actions" style="margin-top:14px">
+              <input id="hl-target" type="number" value="30" step="5" min="10" max="120" class="snap-input" style="max-width:90px" />
+              <button id="hl-btn" class="btn-primary">⚡ Gerar highlights reel</button>
+              <a id="hl-link" class="btn-ghost" href="#" download style="display:none">⬇ highlights.mp4</a>
+            </div>
+          </section>
+
+          <section class="card">
+            <h3>5b · Templates + Social copy</h3>
+            <p class="card-help">Templates aplicam BrandBook + estilo de legenda em um clique. Social copy gera caption + hashtags + hook a partir da transcrição.</p>
+            <div class="actions">
+              <select id="template-pick" class="inline-select"><option value="">— template —</option></select>
+              <button id="apply-template-btn" class="btn-ghost">📐 Aplicar template</button>
+              <select id="social-lang" class="inline-select">
+                <option value="pt">PT</option>
+                <option value="en">EN</option>
+                <option value="es">ES</option>
+              </select>
+              <button id="social-btn" class="btn-primary">✍ Gerar copy</button>
+            </div>
+            <div id="social-copy" class="social-copy hidden"></div>
           </section>
 
           <section class="card">

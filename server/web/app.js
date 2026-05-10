@@ -114,6 +114,8 @@ async function loadProject(id) {
   renderAngles(p);
   renderMusicSuggestion(p.music_suggestion);
   await loadSoundbitesAndStory(p);
+  await loadTranscriptWords(p);
+  await refreshTemplates();
 
   await refreshList();
 }
@@ -673,6 +675,259 @@ async function saveBrandPreset() {
   }
 }
 
+// ---- Transcript-driven editor ------------------------------------------------
+
+const tx = { words: [], selStart: null, selEnd: null, ranges: [] };
+
+async function loadTranscriptWords(p) {
+  if (!p?.has_transcript) {
+    $("#transcript-words").innerHTML = '<span class="tx-w" style="color:var(--muted)">Sem transcrição. Rode a etapa 4.</span>';
+    tx.words = [];
+    return;
+  }
+  try {
+    const t = await api(`/api/projects/${p.id}/transcript`);
+    tx.words = t.words || [];
+    renderTranscriptWords();
+  } catch {
+    $("#transcript-words").innerHTML = '<span class="tx-w" style="color:var(--muted)">Falha ao carregar.</span>';
+  }
+}
+
+function renderTranscriptWords() {
+  const root = $("#transcript-words");
+  if (!tx.words.length) {
+    root.innerHTML = '<span class="tx-w" style="color:var(--muted)">(vazio)</span>';
+    return;
+  }
+  root.innerHTML = tx.words.map((w, i) =>
+    `<span class="tx-w" data-i="${i}" data-start="${w.start}" data-end="${w.end}">${escapeHtml(w.word)}</span>`
+  ).join(" ");
+  root.querySelectorAll(".tx-w").forEach(el => {
+    el.addEventListener("click", txOnClick);
+  });
+}
+
+function txOnClick(e) {
+  const i = parseInt(e.currentTarget.dataset.i, 10);
+  const w = tx.words[i];
+  const video = $("#preview");
+  if (e.shiftKey && tx.selStart != null) {
+    tx.selEnd = i;
+  } else if (e.metaKey || e.ctrlKey) {
+    // toggle individual word in selection
+    const has = tx.ranges.find(r => r.from <= i && r.to >= i);
+    if (has) {
+      tx.ranges = tx.ranges.filter(r => r !== has);
+    } else {
+      tx.ranges.push({ from: i, to: i });
+    }
+    tx.selStart = tx.selEnd = null;
+  } else {
+    if (video && w) video.currentTime = Math.max(0, w.start - 0.05);
+    tx.selStart = i;
+    tx.selEnd = i;
+    if (video && video.paused) video.play().catch(() => {});
+  }
+  txRefresh();
+}
+
+function txRefresh() {
+  const root = $("#transcript-words");
+  const inSelection = (i) => {
+    if (tx.selStart != null && tx.selEnd != null) {
+      const lo = Math.min(tx.selStart, tx.selEnd);
+      const hi = Math.max(tx.selStart, tx.selEnd);
+      if (i >= lo && i <= hi) return true;
+    }
+    return tx.ranges.some(r => r.from <= i && r.to >= i);
+  };
+  root.querySelectorAll(".tx-w").forEach(el => {
+    const i = parseInt(el.dataset.i, 10);
+    el.classList.toggle("selected", inSelection(i));
+  });
+  const totalWords = tx.ranges.reduce((acc, r) => acc + (r.to - r.from + 1), 0)
+    + (tx.selStart != null && tx.selEnd != null ? Math.abs(tx.selEnd - tx.selStart) + 1 : 0);
+  $("#tx-status").textContent = totalWords ? `${totalWords} palavras selecionadas` : "";
+  $("#tx-status").className = totalWords ? "status ok" : "status muted";
+}
+
+function txClear() {
+  tx.selStart = tx.selEnd = null;
+  tx.ranges = [];
+  txRefresh();
+}
+
+function txCommitToSelection() {
+  if (tx.selStart != null && tx.selEnd != null) {
+    const lo = Math.min(tx.selStart, tx.selEnd);
+    const hi = Math.max(tx.selStart, tx.selEnd);
+    tx.ranges.push({ from: lo, to: hi });
+    tx.selStart = tx.selEnd = null;
+  }
+  txRefresh();
+}
+
+async function txKeep() {
+  if (!state.current) return;
+  txCommitToSelection();
+  if (!tx.ranges.length) {
+    toast("Selecione palavras antes de aplicar.", "error");
+    return;
+  }
+  // collapse to non-overlapping ranges
+  tx.ranges.sort((a, b) => a.from - b.from);
+  const merged = [];
+  for (const r of tx.ranges) {
+    if (merged.length && r.from <= merged[merged.length - 1].to + 1) {
+      merged[merged.length - 1].to = Math.max(merged[merged.length - 1].to, r.to);
+    } else {
+      merged.push({ ...r });
+    }
+  }
+  const ranges = merged.map(r => ({
+    start: tx.words[r.from].start,
+    end: tx.words[r.to].end,
+  }));
+  try {
+    const plan = await api(`/api/projects/${state.current.id}/cut-from-words`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ keep: ranges, pad: 0.05 }),
+    });
+    log(`✓ cuts manuais · kept ${plan.kept_duration.toFixed(2)}s`, "ok");
+    toast(`Cortes salvos (${plan.kept_duration.toFixed(1)}s)`, "ok");
+    await loadProject(state.current.id);
+  } catch (e) {
+    log(`✗ cut-from-words: ${e.message}`, "err");
+  }
+}
+
+// Live highlight of the playing word
+function attachVideoSync() {
+  const video = $("#preview");
+  if (!video) return;
+  let lastIdx = -1;
+  video.addEventListener("timeupdate", () => {
+    if (!tx.words.length) return;
+    const t = video.currentTime;
+    let hit = -1;
+    for (let i = 0; i < tx.words.length; i++) {
+      const w = tx.words[i];
+      if (t >= w.start && t <= w.end) { hit = i; break; }
+      if (w.start > t) break;
+    }
+    if (hit !== lastIdx) {
+      const root = $("#transcript-words");
+      if (lastIdx >= 0) root.querySelector(`.tx-w[data-i="${lastIdx}"]`)?.classList.remove("playing");
+      if (hit >= 0) root.querySelector(`.tx-w[data-i="${hit}"]`)?.classList.add("playing");
+      lastIdx = hit;
+    }
+  });
+}
+
+// ---- Highlights / Social / Templates ---------------------------------------
+
+async function buildHighlights() {
+  if (!state.current) return;
+  const target = parseFloat($("#hl-target").value || "30");
+  log(`▶ highlights ${target}s`);
+  try {
+    const r = await api(`/api/projects/${state.current.id}/highlights`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ target_seconds: target, apply_lut: true }),
+    });
+    log(`✓ highlights · ${r.duration.toFixed(1)}s · ${r.segments} bites`, "ok");
+    const a = $("#hl-link");
+    a.href = r.url;
+    a.style.display = "inline-block";
+  } catch (e) {
+    log(`✗ highlights: ${e.message}`, "err");
+  }
+}
+
+async function generateSocialCopy() {
+  if (!state.current) return;
+  const lang = $("#social-lang").value;
+  const btn = $("#social-btn");
+  btn.disabled = true;
+  btn.textContent = "✍ Gerando...";
+  try {
+    const c = await api(`/api/projects/${state.current.id}/social-copy`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ language: lang }),
+    });
+    renderSocialCopy(c);
+    log("✓ social copy", "ok");
+  } catch (e) {
+    log(`✗ social: ${e.message}`, "err");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "✍ Gerar copy";
+  }
+}
+
+function renderSocialCopy(c) {
+  const root = $("#social-copy");
+  root.classList.remove("hidden");
+  const row = (label, text, cls = "") => `
+    <div class="sc-row">
+      <div class="sc-label">${label} <button class="copy-btn" data-copy="${escapeHtml(text)}">copiar</button></div>
+      <div class="sc-text ${cls}">${escapeHtml(text)}</div>
+    </div>`;
+  root.innerHTML =
+    row("Hook", c.hook, "hook") +
+    row("Caption (Reels/TikTok)", c.caption) +
+    row("Caption longa", c.long_caption, "long") +
+    row("YouTube title", c.youtube_title) +
+    row("YouTube description", c.youtube_description, "long") +
+    row("Thumbnail title", c.thumbnail_title) +
+    `<div class="sc-row"><div class="sc-label">Hashtags <button class="copy-btn" data-copy="${escapeHtml(c.hashtags.join(" "))}">copiar</button></div><div class="sc-text">${(c.hashtags || []).map(escapeHtml).join(" ")}</div></div>`;
+  root.querySelectorAll(".copy-btn").forEach(b => {
+    b.onclick = () => {
+      navigator.clipboard.writeText(b.dataset.copy).then(() => toast("copiado", "ok")).catch(() => {});
+    };
+  });
+}
+
+async function refreshTemplates() {
+  const sel = $("#template-pick");
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— template —</option>';
+  try {
+    const list = await api(`/api/templates`);
+    for (const t of list) {
+      const opt = document.createElement("option");
+      opt.value = t.id;
+      opt.textContent = t.label;
+      sel.appendChild(opt);
+    }
+  } catch {}
+}
+
+async function applyTemplate() {
+  if (!state.current) return;
+  const id = $("#template-pick").value;
+  if (!id) return;
+  try {
+    const r = await api(`/api/projects/${state.current.id}/template`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ template_id: id }),
+    });
+    fillBrandForm(r.brand);
+    if ($("#render-aspect")) $("#render-aspect").value = r.aspect;
+    if ($("#render-source")) $("#render-source").value = r.render_source;
+    if ($("#render-chapters")) $("#render-chapters").checked = r.include_chapter_cards;
+    log(`✓ template aplicado: ${r.label}`, "ok");
+    toast(`Template: ${r.label}`, "ok");
+  } catch (e) {
+    log(`✗ template: ${e.message}`, "err");
+  }
+}
+
 async function exportBundle() {
   if (!state.current) return;
   log("▶ bundle");
@@ -959,6 +1214,12 @@ function bind() {
   $("#dup-btn").onclick = duplicateProject;
   $("#speakers-btn").onclick = detectSpeakers;
   $("#thumbs-btn").onclick = chapterThumbs;
+  $("#tx-clear-btn").onclick = txClear;
+  $("#tx-keep-btn").onclick = txKeep;
+  $("#hl-btn").onclick = buildHighlights;
+  $("#social-btn").onclick = generateSocialCopy;
+  $("#apply-template-btn").onclick = applyTemplate;
+  attachVideoSync();
 
   for (const btn of $$("[data-run]")) {
     btn.addEventListener("click", () => runStage(btn.dataset.run));
