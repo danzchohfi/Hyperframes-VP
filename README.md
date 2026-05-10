@@ -46,9 +46,25 @@ cp .env.example .env       # e cole sua chave
 
 A SPA abre em `/`. Os endpoints da API ficam em `/api/*`.
 
-> **Testar do iPad/celular no mesmo Wi-Fi:** rode `HOST=0.0.0.0 ./run.sh` e abra
-> `http://<ip-do-mac>:8765` no iPad. (No Mac, descubra o IP em
-> Configurações → Wi-Fi → Detalhes da rede.)
+### Testar do iPad/celular
+
+**Mesma rede Wi-Fi:** rode `HOST=0.0.0.0 ./run.sh` no Mac e abra
+`http://<ip-do-mac>:8765` no iPad. (Mac → Configurações → Wi-Fi → Detalhes.)
+
+**Redes diferentes (iPad fora de casa, Mac em casa):** use o `tunnel.sh`,
+que cria uma URL pública temporária via Cloudflare:
+
+```bash
+# Terminal 1 no Mac:
+./run.sh
+
+# Terminal 2 no Mac (em paralelo):
+brew install cloudflared      # uma vez
+./tunnel.sh
+```
+
+O `tunnel.sh` imprime uma URL `https://*.trycloudflare.com` — abra ela no Safari
+do iPad. A URL existe enquanto o `tunnel.sh` estiver rodando; fecha no Ctrl-C.
 
 ## Workflow remoto: como puxar melhorias
 
