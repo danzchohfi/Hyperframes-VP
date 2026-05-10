@@ -193,13 +193,15 @@ async function loadSoundbitesAndStory(p) {
   }
 }
 
-function renderSoundbites(analysis) {
+function renderSoundbites(analysis, thumbs) {
   const root = $("#topics-list");
   root.innerHTML = "";
   const byTopic = {};
   for (const sb of analysis.soundbites || []) {
     (byTopic[sb.topic] = byTopic[sb.topic] || []).push(sb);
   }
+  const thumbByBite = {};
+  for (const t of (thumbs || [])) thumbByBite[t.id] = t.url;
   for (const t of analysis.topics || []) {
     const card = document.createElement("div");
     card.className = "topic-card";
@@ -210,22 +212,52 @@ function renderSoundbites(analysis) {
         <span class="topic-summary">${escapeHtml(t.summary || "")}</span>
       </div>
       <div class="bites-list">
-        ${bites.map(b => `
-          <label class="bite">
+        ${bites.map(b => {
+          const thumb = thumbByBite[b.id]
+            ? `<img class="bite-thumb" src="${thumb_safe(thumbByBite[b.id])}" alt="" loading="lazy"/>`
+            : "";
+          return `
+          <label class="bite${thumb ? ' with-thumb' : ''}">
             <input type="checkbox" data-bite="${b.id}" />
+            ${thumb}
             <div class="bite-body">
               <div class="bite-meta">
-                <span>${b.start.toFixed(1)}s – ${b.end.toFixed(1)}s</span>
+                <span class="bite-time" data-seek="${b.start}">${b.start.toFixed(1)}s – ${b.end.toFixed(1)}s</span>
                 <span class="bite-score ${b.score >= 80 ? 'high' : b.score >= 60 ? 'mid' : 'low'}">${b.score}</span>
                 ${b.summary ? `<span>${escapeHtml(b.summary)}</span>` : ""}
               </div>
               <div class="bite-text">${escapeHtml(b.text)}</div>
             </div>
           </label>
-        `).join("")}
+        `;}).join("")}
       </div>
     `;
     root.appendChild(card);
+  }
+  // wire seek-on-click
+  for (const el of root.querySelectorAll(".bite-time")) {
+    el.style.cursor = "pointer";
+    el.addEventListener("click", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const t = parseFloat(el.dataset.seek);
+      const v = $("#preview");
+      if (v && !isNaN(t)) { v.currentTime = t; v.play().catch(() => {}); }
+    });
+  }
+}
+function thumb_safe(u) { return u.replace(/"/g, "%22"); }
+
+async function generateBiteThumbs() {
+  if (!state.current) return;
+  log("▶ bite thumbs");
+  try {
+    const r = await api(`/api/projects/${state.current.id}/bite-thumbnails`, { method: "POST" });
+    log(`✓ ${r.thumbs.length} thumbs`, "ok");
+    // re-render soundbites with thumbs
+    const a = await api(`/api/projects/${state.current.id}/soundbites`);
+    renderSoundbites(a, r.thumbs);
+  } catch (e) {
+    log(`✗ bite-thumbs: ${e.message}`, "err");
   }
 }
 
@@ -1328,6 +1360,11 @@ async function showWaveform() {
   svg.innerHTML = `<text x="6" y="18" fill="rgba(255,255,255,0.55)" font-size="10">carregando...</text>`;
   try {
     const wf = await api(`/api/projects/${state.current.id}/waveform?buckets=600`);
+    let turns = [];
+    try {
+      const sp = await api(`/api/projects/${state.current.id}/files/speakers.json`);
+      turns = (sp && sp.turns) || [];
+    } catch {}
     const W = 1000, H = 60;
     const peaks = wf.peaks || [];
     const N = peaks.length;
@@ -1335,15 +1372,33 @@ async function showWaveform() {
       svg.innerHTML = `<text x="6" y="18" fill="rgba(255,255,255,0.55)" font-size="10">sem áudio</text>`;
       return;
     }
+    const dur = wf.duration || 0;
+    const speakerColors = { A: "rgba(245, 158, 11, 0.85)", B: "rgba(6, 182, 212, 0.85)", C: "rgba(167, 139, 250, 0.85)" };
+    function colorAt(secs) {
+      for (const t of turns) {
+        if (secs >= (t.start || 0) && secs <= (t.end || 0)) {
+          return speakerColors[t.speaker] || "rgba(167, 139, 250, 0.7)";
+        }
+      }
+      return "rgba(167, 139, 250, 0.55)";
+    }
     const bw = W / N;
     const parts = [];
+    // tint background bands by speaker (subtle)
+    for (const t of turns) {
+      const x1 = ((t.start || 0) / Math.max(0.001, dur)) * W;
+      const x2 = ((t.end || 0) / Math.max(0.001, dur)) * W;
+      const c = (speakerColors[t.speaker] || "rgba(167, 139, 250, 0.4)").replace("0.85", "0.10").replace("0.7", "0.10").replace("0.55", "0.08");
+      parts.push(`<rect x="${x1.toFixed(1)}" y="0" width="${Math.max(1, x2 - x1).toFixed(1)}" height="${H}" fill="${c}"/>`);
+    }
     for (let i = 0; i < N; i++) {
       const h = Math.max(1, peaks[i] * (H - 4));
       const x = i * bw;
       const y = (H - h) / 2;
-      parts.push(`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${Math.max(0.6, bw - 0.4).toFixed(1)}" height="${h.toFixed(1)}" fill="rgba(167, 139, 250, 0.7)"/>`);
+      const t_sec = dur * (i / N);
+      parts.push(`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${Math.max(0.6, bw - 0.4).toFixed(1)}" height="${h.toFixed(1)}" fill="${colorAt(t_sec)}"/>`);
     }
-    parts.push(`<text x="6" y="14" fill="rgba(255,255,255,0.55)" font-size="10">waveform · ${wf.duration.toFixed(1)}s</text>`);
+    parts.push(`<text x="6" y="14" fill="rgba(255,255,255,0.55)" font-size="10">waveform · ${dur.toFixed(1)}s${turns.length ? ' · speakers coloridos' : ''}</text>`);
     svg.innerHTML = parts.join("");
   } catch (e) {
     svg.innerHTML = `<text x="6" y="18" fill="rgba(239,68,68,0.7)" font-size="10">${escapeHtml(e.message)}</text>`;
@@ -1686,6 +1741,7 @@ function bind() {
   $("#multicam-sync-btn").onclick = multicamSync;
   $("#podcast-pipeline-btn").onclick = runPodcastPipeline;
   $("#yt-desc-btn").onclick = (e) => { e.preventDefault(); downloadYoutubeDescription(); };
+  $("#bite-thumbs-btn").onclick = generateBiteThumbs;
   $("#thumbs-btn").onclick = chapterThumbs;
   $("#tx-clear-btn").onclick = txClear;
   $("#tx-keep-btn").onclick = txKeep;

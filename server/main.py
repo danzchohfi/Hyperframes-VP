@@ -1257,6 +1257,39 @@ async def make_hook(pid: str, body: HookIn) -> dict[str, Any]:
 
 # ---- peak thumbnail ---------------------------------------------------------
 
+@app.post("/api/projects/{pid}/bite-thumbnails")
+async def bite_thumbnails(pid: str) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    src = pdir / "source.mp4"
+    if not src.exists():
+        raise HTTPException(400, "no source")
+    if not state.has_soundbites:
+        raise HTTPException(400, "extract soundbites first")
+    analysis = storage.read_json(pid, "soundbites.json")
+    bites = analysis.get("soundbites") or []
+    out_dir = pdir / "thumbs"
+    out_dir.mkdir(exist_ok=True)
+    results = []
+    for b in bites:
+        bid = b.get("id") or f"sb{len(results) + 1}"
+        at = max(0.05, float(b.get("start") or 0.0) + 0.3)
+        out = out_dir / f"bite_{bid}.jpg"
+        try:
+            await ff.grab_thumbnail(src, out, at=at, width=480)
+            results.append({
+                "id": bid,
+                "url": f"/api/projects/{pid}/files/thumbs/{out.name}",
+                "at": at,
+                "topic": b.get("topic"),
+                "score": b.get("score"),
+            })
+        except Exception:
+            continue
+    _stage(state, "bite_thumbs", "done", f"{len(results)} bites")
+    return {"thumbs": results}
+
+
 @app.post("/api/projects/{pid}/peak-thumbnail")
 async def peak_thumbnail(pid: str) -> dict[str, Any]:
     state = _load(pid)
