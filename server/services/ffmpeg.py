@@ -208,6 +208,56 @@ async def apply_lut(src: Path, dst: Path, lut: Path) -> None:
     )
 
 
+async def concat_segments_from_multiple(
+    items: list[tuple[Path, float, float]],
+    dst: Path,
+    *,
+    width: int = 1920,
+    height: int = 1080,
+    loudnorm: bool = False,
+) -> None:
+    """Concatenate (path, start, end) tuples from multiple files into one MP4.
+
+    Each segment is scaled to the target frame size with padding so different
+    source aspect ratios don't break the concat.
+    """
+    if not items:
+        raise FFmpegError("no items")
+
+    inputs: list[str] = []
+    for path, s, e in items:
+        inputs += ["-ss", f"{s:.3f}", "-to", f"{e:.3f}", "-i", str(path)]
+
+    parts: list[str] = []
+    for i, _ in enumerate(items):
+        parts.append(
+            f"[{i}:v]scale={width}:{height}:force_original_aspect_ratio=decrease,"
+            f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1[v{i}];"
+            f"[{i}:a:0]aresample=async=1[a{i}]"
+        )
+    chain = ";".join(parts)
+    concat = "".join(f"[v{i}][a{i}]" for i in range(len(items))) + f"concat=n={len(items)}:v=1:a=1[v][a]"
+    full = chain + ";" + concat
+
+    audio_chain_extra = ""
+    audio_map = "[a]"
+    if loudnorm:
+        full += ";[a]loudnorm=I=-14:LRA=11:TP=-1.5[al]"
+        audio_map = "[al]"
+
+    cmd = [
+        "ffmpeg", "-y", *inputs,
+        "-filter_complex", full,
+        "-map", "[v]", "-map", audio_map,
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-b:a", "192k",
+        "-movflags", "+faststart",
+        str(dst),
+    ]
+    await run(cmd)
+
+
 async def apply_audio_filter(src: Path, dst: Path, audio_filter: str) -> None:
     """Re-encode `src` to `dst` applying `audio_filter` to its audio. Video
     is stream-copied."""

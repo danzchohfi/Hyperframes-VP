@@ -54,6 +54,8 @@ class ProjectState(BaseModel):
     has_render: bool = False
     last_export: str | None = None
     angles: list[dict[str, Any]] = Field(default_factory=list)  # [{name, filename, duration, tags?}, ...]
+    mode: str = "single"  # single | vlog | podcast
+    clips: list[dict[str, Any]] = Field(default_factory=list)  # [{id, name, filename, duration, has_transcript, summary?}, ...]
     music_suggestion: dict[str, Any] | None = None
     music_track: dict[str, Any] | None = None
     has_fillers: bool = False

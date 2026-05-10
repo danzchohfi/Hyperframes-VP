@@ -162,6 +162,7 @@ async function loadProject(id) {
   await refreshTemplates();
   await refreshHistory();
   await refreshShortsGallery();
+  await loadClips();
 
   await refreshList();
 }
@@ -298,9 +299,15 @@ function renderAngles(p) {
     const qc = a.quality_check || {};
     const qcBadge = qc.quality && qc.quality !== "ok"
       ? ` <span class="tag warn">⚠ ${qc.quality}</span>` : (qc.quality === "ok" ? ' <span class="tag ok">✓ ok</span>' : '');
+    const fa = a.face_analysis || {};
+    const shotBadge = fa.shot_type
+      ? ` <span class="tag">${escapeHtml(fa.shot_type.replace('_', ' '))}</span>`
+      : '';
+    const subjBadge = fa.subject_change
+      ? ' <span class="tag warn">⇄ sujeito mudou</span>' : '';
     const offset = a.audio_offset != null ? ` · sync ${a.audio_offset > 0 ? "+" : ""}${a.audio_offset.toFixed(2)}s` : '';
     li.innerHTML = `
-      <span class="a-name">${escapeHtml(a.name)}${qcBadge}</span>
+      <span class="a-name">${escapeHtml(a.name)}${qcBadge}${shotBadge}${subjBadge}</span>
       <span class="a-meta">${(a.duration || 0).toFixed(1)}s · ${a.filename}${a.tags?.summary ? ' · ' + escapeHtml(a.tags.summary) : ''}${offset}</span>
       ${tags.length ? `<span class="a-tags">${tags.slice(0, 5).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join("")}</span>` : ""}
       <span class="a-actions">
@@ -408,6 +415,17 @@ function attachEventStream(pid) {
     } else if (data.type === "log") {
       log(data.message, data.level === "error" ? "err" : data.level === "ok" ? "ok" : "");
     } else if (data.type === "job") {
+      // vlog batch transcribe
+      if (state.vlogTranscribeJobId && data.job_id === state.vlogTranscribeJobId) {
+        if (data.status === "done") {
+          state.vlogTranscribeJobId = null;
+          toast("Transcrição em lote pronta", "ok");
+          loadClips();
+        } else if (data.status === "error" || data.status === "cancelled") {
+          state.vlogTranscribeJobId = null;
+          toast(`Transcrição em lote ${data.status}`, "error");
+        }
+      }
       // shorts batch UI
       if (state.shortsJobId && data.job_id === state.shortsJobId) {
         const btn = $("#shorts-btn");
@@ -1362,6 +1380,166 @@ async function downloadYoutubeDescription() {
   }
 }
 
+// ---- Vlog mode -------------------------------------------------------------
+
+async function uploadClips(files) {
+  if (!state.current) return;
+  for (const f of files) {
+    const fd = new FormData();
+    fd.append("file", f);
+    fd.append("name", f.name);
+    log(`▶ uploading clip ${f.name}`);
+    try {
+      const r = await api(`/api/projects/${state.current.id}/clips`, { method: "POST", body: fd });
+      log(`✓ clip ${r.name} (${r.duration.toFixed(1)}s)`, "ok");
+    } catch (e) {
+      log(`✗ clip upload: ${e.message}`, "err");
+    }
+  }
+  await loadClips();
+}
+
+async function loadClips() {
+  if (!state.current) return;
+  try {
+    const clips = await api(`/api/projects/${state.current.id}/clips`);
+    const root = $("#clips-list");
+    if (!root) return;
+    root.innerHTML = "";
+    for (const c of clips) {
+      const li = document.createElement("li");
+      li.innerHTML = `
+        <span class="a-name">${escapeHtml(c.name)}${c.has_transcript ? ' <span class="tag ok">✓ txt</span>' : ' <span class="tag warn">— sem txt</span>'}</span>
+        <span class="a-meta">${c.duration.toFixed(1)}s${c.transcript_text ? ' · ' + escapeHtml(c.transcript_text.slice(0, 60)) : ''}</span>
+        <span class="a-actions">
+          <button class="btn-ghost c-txn" data-cid="${c.id}">Transcrever</button>
+          <button class="a-del" data-cid="${c.id}">×</button>
+        </span>
+      `;
+      li.querySelector(".c-txn").onclick = async () => {
+        try {
+          await api(`/api/projects/${state.current.id}/clips/${c.id}/transcribe`, { method: "POST" });
+          await loadClips();
+        } catch (e) { log(`✗ transcribe: ${e.message}`, "err"); }
+      };
+      li.querySelector(".a-del").onclick = async () => {
+        if (!confirm(`Excluir ${c.name}?`)) return;
+        await api(`/api/projects/${state.current.id}/clips/${c.id}`, { method: "DELETE" });
+        await loadClips();
+      };
+      root.appendChild(li);
+    }
+  } catch {}
+}
+
+async function vlogTranscribeAll() {
+  if (!state.current) return;
+  log("▶ transcribe all clips");
+  try {
+    const r = await api(`/api/projects/${state.current.id}/clips/transcribe-all`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    state.vlogTranscribeJobId = r.job_id;
+    toast(`Transcrição em lote rodando…`, "ok");
+  } catch (e) {
+    log(`✗ transcribe-all: ${e.message}`, "err");
+  }
+}
+
+async function vlogProposeNarratives() {
+  if (!state.current) return;
+  const btn = $("#vlog-narratives-btn");
+  btn.disabled = true;
+  btn.textContent = "🧭 pensando...";
+  log("▶ vlog narratives");
+  try {
+    const r = await api(`/api/projects/${state.current.id}/vlog/narratives`, { method: "POST" });
+    renderNarratives(r.narratives || []);
+    log(`✓ ${r.narratives?.length || 0} narrativas propostas`, "ok");
+  } catch (e) {
+    log(`✗ narratives: ${e.message}`, "err");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "🧭 Sugerir narrativas";
+  }
+}
+
+function renderNarratives(narratives) {
+  const root = $("#narratives-list");
+  root.innerHTML = "";
+  for (const n of narratives) {
+    const card = document.createElement("div");
+    card.className = "narrative-card";
+    const segs = (n.sequence || []).map(s =>
+      `<span class="seg">${escapeHtml(s.clip_id.slice(-6))} ${s.start.toFixed(1)}-${s.end.toFixed(1)}s<span class="reason">${escapeHtml(s.reason || "")}</span></span>`
+    ).join("");
+    card.innerHTML = `
+      <div class="nh">
+        <span class="name">${escapeHtml(n.name)}</span>
+        <span class="genre">${escapeHtml(n.genre || "")}</span>
+        <span class="duration">~${(n.estimated_duration || 0).toFixed(1)}s</span>
+      </div>
+      <div class="logline">${escapeHtml(n.logline || "")}</div>
+      <div class="seq">${segs}</div>
+      <div class="actions">
+        <select class="inline-select n-aspect"><option value="9:16">9:16</option><option value="16:9">16:9</option><option value="1:1">1:1</option></select>
+        <button class="btn-primary n-assemble" data-id="${n.id}">🎬 Montar este vlog</button>
+        <a class="btn-ghost n-link" href="#" download style="display:none">⬇ vlog.mp4</a>
+      </div>
+    `;
+    card.querySelector(".n-assemble").onclick = async () => {
+      const aspect = card.querySelector(".n-aspect").value;
+      log(`▶ assemble narrative ${n.id}`);
+      try {
+        const r = await api(`/api/projects/${state.current.id}/vlog/assemble`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ narrative_id: n.id, aspect, loudnorm: true }),
+        });
+        log(`✓ vlog · ${r.bytes} bytes`, "ok");
+        const a = card.querySelector(".n-link");
+        a.href = r.url; a.style.display = "inline-block"; a.textContent = `⬇ ${r.export}`;
+        await refreshHistory();
+      } catch (e) {
+        log(`✗ assemble: ${e.message}`, "err");
+      }
+    };
+    root.appendChild(card);
+  }
+}
+
+async function multicamPick() {
+  if (!state.current) return;
+  log("▶ multicam pick");
+  try {
+    const r = await api(`/api/projects/${state.current.id}/multicam-pick`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ intervals: "turns", min_dur: 1.4 }),
+    });
+    log(`✓ ${r.cuts.length} cam cuts (intervalos: ${r.intervals})`, "ok");
+    toast(`Câmera escolhida pra ${r.cuts.length} segmentos`, "ok");
+  } catch (e) {
+    log(`✗ multicam-pick: ${e.message}`, "err");
+  }
+}
+
+async function multicamRender() {
+  if (!state.current) return;
+  log("▶ multicam render");
+  try {
+    const r = await api(`/api/projects/${state.current.id}/multicam-render`, { method: "POST" });
+    log(`✓ multicam ${(r.bytes / 1024).toFixed(0)} KB`, "ok");
+    const a = $("#multicam-link");
+    a.href = r.url; a.style.display = "inline-block"; a.textContent = `⬇ ${r.export}`;
+    await refreshHistory();
+  } catch (e) {
+    log(`✗ multicam render: ${e.message}`, "err");
+  }
+}
+
 async function multicamSync() {
   if (!state.current) return;
   log("▶ multicam sync");
@@ -1803,6 +1981,20 @@ function bind() {
   $("#yt-desc-btn").onclick = (e) => { e.preventDefault(); downloadYoutubeDescription(); };
   $("#bite-thumbs-btn").onclick = generateBiteThumbs;
   $("#shorts-btn").onclick = generateShorts;
+  $("#vlog-transcribe-all").onclick = vlogTranscribeAll;
+  $("#vlog-narratives-btn").onclick = vlogProposeNarratives;
+  $("#multicam-pick-btn").onclick = multicamPick;
+  $("#multicam-render-btn").onclick = multicamRender;
+  const ci = $("#clip-input");
+  if (ci) {
+    $("#clip-zone").addEventListener("click", () => ci.click());
+    ci.addEventListener("change", () => ci.files.length && uploadClips(Array.from(ci.files)));
+    $("#clip-zone").addEventListener("dragover", (e) => e.preventDefault());
+    $("#clip-zone").addEventListener("drop", (e) => {
+      e.preventDefault();
+      if (e.dataTransfer?.files?.length) uploadClips(Array.from(e.dataTransfer.files));
+    });
+  }
   $("#thumbs-btn").onclick = chapterThumbs;
   $("#tx-clear-btn").onclick = txClear;
   $("#tx-keep-btn").onclick = txKeep;

@@ -212,6 +212,23 @@
             <div id="pipeline-log" class="log"></div>
           </section>
 
+          <section class="card" id="vlog-card">
+            <h3>1b · Vlog mode (vários clipes)</h3>
+            <p class="card-help">Em vez de 1 vídeo único, você sobe N clipes curtos. O sistema transcreve, descobre narrativas possíveis e monta um vlog do estilo que você escolher.</p>
+            <div class="actions">
+              <label class="dropzone small" id="clip-zone" style="flex:1">
+                <input id="clip-input" type="file" accept="video/*" hidden multiple />
+                <div class="dz-icon">📹</div>
+                <div class="dz-title">Arrastar clipes</div>
+                <div class="dz-sub">vários ao mesmo tempo · MP4 / MOV</div>
+              </label>
+              <button id="vlog-transcribe-all" class="btn-ghost">📝 Transcrever todos</button>
+              <button id="vlog-narratives-btn" class="btn-primary">🧭 Sugerir narrativas</button>
+            </div>
+            <ul id="clips-list" class="angle-list"></ul>
+            <div id="narratives-list" class="narratives-list"></div>
+          </section>
+
           <section class="card" id="podcast-card">
             <h3>4a · Podcast — pipeline 1-click</h3>
             <p class="card-help">Roda transcrição → diarização → capítulos → cortes de silêncio → muletas → LUT → loudnorm → nivelamento por speaker → social copy num único job.</p>
@@ -306,6 +323,9 @@
             </div>
             <div class="actions">
               <button id="place-broll-btn" class="btn-primary">🎯 Posicionar B-roll automaticamente</button>
+              <button id="multicam-pick-btn" class="btn-ghost">🎬 Escolher câmera por turno</button>
+              <button id="multicam-render-btn" class="btn-ghost">🎞 Renderizar multicam</button>
+              <a id="multicam-link" class="btn-ghost" href="#" download style="display:none">⬇ multicam.mp4</a>
               <span id="broll-place-status" class="status muted"></span>
             </div>
             <p class="card-help">Roda depois de extrair soundbites e taggear ângulos. A IA escolhe qual ângulo cobre cada bite.</p>

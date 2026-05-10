@@ -63,6 +63,10 @@ from .services import audio_sync as audio_sync_svc
 from .services import jobs as jobs_svc
 from .services import speaker_levels as levels_svc
 from .services import quality as quality_svc
+from .services import face_analysis as face_svc
+from .services import camera_picker as cam_picker_svc
+from .services import multicam_render as mc_render_svc
+from .services import vlog as vlog_svc
 from .services import podcast_pipeline as podcast_pipeline_svc
 from .services import shorts as shorts_svc
 from .services import yt_thumbnail as yt_thumb_svc
@@ -653,6 +657,11 @@ async def add_angle(pid: str, name: str = Form("Angle"), file: UploadFile = File
     # auto-assess quality on upload (fast, ~50ms)
     try:
         angle_record["quality_check"] = quality_svc.assess(norm)
+    except Exception:
+        pass
+    # auto-run face analysis (cheap; ~100-300ms per clip)
+    try:
+        angle_record["face_analysis"] = face_svc.analyze(norm, max_frames=24)
     except Exception:
         pass
     state.angles.append(angle_record)
@@ -1927,6 +1936,402 @@ async def roughcut_async(pid: str, body: RoughCutIn) -> dict[str, Any]:
 
     job_id = await jobs_svc.manager.submit(pid, "roughcut", _run)
     return {"job_id": job_id, "status": "pending"}
+
+
+# ---- face / subject analysis per angle --------------------------------------
+
+@app.post("/api/projects/{pid}/angles/{idx}/analyze-faces")
+async def angle_face_analysis(pid: str, idx: int) -> dict[str, Any]:
+    state = _load(pid)
+    if idx < 0 or idx >= len(state.angles):
+        raise HTTPException(404, "angle not found")
+    pdir = storage.project_dir(pid)
+    angle = state.angles[idx]
+    src = pdir / "angles" / angle["filename"]
+    if not src.exists():
+        raise HTTPException(404, "file missing")
+    try:
+        fa = face_svc.analyze(src, max_frames=30)
+    except Exception as e:
+        raise HTTPException(500, str(e))
+    angle["face_analysis"] = fa
+    storage.save(state)
+    sc = "⚠ subject change" if fa.get("subject_change") else "ok"
+    _stage(state, "face_analysis", "done", f"{angle['name']} · {fa['shot_type']} · {sc}")
+    return angle
+
+
+@app.post("/api/projects/{pid}/source/analyze-faces")
+async def source_face_analysis(pid: str) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    src = pdir / "source.mp4"
+    if not src.exists():
+        raise HTTPException(400, "no source")
+    try:
+        fa = face_svc.analyze(src, max_frames=30)
+    except Exception as e:
+        raise HTTPException(500, str(e))
+    storage.write_json(pid, "source_face.json", fa)
+    _stage(state, "face_analysis", "done", f"source · {fa['shot_type']}")
+    return fa
+
+
+# ---- multicam camera-decision per interval ----------------------------------
+
+class CameraPickIn(BaseModel):
+    intervals: str = "turns"     # turns | bites
+    min_dur: float = 1.4
+
+
+@app.post("/api/projects/{pid}/multicam-pick")
+async def multicam_pick(pid: str, body: CameraPickIn) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    if not state.angles:
+        raise HTTPException(400, "no angles; using source only")
+
+    # Build the angle pool: source = index 0, then user angles
+    src_face = (
+        storage.read_json(pid, "source_face.json")
+        if (pdir / "source_face.json").exists()
+        else None
+    )
+    angle_pool: list[dict] = [{
+        "name": "source",
+        "face_analysis": src_face,
+        "quality_check": None,
+    }]
+    for a in state.angles:
+        angle_pool.append({
+            "name": a.get("name"),
+            "face_analysis": a.get("face_analysis"),
+            "quality_check": a.get("quality_check"),
+        })
+
+    intervals: list[tuple[float, float]] = []
+    if body.intervals == "turns":
+        sp_path = pdir / "speakers.json"
+        if not sp_path.exists():
+            raise HTTPException(400, "run /speakers first")
+        turns = (storage.read_json(pid, "speakers.json") or {}).get("turns") or []
+        intervals = [(float(t["start"]), float(t["end"])) for t in turns]
+    elif body.intervals == "bites":
+        if not state.has_soundbites:
+            raise HTTPException(400, "extract soundbites first")
+        bites = storage.read_json(pid, "soundbites.json").get("soundbites") or []
+        intervals = [(float(b["start"]), float(b["end"])) for b in bites]
+    else:
+        raise HTTPException(400, "intervals must be 'turns' or 'bites'")
+
+    if not intervals:
+        raise HTTPException(400, "no intervals to score")
+
+    raw = cam_picker_svc.pick_cameras(angle_pool, intervals, min_dur=body.min_dur)
+    merged = cam_picker_svc.merge_adjacent(raw)
+    storage.write_json(pid, "camera_plan.json", {
+        "intervals": body.intervals,
+        "angles": [a["name"] for a in angle_pool],
+        "cuts": merged,
+    })
+    _stage(state, "camera_pick", "done",
+           f"{len(intervals)} → {len(merged)} cam cuts · angles={len(angle_pool)}")
+    return {
+        "angles": [a["name"] for a in angle_pool],
+        "cuts": merged,
+        "intervals": len(intervals),
+    }
+
+
+@app.post("/api/projects/{pid}/multicam-render")
+async def multicam_render_endpoint(pid: str) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    src = pdir / "source.mp4"
+    if not src.exists():
+        raise HTTPException(400, "no source")
+    plan_path = pdir / "camera_plan.json"
+    if not plan_path.exists():
+        raise HTTPException(400, "run /multicam-pick first")
+    plan = storage.read_json(pid, "camera_plan.json")
+
+    # Angle path pool: index 0 = source, then user angles
+    angles_dir = pdir / "angles"
+    angle_paths = [src]
+    angle_offsets: list[float] = [0.0]
+    for a in state.angles:
+        angle_paths.append(angles_dir / a["filename"])
+        angle_offsets.append(float(a.get("audio_offset") or 0.0))
+
+    out = pdir / "exports" / f"{state.name.replace(' ', '_')}-multicam.mp4"
+    out.parent.mkdir(exist_ok=True)
+    _stage(state, "multicam_render", "running", f"{len(plan['cuts'])} cuts")
+    try:
+        await mc_render_svc.render(
+            project_dir=pdir,
+            source=src,
+            angle_paths=angle_paths,
+            angle_offsets=angle_offsets,
+            plan=plan["cuts"],
+            out=out,
+        )
+    except Exception as e:
+        _stage(state, "multicam_render", "error", str(e))
+        raise HTTPException(500, str(e))
+
+    _stage(state, "multicam_render", "done", f"{out.name} · {out.stat().st_size // 1024} KB")
+    storage.append_render_history(pid, name=out.name, kind="multicam",
+                                  url=f"/api/projects/{pid}/exports/{out.name}",
+                                  bytes=out.stat().st_size,
+                                  extra={"cuts": len(plan["cuts"])})
+    return {
+        "export": out.name,
+        "url": f"/api/projects/{pid}/exports/{out.name}",
+        "bytes": out.stat().st_size,
+        "cuts": len(plan["cuts"]),
+    }
+
+
+# ---- Vlog mode --------------------------------------------------------------
+
+class VlogModeIn(BaseModel):
+    mode: str = "vlog"  # vlog | single | podcast
+
+
+@app.post("/api/projects/{pid}/mode")
+async def set_mode(pid: str, body: VlogModeIn) -> dict[str, Any]:
+    state = _load(pid)
+    if body.mode not in ("single", "vlog", "podcast"):
+        raise HTTPException(400, "mode must be single | vlog | podcast")
+    state.mode = body.mode
+    storage.save(state)
+    _stage(state, "mode", "done", body.mode)
+    return state.model_dump()
+
+
+@app.post("/api/projects/{pid}/clips")
+async def upload_clip(
+    pid: str,
+    file: UploadFile = File(...),
+    name: str = Form(""),
+) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    clips_dir = pdir / "clips"
+    clips_dir.mkdir(exist_ok=True)
+
+    cid = vlog_svc.new_clip_id()
+    ext = Path(file.filename or "clip.mp4").suffix or ".mp4"
+    raw = clips_dir / f"{cid}_raw{ext}"
+    norm = clips_dir / f"{cid}.mp4"
+    async with aiofiles.open(raw, "wb") as out:
+        while chunk := await file.read(1024 * 1024):
+            await out.write(chunk)
+
+    try:
+        await ff.normalize(raw, norm)
+        dur = await ff.duration(norm)
+    except ff.FFmpegError as e:
+        raise HTTPException(400, f"ffmpeg failed: {e}")
+    raw.unlink(missing_ok=True)
+
+    clip_record = {
+        "id": cid,
+        "name": name or file.filename or cid,
+        "filename": norm.name,
+        "duration": dur,
+        "has_transcript": False,
+    }
+    state.clips.append(clip_record)
+    if state.mode == "single":
+        state.mode = "vlog"
+    storage.save(state)
+    _stage(state, "clip_upload", "done", f"{clip_record['name']} ({dur:.1f}s)")
+    return clip_record
+
+
+@app.get("/api/projects/{pid}/clips")
+async def list_clips(pid: str) -> list[dict[str, Any]]:
+    return _load(pid).clips
+
+
+@app.delete("/api/projects/{pid}/clips/{cid}")
+async def delete_clip(pid: str, cid: str) -> dict[str, str]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    clip = next((c for c in state.clips if c["id"] == cid), None)
+    if not clip:
+        raise HTTPException(404, "clip not found")
+    (pdir / "clips" / clip["filename"]).unlink(missing_ok=True)
+    (pdir / "clips" / f"{cid}_transcript.json").unlink(missing_ok=True)
+    state.clips = [c for c in state.clips if c["id"] != cid]
+    storage.save(state)
+    return {"status": "deleted"}
+
+
+@app.get("/api/projects/{pid}/files/clips/{name}")
+async def serve_clip(pid: str, name: str):
+    pdir = storage.project_dir(pid)
+    fp = (pdir / "clips" / name).resolve()
+    if not fp.exists() or (pdir / "clips").resolve() not in fp.parents:
+        raise HTTPException(404)
+    return FileResponse(fp)
+
+
+class ClipTranscribeIn(BaseModel):
+    language: str | None = None
+
+
+@app.post("/api/projects/{pid}/clips/{cid}/transcribe")
+async def transcribe_clip(pid: str, cid: str, body: ClipTranscribeIn | None = None) -> dict[str, Any]:
+    body = body or ClipTranscribeIn()
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    clip = next((c for c in state.clips if c["id"] == cid), None)
+    if not clip:
+        raise HTTPException(404, "clip not found")
+    src = pdir / "clips" / clip["filename"]
+    if not src.exists():
+        raise HTTPException(404, "file missing")
+    _stage(state, "clip_transcribe", "running", clip["name"])
+    try:
+        result = await whisper.transcribe(src, language=body.language)
+    except Exception as e:
+        _stage(state, "clip_transcribe", "error", str(e))
+        raise HTTPException(502, str(e))
+    (pdir / "clips" / f"{cid}_transcript.json").write_text(
+        _json.dumps(result, ensure_ascii=False, indent=2)
+    )
+    clip["has_transcript"] = True
+    clip["transcript_text"] = (result.get("text") or "")[:300]
+    clip["language"] = result.get("language")
+    storage.save(state)
+    _stage(state, "clip_transcribe", "done",
+           f"{clip['name']} · {len(result.get('words') or [])} words")
+    return {"clip_id": cid, "words": len(result.get("words") or []),
+            "language": result.get("language")}
+
+
+@app.post("/api/projects/{pid}/clips/transcribe-all")
+async def transcribe_all_clips(pid: str, body: ClipTranscribeIn | None = None) -> dict[str, Any]:
+    body = body or ClipTranscribeIn()
+    state = _load(pid)
+
+    async def _run(ctx: jobs_svc.JobContext) -> dict[str, Any]:
+        pending = [c for c in state.clips if not c.get("has_transcript")]
+        if not pending:
+            return {"transcribed": 0, "skipped": len(state.clips)}
+        out = 0
+        for i, clip in enumerate(pending):
+            ctx.progress(i / len(pending), f"transcribing {clip['name']}")
+            try:
+                await transcribe_clip(pid, clip["id"], body)
+                out += 1
+            except Exception as e:
+                ctx.log(f"clip {clip['id']} failed: {e}", level="error")
+        ctx.progress(1.0, "all transcribed")
+        return {"transcribed": out, "total": len(state.clips)}
+
+    job_id = await jobs_svc.manager.submit(pid, "vlog_transcribe_all", _run)
+    return {"job_id": job_id, "status": "pending"}
+
+
+@app.post("/api/projects/{pid}/vlog/narratives")
+async def vlog_narratives(pid: str) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    if not state.clips:
+        raise HTTPException(400, "upload clips first")
+
+    payload = []
+    for c in state.clips:
+        if not c.get("has_transcript"):
+            continue
+        t_path = pdir / "clips" / f"{c['id']}_transcript.json"
+        if not t_path.exists():
+            continue
+        try:
+            t = _json.loads(t_path.read_text())
+        except Exception:
+            continue
+        payload.append({
+            "id": c["id"],
+            "name": c.get("name"),
+            "duration": c.get("duration") or 0.0,
+            "transcript_text": (t.get("text") or "")[:1500],
+            "segments": t.get("segments") or [],
+        })
+    if not payload:
+        raise HTTPException(400, "transcribe at least one clip first")
+
+    _stage(state, "vlog_narratives", "running", f"{len(payload)} clips")
+    try:
+        result = await vlog_svc.propose(payload, target_count=4)
+    except Exception as e:
+        _stage(state, "vlog_narratives", "error", str(e))
+        raise HTTPException(502, str(e))
+    storage.write_json(pid, "vlog_narratives.json", result.model_dump())
+    _stage(state, "vlog_narratives", "done",
+           f"{len(result.narratives)} narratives proposed")
+    return result.model_dump()
+
+
+class VlogAssembleIn(BaseModel):
+    narrative_id: str
+    aspect: str = "9:16"
+    loudnorm: bool = True
+
+
+@app.post("/api/projects/{pid}/vlog/assemble")
+async def vlog_assemble(pid: str, body: VlogAssembleIn) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    if not state.clips:
+        raise HTTPException(400, "no clips")
+    npath = pdir / "vlog_narratives.json"
+    if not npath.exists():
+        raise HTTPException(400, "run /vlog/narratives first")
+    narrative_set = vlog_svc.NarrativeSet.model_validate(storage.read_json(pid, "vlog_narratives.json"))
+    narrative = next((n for n in narrative_set.narratives if n.id == body.narrative_id), None)
+    if not narrative:
+        raise HTTPException(404, "narrative not found")
+
+    plan = vlog_svc.assembly_plan(narrative, state.clips)
+    if not plan:
+        raise HTTPException(400, "narrative didn't resolve to any clips")
+
+    # Build (path, start, end) tuples for ffmpeg
+    items: list[tuple[Path, float, float]] = []
+    for p in plan:
+        items.append((pdir / "clips" / p["filename"], float(p["start"]), float(p["end"])))
+
+    # Aspect dimensions
+    presets = {"9:16": (1080, 1920), "16:9": (1920, 1080), "1:1": (1080, 1080)}
+    w, h = presets.get(body.aspect, (1920, 1080))
+
+    out = pdir / "exports" / f"{state.name.replace(' ', '_')}-vlog-{narrative.id}.mp4"
+    out.parent.mkdir(exist_ok=True)
+    _stage(state, "vlog_assemble", "running", f"{len(items)} segments")
+    try:
+        await ff.concat_segments_from_multiple(items, out, width=w, height=h, loudnorm=body.loudnorm)
+    except Exception as e:
+        _stage(state, "vlog_assemble", "error", str(e))
+        raise HTTPException(500, str(e))
+
+    _stage(state, "vlog_assemble", "done", f"{out.name} · {out.stat().st_size // 1024} KB")
+    storage.append_render_history(pid, name=out.name, kind="vlog",
+                                  url=f"/api/projects/{pid}/exports/{out.name}",
+                                  bytes=out.stat().st_size,
+                                  extra={"narrative": narrative.name,
+                                         "genre": narrative.genre,
+                                         "clips": len(items)})
+    return {
+        "narrative": narrative.model_dump(),
+        "plan": plan,
+        "export": out.name,
+        "url": f"/api/projects/{pid}/exports/{out.name}",
+        "bytes": out.stat().st_size,
+    }
 
 
 # ---- frame-quality assessment -----------------------------------------------
