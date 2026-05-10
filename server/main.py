@@ -2265,12 +2265,24 @@ async def upload_clip(
         raise HTTPException(400, f"ffmpeg failed: {e}")
     raw.unlink(missing_ok=True)
 
+    # Quick thumbnail at 0.5s (or middle, if shorter)
+    thumb_dir = pdir / "clips" / "thumbs"
+    thumb_dir.mkdir(exist_ok=True)
+    thumb_at = min(0.5, dur / 2)
+    thumb_path = thumb_dir / f"{cid}.jpg"
+    try:
+        await ff.grab_thumbnail(norm, thumb_path, at=thumb_at, width=480)
+        thumb_url = f"/api/projects/{pid}/files/clips/thumbs/{thumb_path.name}"
+    except Exception:
+        thumb_url = None
+
     clip_record = {
         "id": cid,
         "name": name or file.filename or cid,
         "filename": norm.name,
         "duration": dur,
         "has_transcript": False,
+        "thumbnail": thumb_url,
     }
     state.clips.append(clip_record)
     if state.mode == "single":
@@ -2304,6 +2316,15 @@ async def serve_clip(pid: str, name: str):
     pdir = storage.project_dir(pid)
     fp = (pdir / "clips" / name).resolve()
     if not fp.exists() or (pdir / "clips").resolve() not in fp.parents:
+        raise HTTPException(404)
+    return FileResponse(fp)
+
+
+@app.get("/api/projects/{pid}/files/clips/thumbs/{name}")
+async def serve_clip_thumb(pid: str, name: str):
+    pdir = storage.project_dir(pid)
+    fp = (pdir / "clips" / "thumbs" / name).resolve()
+    if not fp.exists() or (pdir / "clips" / "thumbs").resolve() not in fp.parents:
         raise HTTPException(404)
     return FileResponse(fp)
 
@@ -2430,6 +2451,52 @@ async def vlog_narratives(pid: str) -> dict[str, Any]:
     _stage(state, "vlog_narratives", "done",
            f"{len(result.narratives)} narratives proposed")
     return result.model_dump()
+
+
+class NarrativeEditIn(BaseModel):
+    name: str | None = None
+    genre: str | None = None
+    logline: str | None = None
+    sequence: list[dict[str, Any]] | None = None  # [{clip_id, start, end, reason}, ...]
+
+
+@app.put("/api/projects/{pid}/vlog/narratives/{nid}")
+async def edit_narrative(pid: str, nid: str, body: NarrativeEditIn) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    npath = pdir / "vlog_narratives.json"
+    if not npath.exists():
+        raise HTTPException(400, "no narratives")
+    data = storage.read_json(pid, "vlog_narratives.json")
+    target = next((n for n in data["narratives"] if n["id"] == nid), None)
+    if not target:
+        raise HTTPException(404, "narrative not found")
+    if body.name is not None:
+        target["name"] = body.name
+    if body.genre is not None:
+        target["genre"] = body.genre
+    if body.logline is not None:
+        target["logline"] = body.logline
+    if body.sequence is not None:
+        # Validate clip_ids
+        valid_ids = {c["id"] for c in state.clips}
+        new_seq = []
+        for s in body.sequence:
+            cid = str(s.get("clip_id") or "")
+            if cid not in valid_ids:
+                continue
+            new_seq.append({
+                "clip_id": cid,
+                "start": float(s.get("start") or 0.0),
+                "end": float(s.get("end") or 0.0),
+                "text": str(s.get("text") or ""),
+                "reason": str(s.get("reason") or ""),
+            })
+        target["sequence"] = new_seq
+        target["estimated_duration"] = round(sum(b["end"] - b["start"] for b in new_seq), 2)
+    storage.write_json(pid, "vlog_narratives.json", data)
+    _stage(state, "vlog_narrative_edit", "done", target["name"])
+    return target
 
 
 class VlogAssembleIn(BaseModel):

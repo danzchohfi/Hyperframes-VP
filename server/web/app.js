@@ -1430,8 +1430,15 @@ async function loadClips() {
     root.innerHTML = "";
     for (const c of clips) {
       const li = document.createElement("li");
+      const thumb = c.thumbnail
+        ? `<img class="bite-thumb" src="${escapeHtml(c.thumbnail)}" alt="" loading="lazy"/>`
+        : "";
+      const peopleBadges = (c.face_clusters || []).map(p =>
+        `<span class="tag">👤 ${escapeHtml(p)}</span>`
+      ).join(" ");
       li.innerHTML = `
-        <span class="a-name">${escapeHtml(c.name)}${c.has_transcript ? ' <span class="tag ok">✓ txt</span>' : ' <span class="tag warn">— sem txt</span>'}</span>
+        ${thumb}
+        <span class="a-name">${escapeHtml(c.name)}${c.has_transcript ? ' <span class="tag ok">✓ txt</span>' : ' <span class="tag warn">— sem txt</span>'} ${peopleBadges}</span>
         <span class="a-meta">${c.duration.toFixed(1)}s${c.transcript_text ? ' · ' + escapeHtml(c.transcript_text.slice(0, 60)) : ''}</span>
         <span class="a-actions">
           <button class="btn-ghost c-txn" data-cid="${c.id}">Transcrever</button>
