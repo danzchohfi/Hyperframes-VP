@@ -46,6 +46,28 @@ cp .env.example .env       # e cole sua chave
 
 A SPA abre em `/`. Os endpoints da API ficam em `/api/*`.
 
+> **Testar do iPad/celular no mesmo Wi-Fi:** rode `HOST=0.0.0.0 ./run.sh` e abra
+> `http://<ip-do-mac>:8765` no iPad. (No Mac, descubra o IP em
+> Configurações → Wi-Fi → Detalhes da rede.)
+
+## Workflow remoto: como puxar melhorias
+
+O ciclo é: você roda local, eu (Claude) commito melhorias na branch
+`claude/setup-hyperframes-DRZSw`, você puxa quando quiser.
+
+```bash
+./update.sh    # git pull --ff-only + reinstala deps
+./run.sh       # bounce o server (uvicorn já tem --reload pra hot-reload do código)
+```
+
+`update.sh` aborta se você tiver mudanças locais não commitadas — pra não pisar
+em código que você quer guardar. Use `git stash` ou `git status` se isso acontecer.
+
+Seus dados em `server/projects/` e o `.env` ficam intocados (gitignored).
+
+**Para pedir mudanças**, é só me mandar a mensagem aqui. Eu commito e dou push,
+você roda `./update.sh`.
+
 ## Pipeline (chamadas equivalentes via curl)
 
 ```bash
