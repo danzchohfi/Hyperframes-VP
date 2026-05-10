@@ -65,6 +65,8 @@ from .services import speaker_levels as levels_svc
 from .services import quality as quality_svc
 from .services import podcast_pipeline as podcast_pipeline_svc
 from .services import shorts as shorts_svc
+from .services import yt_thumbnail as yt_thumb_svc
+from .services import repetitions as repetitions_svc
 from .services.events import bus, emit_stage, emit_log, emit_state_changed
 from .services import captions as captions_svc
 from .services.brand import BrandBook
@@ -850,6 +852,74 @@ async def cut_fillers(pid: str, body: FillersIn) -> dict[str, Any]:
     return {"count": len(ranges), "duration": fillers_svc.stats(ranges)["duration"]}
 
 
+# ---- repetitive phrase removal ----------------------------------------------
+
+class RepetitionsIn(BaseModel):
+    immediate: bool = True
+    ngram: bool = True
+    ngram_size: int = 4
+    window_seconds: float = 12.0
+    pad: float = 0.04
+
+
+@app.post("/api/projects/{pid}/cut-repetitions")
+async def cut_repetitions(pid: str, body: RepetitionsIn) -> dict[str, Any]:
+    state = _load(pid)
+    if not state.has_transcript:
+        raise HTTPException(400, "transcribe first")
+    transcript = storage.read_json(pid, "transcript.json")
+    words = transcript.get("words") or []
+    if not words:
+        raise HTTPException(400, "transcript has no word timings")
+
+    immediate = repetitions_svc.immediate_repetitions(words, pad=body.pad) if body.immediate else []
+    ngram = repetitions_svc.ngram_repetitions(words, n=body.ngram_size,
+                                              window_seconds=body.window_seconds,
+                                              pad=body.pad) if body.ngram else []
+    combined = sorted(immediate + ngram)
+    merged: list[tuple[float, float]] = []
+    for s, e in combined:
+        if merged and s <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], e))
+        else:
+            merged.append((s, e))
+
+    # Append to fillers.json so /apply picks up automatically.
+    existing_filler_ranges = []
+    fpath = storage.project_dir(pid) / "fillers.json"
+    if fpath.exists():
+        existing = storage.read_json(pid, "fillers.json")
+        existing_filler_ranges = [(r["start"], r["end"]) for r in existing.get("ranges", [])]
+    all_ranges = sorted(existing_filler_ranges + merged)
+    final: list[tuple[float, float]] = []
+    for s, e in all_ranges:
+        if final and s <= final[-1][1]:
+            final[-1] = (final[-1][0], max(final[-1][1], e))
+        else:
+            final.append((s, e))
+
+    storage.write_json(pid, "fillers.json", {
+        "language": (storage.read_json(pid, "fillers.json").get("language")
+                     if fpath.exists() else transcript.get("language") or "auto"),
+        "ranges": [{"start": s, "end": e} for s, e in final],
+        "stats": repetitions_svc.stats(final),
+        "repetitions": {
+            "immediate": repetitions_svc.stats(immediate),
+            "ngram": repetitions_svc.stats(ngram),
+        },
+    })
+    state.has_fillers = True
+    state.fillers_count = len(final)
+    storage.save(state)
+    _stage(state, "repetitions", "done",
+           f"immediate={len(immediate)} ngram={len(ngram)} total={len(final)}")
+    return {
+        "immediate": repetitions_svc.stats(immediate),
+        "ngram": repetitions_svc.stats(ngram),
+        "total_ranges": len(final),
+    }
+
+
 # ---- soundbites + topics -----------------------------------------------------
 
 @app.post("/api/projects/{pid}/soundbites")
@@ -1316,6 +1386,71 @@ async def bite_thumbnails(pid: str) -> dict[str, Any]:
             continue
     _stage(state, "bite_thumbs", "done", f"{len(results)} bites")
     return {"thumbs": results}
+
+
+class YTThumbIn(BaseModel):
+    title: str | None = None
+    sub: str | None = None
+    at: float | None = None
+    primary: str | None = None  # hex
+
+
+@app.post("/api/projects/{pid}/yt-thumbnail")
+async def yt_thumbnail(pid: str, body: YTThumbIn) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    src = pdir / "source.mp4"
+    if not src.exists():
+        raise HTTPException(400, "no source")
+
+    title = body.title
+    sub = body.sub
+    primary = body.primary
+    # Auto-fill from social_copy / story / brand when not provided
+    sc = pdir / "social_copy.json"
+    if sc.exists():
+        social = storage.read_json(pid, "social_copy.json")
+        if not title:
+            title = social.get("thumbnail_title") or social.get("youtube_title")
+    if not title and (pdir / "story.json").exists():
+        title = storage.read_json(pid, "story.json").get("title")
+    if not title:
+        title = state.name
+    if not sub and (pdir / "story.json").exists():
+        sub = storage.read_json(pid, "story.json").get("logline")
+    if not primary and state.has_brand:
+        b = storage.read_json(pid, "brand.json")
+        primary = (b.get("palette") or {}).get("accent") or "#facc15"
+
+    at = body.at
+    if at is None:
+        # default: peak from soundbites
+        if state.has_soundbites:
+            bites = storage.read_json(pid, "soundbites.json").get("soundbites") or []
+            if bites:
+                top = max(bites, key=lambda b: float(b.get("score") or 0))
+                at = float(top["start"]) + 0.3
+        if at is None:
+            at = (state.source_duration or 1.0) / 2.0
+
+    out = pdir / "thumbs" / "youtube.jpg"
+    out.parent.mkdir(exist_ok=True)
+    _stage(state, "yt_thumb", "running", f"at={at:.1f}s")
+    try:
+        await yt_thumb_svc.compose(
+            source=src, at=at, out=out,
+            title=title or "", sub=sub,
+            primary_hex=primary or "#facc15",
+        )
+    except Exception as e:
+        _stage(state, "yt_thumb", "error", str(e))
+        raise HTTPException(500, str(e))
+    _stage(state, "yt_thumb", "done", out.name)
+    return {
+        "url": f"/api/projects/{pid}/files/thumbs/{out.name}",
+        "title": title,
+        "at": at,
+    }
 
 
 @app.post("/api/projects/{pid}/peak-thumbnail")
