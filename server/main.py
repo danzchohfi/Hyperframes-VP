@@ -251,6 +251,8 @@ async def get_project(pid: str) -> dict[str, Any]:
     pdir = storage.project_dir(pid)
     payload["stale"] = _compute_stale(pdir, state)
     payload["render_active"] = render.is_active(pid)
+    payload["has_narratives"] = (pdir / "vlog_narratives.json").exists()
+    payload["has_face_identities"] = (pdir / "face_identities.json").exists()
     return payload
 
 

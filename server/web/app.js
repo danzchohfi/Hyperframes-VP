@@ -101,6 +101,7 @@ async function loadProject(id) {
   attachEventStream(id);
   renderStaleWarnings(p);
   renderCutsTimeline(p);
+  renderProgressBar(p);
   $("#cancel-render-btn").style.display = p.render_active ? "inline-block" : "none";
   $("#empty").classList.add("hidden");
   $("#project-view").classList.remove("hidden");
@@ -1134,6 +1135,68 @@ async function applyTemplate() {
     toast(`Template: ${r.label}`, "ok");
   } catch (e) {
     log(`✗ template: ${e.message}`, "err");
+  }
+}
+
+function renderProgressBar(p) {
+  const root = $("#ph-progress");
+  if (!root) return;
+  // Single-mode pipeline: upload → transcribe → cuts → render
+  // Vlog mode: clips ≥ 1 → transcribe all → narratives → assemble
+  const mode = (p.clips && p.clips.length) ? "vlog" : "single";
+  let steps;
+  if (mode === "vlog") {
+    const hasClips = (p.clips || []).length > 0;
+    const allTx = hasClips && p.clips.every(c => c.has_transcript);
+    const hasNarratives = !!p.has_narratives; // we'll set this client-side too
+    const hasVlogRender = (p.last_export || "").includes("-vlog-");
+    steps = [
+      { id: "upload",    label: `Upload (${(p.clips || []).length})`,      done: hasClips },
+      { id: "transcribe",label: "Transcrição",                              done: allTx },
+      { id: "narratives",label: "Narrativas",                               done: hasNarratives },
+      { id: "render",    label: "Vlog renderizado",                         done: hasVlogRender },
+    ];
+  } else {
+    steps = [
+      { id: "upload",     label: "Upload",      done: !!p.source_filename },
+      { id: "transcribe", label: "Transcrição", done: !!p.has_transcript },
+      { id: "cuts",       label: "Cortes",      done: !!p.has_cuts || !!p.has_fillers },
+      { id: "soundbites", label: "Soundbites",  done: !!p.has_soundbites },
+      { id: "story",      label: "Roteiro",     done: !!p.has_story },
+      { id: "render",     label: "Render",      done: !!p.has_render },
+    ];
+  }
+  // Mark the first not-done as "next"
+  let nextMarked = false;
+  const html = steps.map(s => {
+    let cls = "step";
+    if (s.done) cls += " done";
+    else if (!nextMarked) { cls += " next"; nextMarked = true; }
+    return `<span class="${cls}"><span class="step-dot"></span>${escapeHtml(s.label)}</span>`;
+  }).join("");
+  root.innerHTML = html;
+
+  // Suggest the next action as a primary button
+  const next = steps.find(s => !s.done);
+  const btn = $("#ph-next-step");
+  if (!btn) return;
+  if (!next) {
+    btn.style.display = "none";
+  } else {
+    btn.style.display = "inline-block";
+    const map = {
+      upload:     { label: "↑ Subir vídeo",       fn: () => $("#file-input")?.click() },
+      transcribe: { label: "▶ Transcrever agora", fn: () => runStage("transcribe") },
+      cuts:       { label: "▶ Detectar silêncios + muletas", fn: () => runStage("silence") },
+      soundbites: { label: "🎯 Extrair soundbites", fn: () => extractSoundbites() },
+      story:      { label: "📜 Propor roteiro",   fn: () => buildStory() },
+      render:     { label: "🎬 Renderizar",       fn: () => runStage("render") },
+      narratives: { label: "🧭 Sugerir narrativas", fn: () => vlogProposeNarratives() },
+    };
+    const m = map[next.id];
+    if (!m) { btn.style.display = "none"; return; }
+    btn.textContent = m.label;
+    btn.onclick = m.fn;
   }
 }
 
