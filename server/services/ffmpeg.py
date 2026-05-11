@@ -343,18 +343,34 @@ async def mix_music(
 
 
 async def burn_subtitles(src: Path, dst: Path, ass_path: Path) -> None:
-    """Burn an ASS subtitle file into the video via ffmpeg's subtitles filter."""
-    # ffmpeg's subtitles filter requires : and ' escaped in the path
-    ass_arg = str(ass_path).replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
-    await run([
-        "ffmpeg", "-y", "-i", str(src),
-        "-vf", f"ass='{ass_arg}'",
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
-        "-pix_fmt", "yuv420p",
-        "-c:a", "copy",
-        "-movflags", "+faststart",
-        str(dst),
-    ])
+    """Burn an ASS subtitle file into the video via ffmpeg's subtitles filter.
+
+    ffmpeg's filter-graph parser is notoriously brittle around paths that
+    contain spaces, single quotes, or colons. Rather than try to escape
+    every variant, we copy the .ass file into a temporary directory whose
+    path we control (no spaces, no special chars) and reference that.
+    """
+    import shutil
+    import tempfile
+
+    tmp_dir = Path(tempfile.mkdtemp(prefix="hf-burn-"))
+    safe_ass = tmp_dir / "captions.ass"
+    shutil.copy2(ass_path, safe_ass)
+    try:
+        # Even on a clean tmp path, ":" is the option separator inside a
+        # filter description and must be escaped.
+        ass_arg = str(safe_ass).replace(":", r"\:")
+        await run([
+            "ffmpeg", "-y", "-i", str(src),
+            "-vf", f"subtitles={ass_arg}",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+            "-pix_fmt", "yuv420p",
+            "-c:a", "copy",
+            "-movflags", "+faststart",
+            str(dst),
+        ])
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 async def extract_audio_with_chapters(

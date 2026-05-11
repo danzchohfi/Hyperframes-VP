@@ -73,7 +73,30 @@
             </div>
           </header>
 
-          <section class="card">
+          <nav class="workflow-bar" aria-label="Filtrar ferramentas">
+            <div class="wb-presets" role="tablist">
+              <button class="wb-preset" data-preset="caption">⚡ Só legendas</button>
+              <button class="wb-preset" data-preset="podcast">🎙 Podcast</button>
+              <button class="wb-preset" data-preset="vlog">📹 Vlog</button>
+              <button class="wb-preset" data-preset="multicam">🎬 Multicam</button>
+              <button class="wb-preset" data-preset="eddie">🎯 Eddie cut</button>
+              <button class="wb-preset active" data-preset="all">⚙ Tudo</button>
+            </div>
+            <div class="wb-divider"></div>
+            <div class="wb-cats" role="group" aria-label="Categorias visíveis">
+              <button class="wb-cat" data-cat="upload">📥 Upload</button>
+              <button class="wb-cat" data-cat="edit">✂ Editar</button>
+              <button class="wb-cat" data-cat="soundbites">🎯 Soundbites</button>
+              <button class="wb-cat" data-cat="podcast">🎙 Podcast</button>
+              <button class="wb-cat" data-cat="vlog">📹 Vlog</button>
+              <button class="wb-cat" data-cat="multicam">🎬 Multicam</button>
+              <button class="wb-cat" data-cat="brand">🎨 Brand</button>
+              <button class="wb-cat" data-cat="music">🎵 Música</button>
+              <button class="wb-cat" data-cat="export">📤 Exportar</button>
+            </div>
+          </nav>
+
+          <section class="card" data-cat="upload">
             <h3>1 · Vídeo de origem</h3>
             <div class="row">
               <label class="dropzone" id="dropzone">
@@ -94,7 +117,7 @@
             <div id="stale-warnings" class="stale-warnings"></div>
           </section>
 
-          <section class="card">
+          <section class="card" data-cat="brand">
             <h3>2 · Brand book</h3>
             <div class="grid-2">
               <label>Nome
@@ -149,7 +172,7 @@
             </div>
           </section>
 
-          <section class="card">
+          <section class="card" data-cat="brand">
             <h3>Snapshots</h3>
             <p class="card-help">Salve "fotos" do estado (cuts, soundbites, story…) pra comparar depois.</p>
             <div class="actions">
@@ -159,7 +182,7 @@
             <ul id="snap-list" class="snap-list"></ul>
           </section>
 
-          <section class="card">
+          <section class="card" data-cat="edit">
             <h3>3 · LUT (.cube)</h3>
             <div class="row">
               <label class="dropzone small" id="lut-zone">
@@ -172,7 +195,7 @@
             </div>
           </section>
 
-          <section class="card">
+          <section class="card" data-cat="edit">
             <h3>4 · Pipeline</h3>
             <div class="stages">
               <div class="stage" data-stage="transcribe">
@@ -243,7 +266,7 @@
             <div id="pipeline-log" class="log"></div>
           </section>
 
-          <section class="card" id="vlog-card">
+          <section class="card" id="vlog-card" data-cat="vlog">
             <h3>1b · Vlog mode (vários clipes)</h3>
             <p class="card-help">Em vez de 1 vídeo único, você sobe N clipes curtos. O sistema transcreve, descobre narrativas possíveis e monta um vlog do estilo que você escolher.</p>
             <div class="actions">
@@ -268,7 +291,7 @@
             <div id="narratives-list" class="narratives-list"></div>
           </section>
 
-          <section class="card" id="podcast-card">
+          <section class="card" id="podcast-card" data-cat="podcast">
             <h3>4a · Podcast — pipeline 1-click</h3>
             <p class="card-help">Roda transcrição → diarização → capítulos → cortes de silêncio → muletas → LUT → loudnorm → nivelamento por speaker → social copy num único job.</p>
             <div class="actions">
@@ -288,7 +311,7 @@
             </div>
           </section>
 
-          <section class="card" id="transcript-card">
+          <section class="card" id="transcript-card" data-cat="edit">
             <h3>4b · Transcrição interativa</h3>
             <p class="card-help">Clique numa palavra pra pular o vídeo. Selecione um range e clique <strong>Keep</strong> pra construir cortes manualmente (sobrescreve <code>cuts.json</code>).</p>
             <div class="actions" style="margin-bottom:8px">
@@ -299,7 +322,7 @@
             <div id="transcript-words" class="tx-words"></div>
           </section>
 
-          <section class="card">
+          <section class="card" data-cat="soundbites">
             <h3>5 · Soundbites + roteiro (Eddie-style)</h3>
             <p class="card-help">A IA escolhe os melhores trechos da transcrição, agrupa por tópico e propõe uma estrutura de roteiro. Depois você gera o rough cut só com os trechos selecionados.</p>
             <div class="actions">
@@ -330,7 +353,7 @@
             </div>
           </section>
 
-          <section class="card">
+          <section class="card" data-cat="brand">
             <h3>5b · Templates + Social copy</h3>
             <p class="card-help">Templates aplicam BrandBook + estilo de legenda em um clique. Social copy gera caption + hashtags + hook a partir da transcrição.</p>
             <div class="actions">
@@ -347,7 +370,7 @@
             <div id="shorts-gallery" class="shorts-gallery"></div>
           </section>
 
-          <section class="card">
+          <section class="card" data-cat="multicam">
             <h3>6 · Multicam (opcional)</h3>
             <p class="card-help">Suba ângulos extras pra exportar como multicam pro Final Cut. O vídeo principal vira o ângulo 1.</p>
             <div class="row">
@@ -371,7 +394,7 @@
             <p class="card-help">Roda depois de extrair soundbites e taggear ângulos. A IA escolhe qual ângulo cobre cada bite.</p>
           </section>
 
-          <section class="card">
+          <section class="card" data-cat="music">
             <h3>7 · Música por IA</h3>
             <p class="card-help">A IA analisa a transcrição e sugere mood, gênero, BPM. Se você tiver token da Epidemic Sound em <code>.env</code>, o sistema busca faixas direto.</p>
             <div class="actions">
@@ -401,7 +424,7 @@
             </div>
           </section>
 
-          <section class="card" id="export-card">
+          <section class="card" id="export-card" data-cat="export">
             <h3>8 · Exportar</h3>
             <div class="roughcut-bar">
               <button id="roughcut-btn" class="btn-primary">⚡ Gerar rough cut do roteiro</button>
