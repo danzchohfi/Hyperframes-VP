@@ -70,6 +70,7 @@ from .services import camera_picker as cam_picker_svc
 from .services import speaker_camera as speaker_cam_svc
 from .services import multicam_render as mc_render_svc
 from .services import vlog as vlog_svc
+from .services import vlog_assemble as vlog_assemble_svc
 from .services import vlog_pipeline as vlog_pipeline_svc
 from .services import vlog_broll as vlog_broll_svc
 from .services import take_grouping as take_grouping_svc
@@ -360,7 +361,20 @@ async def cut_silences(pid: str, body: CutOptionsIn) -> dict[str, Any]:
     try:
         silences = await ff.detect_silences(src, noise_db=body.noise_db, min_silence=body.min_silence)
         dur = state.source_duration or await ff.duration(src)
-        keep = silence.plan_keep_segments(dur, silences, pad=body.pad)
+        # If we have a transcript, run sentence-safe planning so we never chop a word.
+        words: list[dict] | None = None
+        segs: list[dict] | None = None
+        if state.has_transcript:
+            try:
+                tj = storage.read_json(pid, "transcript.json")
+                words = tj.get("words") or []
+                segs = tj.get("segments") or []
+            except Exception:
+                pass
+        keep = silence.plan_keep_segments(
+            dur, silences, pad=body.pad,
+            words=words, segments=segs, sentence_safe=bool(words),
+        )
     except Exception as e:
         _stage(state, "silence", "error", str(e))
         raise HTTPException(500, str(e))
@@ -1063,17 +1077,29 @@ async def roughcut(pid: str, body: RoughCutIn) -> dict[str, Any]:
         raise HTTPException(400, "extract soundbites first")
 
     analysis = storage.read_json(pid, "soundbites.json")
+    # Speech-aware snapping uses transcript word/segment timings.
+    snap_words: list[dict] | None = None
+    snap_segs: list[dict] | None = None
+    if state.has_transcript:
+        try:
+            tj = storage.read_json(pid, "transcript.json")
+            snap_words = tj.get("words") or []
+            snap_segs = tj.get("segments") or []
+        except Exception:
+            pass
 
     if body.use_story:
         if not state.has_story:
             raise HTTPException(400, "build story first or set use_story=false with explicit soundbite_ids")
         story = storage.read_json(pid, "story.json")
-        ranges = rc_svc.chapter_ranges(story["chapters"], analysis["soundbites"])
+        ranges = rc_svc.chapter_ranges(story["chapters"], analysis["soundbites"],
+                                       words=snap_words, segments=snap_segs)
         chapter_markers = rc_svc.chapter_marker_plan(story["chapters"], analysis["soundbites"])
     else:
         if not body.soundbite_ids:
             raise HTTPException(400, "soundbite_ids required when use_story=false")
-        ranges = rc_svc.selected_ranges(body.soundbite_ids, analysis["soundbites"])
+        ranges = rc_svc.selected_ranges(body.soundbite_ids, analysis["soundbites"],
+                                        words=snap_words, segments=snap_segs)
         chapter_markers = []
 
     if not ranges:
@@ -1141,6 +1167,16 @@ async def highlights(pid: str, body: HighlightsIn) -> dict[str, Any]:
     ranges = highlights_svc.select(analysis["soundbites"], target_seconds=body.target_seconds)
     if not ranges:
         raise HTTPException(400, "no usable soundbites")
+    # Speech-aware: snap to word boundaries so we don't chop syllables
+    if state.has_transcript:
+        try:
+            tj = storage.read_json(pid, "transcript.json")
+            from server.services import speech_cuts as _sc
+            ranges = _sc.snap_ranges(ranges, words=tj.get("words") or [],
+                                     segments=tj.get("segments") or [],
+                                     mode="word", pad=0.03)
+        except Exception:
+            pass
     lut = pdir / "lut.cube" if (state.has_lut and body.apply_lut) else None
     out = pdir / "highlights.mp4"
     _stage(state, "highlights", "running", f"{len(ranges)} segments")
@@ -1349,6 +1385,17 @@ async def make_hook(pid: str, body: HookIn) -> dict[str, Any]:
     if not pick:
         raise HTTPException(400, "no usable range")
     s, e = pick
+    # Speech-aware snap
+    if state.has_transcript:
+        try:
+            tj = storage.read_json(pid, "transcript.json")
+            from server.services import speech_cuts as _sc
+            snapped = _sc.snap_range(s, e, words=tj.get("words") or [],
+                                     segments=tj.get("segments") or [],
+                                     mode="word", pad=0.03)
+            s, e = snapped
+        except Exception:
+            pass
     out = pdir / "exports" / f"{state.name.replace(' ', '_')}-hook.mp4"
     out.parent.mkdir(exist_ok=True)
     _stage(state, "hook", "running", f"{e - s:.1f}s @ {s:.1f}s")
@@ -2674,6 +2721,7 @@ class VlogPipelineIn(BaseModel):
     apply_brand: bool = True
     chapter_cards: bool = True
     do_face_clustering: bool = True
+    auto_assemble: bool = True
 
 
 @app.post("/api/projects/{pid}/vlog/group-takes")
@@ -2710,6 +2758,7 @@ async def vlog_auto_pipeline(pid: str, body: VlogPipelineIn) -> dict[str, Any]:
             apply_brand=body.apply_brand,
             chapter_cards=body.chapter_cards,
             do_face_clustering=body.do_face_clustering,
+            auto_assemble=body.auto_assemble,
         )
 
     job_id = await jobs_svc.manager.submit(pid, "vlog_pipeline", _run)
@@ -2907,144 +2956,19 @@ async def vlog_music_suggest(pid: str, language: str = "pt") -> dict[str, Any]:
 
 @app.post("/api/projects/{pid}/vlog/assemble")
 async def vlog_assemble(pid: str, body: VlogAssembleIn) -> dict[str, Any]:
-    state = _load(pid)
-    pdir = storage.project_dir(pid)
-    if not state.clips:
-        raise HTTPException(400, "no clips")
-    npath = pdir / "vlog_narratives.json"
-    if not npath.exists():
-        raise HTTPException(400, "run /vlog/narratives first")
-    narrative_set = vlog_svc.NarrativeSet.model_validate(storage.read_json(pid, "vlog_narratives.json"))
-    narrative = next((n for n in narrative_set.narratives if n.id == body.narrative_id), None)
-    if not narrative:
-        raise HTTPException(404, "narrative not found")
-
-    plan = vlog_svc.assembly_plan(narrative, state.clips)
-    if not plan:
-        raise HTTPException(400, "narrative didn't resolve to any clips")
-
-    # Build (path, start, end) tuples for ffmpeg
-    items: list[tuple[Path, float, float]] = []
-    for p in plan:
-        items.append((pdir / "clips" / p["filename"], float(p["start"]), float(p["end"])))
-
-    # Aspect dimensions
-    presets = {"9:16": (1080, 1920), "16:9": (1920, 1080), "1:1": (1080, 1080)}
-    w, h = presets.get(body.aspect, (1920, 1080))
-
-    raw = pdir / "exports" / f"{state.name.replace(' ', '_')}-vlog-{narrative.id}-raw.mp4"
-    raw.parent.mkdir(exist_ok=True)
-    _stage(state, "vlog_assemble", "running", f"{len(items)} segments")
+    _load(pid)
     try:
-        await ff.concat_segments_from_multiple(items, raw, width=w, height=h, loudnorm=body.loudnorm)
-    except Exception as e:
-        _stage(state, "vlog_assemble", "error", str(e))
-        raise HTTPException(500, str(e))
-
-    final_url = f"/api/projects/{pid}/exports/{raw.name}"
-    final_path = raw
-
-    # Optional brand wrap via Hyperframes composer
-    if body.apply_brand:
-        # Build the unified transcript on the assembled timeline
-        clip_transcripts: dict[str, dict] = {}
-        for c in state.clips:
-            tp = pdir / "clips" / f"{c['id']}_transcript.json"
-            if tp.exists():
-                try:
-                    clip_transcripts[c["id"]] = _json.loads(tp.read_text())
-                except Exception:
-                    continue
-        unified = vlog_svc.build_vlog_transcript(narrative, clip_transcripts) if clip_transcripts else None
-        chapters = vlog_svc.build_chapter_markers(narrative, state.clips) if body.chapter_cards else None
-
-        brand = (
-            BrandBook.model_validate(storage.read_json(pid, "brand.json"))
-            if state.has_brand else BrandBook()
+        return await vlog_assemble_svc.run(
+            project_id=pid,
+            narrative_id=body.narrative_id,
+            aspect=body.aspect,
+            loudnorm=body.loudnorm,
+            apply_brand=body.apply_brand,
+            chapter_cards=body.chapter_cards,
+            auto_social_copy=body.auto_social_copy,
         )
-        comp_parent = pdir / f"vlog_comp_{narrative.id}"
-        comp_parent.mkdir(exist_ok=True)
-        try:
-            comp_dir = composer.build_composition(
-                project_dir=comp_parent,
-                video_path=raw,
-                video_duration=await ff.duration(raw),
-                transcript=unified,
-                brand=brand,
-                aspect=body.aspect,
-                chapters=chapters,
-            )
-            _stage(state, "vlog_assemble", "running", "rendering brand wrap")
-
-            def _on_event(ev: dict) -> None:
-                pct = ev.get("progress")
-                emit_stage(pid, "vlog_assemble", "running",
-                           f"render {pct}% · {ev.get('label', '')}",
-                           progress=float(pct) / 100.0 if pct is not None else None)
-
-            rendered = await render.render(
-                comp_dir,
-                output_dir=pdir / "exports",
-                name=f"{state.name.replace(' ', '_')}-vlog-{narrative.id}",
-                on_event=_on_event,
-                project_id=None,
-            )
-            final_path = rendered
-            final_url = f"/api/projects/{pid}/exports/{rendered.name}"
-            # cleanup raw + composition dir
-            try:
-                raw.unlink()
-                import shutil; shutil.rmtree(comp_parent)
-            except Exception:
-                pass
-        except Exception as e:
-            _stage(state, "vlog_assemble", "error", f"brand wrap failed: {e}")
-            # fall back to the raw cut
-            final_url = f"/api/projects/{pid}/exports/{raw.name}"
-            final_path = raw
-
-    _stage(state, "vlog_assemble", "done",
-           f"{final_path.name} · {final_path.stat().st_size // 1024} KB")
-    storage.append_render_history(pid, name=final_path.name, kind="vlog",
-                                  url=final_url,
-                                  bytes=final_path.stat().st_size,
-                                  extra={"narrative": narrative.name,
-                                         "genre": narrative.genre,
-                                         "clips": len(items),
-                                         "branded": body.apply_brand})
-
-    # Auto-generate social copy from the unified narrative transcript
-    social_payload: dict[str, Any] | None = None
-    if body.auto_social_copy:
-        try:
-            clip_ts: dict[str, dict] = {}
-            for c in state.clips:
-                tp = pdir / "clips" / f"{c['id']}_transcript.json"
-                if tp.exists():
-                    clip_ts[c["id"]] = _json.loads(tp.read_text())
-            unified = vlog_svc.build_vlog_transcript(narrative, clip_ts) if clip_ts else None
-            full_text = " ".join(s.get("text", "") for s in (unified or {}).get("segments") or []).strip()
-            if full_text:
-                social = await social_svc.generate(
-                    transcript_text=full_text,
-                    title=narrative.name,
-                    logline=narrative.logline,
-                    brand_name=state.name,
-                    language=(unified or {}).get("language") or "pt",
-                )
-                storage.write_json(pid, "social_copy.json", social.model_dump())
-                social_payload = social.model_dump()
-        except Exception as e:
-            _stage(state, "vlog_social", "error", str(e))
-    return {
-        "narrative": narrative.model_dump(),
-        "plan": plan,
-        "export": final_path.name,
-        "url": final_url,
-        "bytes": final_path.stat().st_size,
-        "branded": body.apply_brand,
-        "social_copy": social_payload,
-    }
+    except RuntimeError as e:
+        raise HTTPException(400, str(e))
 
 
 # ---- frame-quality assessment -----------------------------------------------

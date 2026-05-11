@@ -2116,6 +2116,27 @@ async function exportFcpxml() {
 }
 
 function bind() {
+  // Theme toggle (dark ↔ light, persisted in localStorage)
+  const themeBtn = $("#theme-toggle");
+  if (themeBtn) {
+    const setIcon = () => {
+      const isLight = document.documentElement.getAttribute("data-theme") === "light";
+      themeBtn.textContent = isLight ? "☾" : "☀";
+    };
+    setIcon();
+    themeBtn.onclick = () => {
+      const isLight = document.documentElement.getAttribute("data-theme") === "light";
+      if (isLight) {
+        document.documentElement.removeAttribute("data-theme");
+        localStorage.setItem("hfvp.theme", "dark");
+      } else {
+        document.documentElement.setAttribute("data-theme", "light");
+        localStorage.setItem("hfvp.theme", "light");
+      }
+      setIcon();
+    };
+  }
+
   $("#new-project").onclick = newProject;
   $("#empty-new").onclick = newProject;
   $("#delete-project").onclick = deleteProject;

@@ -19,6 +19,7 @@ from typing import Any
 from . import jobs as jobs_svc
 from . import whisper as whisper_svc
 from . import vlog as vlog_svc
+from . import vlog_assemble as vlog_assemble_svc
 from . import face_identity as face_id_svc
 from .. import storage
 
@@ -31,6 +32,7 @@ async def run(
     apply_brand: bool = True,
     chapter_cards: bool = True,
     do_face_clustering: bool = True,
+    auto_assemble: bool = True,
 ) -> dict[str, Any]:
     pid = ctx.project_id
     state = storage.load(pid)
@@ -124,15 +126,40 @@ async def run(
     if not narratives.narratives:
         raise RuntimeError("LLM produced no narratives")
 
-    # 4. Assemble the top narrative
+    # 4. Assemble the top narrative — optionally render the final MP4 now.
     top = narratives.narratives[0]
-    ctx.log(f"assembling top narrative: {top.name} ({top.genre})")
-    ctx.progress(0.70, f"assembling: {top.name}")
+    ctx.log(f"top narrative: {top.name} ({top.genre})")
     out["chosen_narrative"] = top.model_dump()
-    out["assembled_via"] = "/vlog/assemble"
-    out["next_step"] = (
-        f"POST /api/projects/{pid}/vlog/assemble with "
-        f"{{narrative_id: '{top.id}', aspect: '{aspect}', apply_brand: {apply_brand}}}"
-    )
-    ctx.progress(1.0, "narratives ready — pick one and POST /vlog/assemble")
+
+    if auto_assemble:
+        ctx.progress(0.70, f"assembling: {top.name}")
+        try:
+            result = await vlog_assemble_svc.run(
+                project_id=pid,
+                narrative_id=top.id,
+                aspect=aspect,
+                loudnorm=True,
+                apply_brand=apply_brand,
+                chapter_cards=chapter_cards,
+                auto_social_copy=True,
+            )
+            out["assembled"] = True
+            out["export"] = result.get("export")
+            out["url"] = result.get("url")
+            out["bytes"] = result.get("bytes")
+            out["branded"] = result.get("branded")
+            out["social_copy"] = result.get("social_copy")
+            ctx.progress(1.0, f"vlog pronto · {result.get('export')}")
+        except Exception as e:
+            ctx.log(f"assemble failed: {e}", level="error")
+            out["assembled"] = False
+            out["assemble_error"] = str(e)
+            ctx.progress(1.0, "narratives prontas — montagem falhou, monte manual")
+    else:
+        out["assembled"] = False
+        out["next_step"] = (
+            f"POST /api/projects/{pid}/vlog/assemble with "
+            f"{{narrative_id: '{top.id}', aspect: '{aspect}', apply_brand: {apply_brand}}}"
+        )
+        ctx.progress(1.0, "narrativas prontas — escolha uma e clique montar")
     return out

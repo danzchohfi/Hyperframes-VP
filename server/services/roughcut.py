@@ -14,6 +14,8 @@ def chapter_ranges(
     soundbites: list[dict[str, Any]],
     *,
     pad: float = 0.05,
+    words: list[dict] | None = None,
+    segments: list[dict] | None = None,
 ) -> list[tuple[float, float]]:
     """Walk the chapters in order, look up each soundbite_id, return time ranges."""
     by_id = {sb["id"]: sb for sb in soundbites}
@@ -26,6 +28,9 @@ def chapter_ranges(
             s = max(0.0, float(sb["start"]) - pad)
             e = float(sb["end"]) + pad
             ranges.append((s, e))
+    if words:
+        from . import speech_cuts as sc
+        ranges = sc.snap_ranges(ranges, words=words, segments=segments, mode="word", pad=0.03)
     return ranges
 
 
@@ -34,6 +39,8 @@ def selected_ranges(
     soundbites: list[dict[str, Any]],
     *,
     pad: float = 0.05,
+    words: list[dict] | None = None,
+    segments: list[dict] | None = None,
 ) -> list[tuple[float, float]]:
     by_id = {sb["id"]: sb for sb in soundbites}
     out: list[tuple[float, float]] = []
@@ -42,6 +49,9 @@ def selected_ranges(
         if not sb:
             continue
         out.append((max(0.0, float(sb["start"]) - pad), float(sb["end"]) + pad))
+    if words:
+        from . import speech_cuts as sc
+        out = sc.snap_ranges(out, words=words, segments=segments, mode="word", pad=0.03)
     return out
 
 

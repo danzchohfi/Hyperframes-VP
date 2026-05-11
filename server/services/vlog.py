@@ -234,20 +234,40 @@ def build_chapter_markers(narrative: Narrative, clips: list[dict[str, Any]]) -> 
     return out
 
 
-def assembly_plan(narrative: Narrative, clips: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def assembly_plan(
+    narrative: Narrative,
+    clips: list[dict[str, Any]],
+    *,
+    clip_transcripts: dict[str, dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
     """Convert a Narrative into a list of `(clip_path, start, end)` instructions
-    the renderer can feed to ffmpeg. Drops bites whose clip_id is unknown."""
+    the renderer can feed to ffmpeg. Drops bites whose clip_id is unknown.
+
+    When `clip_transcripts` is provided, each bite's [start, end] gets snapped
+    to the per-clip word/sentence boundaries so we don't chop a syllable.
+    """
     clip_by_id = {c["id"]: c for c in clips}
     plan: list[dict[str, Any]] = []
     for b in narrative.sequence:
         c = clip_by_id.get(b.clip_id)
         if not c:
             continue
+        s = max(0.0, b.start)
+        e = min(b.end, float(c.get("duration") or b.end))
+        if clip_transcripts and b.clip_id in clip_transcripts:
+            from . import speech_cuts as sc
+            tj = clip_transcripts[b.clip_id]
+            snapped = sc.snap_ranges([(s, e)],
+                                     words=tj.get("words") or [],
+                                     segments=tj.get("segments") or [],
+                                     mode="sentence", pad=0.02)
+            if snapped:
+                s, e = snapped[0]
         plan.append({
             "clip_id": b.clip_id,
             "filename": c["filename"],
-            "start": b.start,
-            "end": min(b.end, float(c.get("duration") or b.end)),
+            "start": s,
+            "end": e,
             "reason": b.reason,
         })
     return plan
