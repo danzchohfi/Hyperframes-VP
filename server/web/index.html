@@ -502,6 +502,19 @@
       </main>
     </div>
 
+    <!-- Branded confirm dialog -->
+    <div id="confirm-backdrop" class="confirm-backdrop hidden" aria-hidden="true">
+      <div class="confirm-dialog" role="dialog" aria-modal="true">
+        <div class="confirm-icon">⚠</div>
+        <div class="confirm-title" id="confirm-title">Tem certeza?</div>
+        <div class="confirm-message" id="confirm-message"></div>
+        <div class="confirm-actions">
+          <button id="confirm-cancel" class="btn-ghost">Cancelar</button>
+          <button id="confirm-ok" class="btn-primary">Confirmar</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Command palette (⌘K) -->
     <div id="cmdk-backdrop" class="cmdk-backdrop hidden" aria-hidden="true">
       <div class="cmdk" role="dialog" aria-modal="true" aria-label="Comandos">

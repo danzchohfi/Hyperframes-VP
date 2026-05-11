@@ -968,6 +968,42 @@ a { color: inherit; text-decoration: none; }
 .seq-details summary:hover { color: var(--text); }
 
 /* =========================================================================
+   Confirm dialog
+   ========================================================================= */
+.confirm-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(2, 4, 10, 0.55);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  display: grid; place-items: center;
+  z-index: 220;
+  animation: fade-in 160ms var(--ease);
+}
+.confirm-backdrop.hidden { display: none; }
+.confirm-dialog {
+  width: min(440px, 92vw);
+  background: var(--bg-elevated);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 28px 28px 20px;
+  animation: cmdk-in 200ms var(--ease);
+  text-align: center;
+}
+.confirm-icon {
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+  color: var(--warn);
+  font-size: 22px;
+  display: grid; place-items: center;
+  margin: 0 auto 14px;
+}
+.confirm-title { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+.confirm-message { color: var(--text-dim); font-size: 14px; line-height: 1.55; margin-top: 6px; }
+.confirm-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 22px; }
+
+/* =========================================================================
    Command palette (⌘K)
    ========================================================================= */
 .cmdk-backdrop {

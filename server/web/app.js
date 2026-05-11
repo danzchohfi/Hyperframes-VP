@@ -3,6 +3,34 @@ const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
 const state = { current: null, sse: null };
 
+function brandedConfirm(message, { title = "Tem certeza?", okText = "Confirmar", okClass = "" } = {}) {
+  return new Promise((resolve) => {
+    const root = $("#confirm-backdrop");
+    if (!root) return resolve(window.confirm(message));
+    $("#confirm-title").textContent = title;
+    $("#confirm-message").textContent = message;
+    const ok = $("#confirm-ok");
+    const cancel = $("#confirm-cancel");
+    ok.className = "btn-primary";
+    if (okClass) ok.classList.add(okClass);
+    ok.textContent = okText;
+    root.classList.remove("hidden");
+    const cleanup = () => {
+      root.classList.add("hidden");
+      ok.onclick = null;
+      cancel.onclick = null;
+      document.removeEventListener("keydown", onKey);
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); cleanup(); resolve(false); }
+      if (e.key === "Enter")  { e.preventDefault(); cleanup(); resolve(true); }
+    };
+    document.addEventListener("keydown", onKey);
+    ok.onclick = () => { cleanup(); resolve(true); };
+    cancel.onclick = () => { cleanup(); resolve(false); };
+  });
+}
+
 function toast(msg, kind = "") {
   let el = document.querySelector(".live-toast");
   if (!el) {
@@ -822,7 +850,7 @@ async function refreshSnapshots() {
         <button class="btn-ghost" data-snap="${s.id}">Restaurar</button>
       `;
       li.querySelector("button").onclick = async () => {
-        if (!confirm(`Restaurar ${s.label}?`)) return;
+        if (!(await brandedConfirm(`Restaurar a snapshot "${s.label}"?`, {title: "Restaurar snapshot", okText: "Restaurar"}))) return;
         try {
           await api(`/api/projects/${state.current.id}/snapshots/${s.id}/restore`, { method: "POST" });
           log(`✓ snapshot restaurado`, "ok");
@@ -1319,7 +1347,8 @@ async function exportBundle() {
 
 async function duplicateProject() {
   if (!state.current) return;
-  if (!confirm(`Duplicar "${state.current.name}"?`)) return;
+  if (!(await brandedConfirm(`Duplicar "${state.current.name}"? Vai criar um clone completo.`,
+        {title: "Duplicar projeto", okText: "Duplicar"}))) return;
   try {
     const p = await api(`/api/projects/${state.current.id}/duplicate`, { method: "POST" });
     log(`✓ duplicado: ${p.name}`, "ok");
@@ -1515,7 +1544,7 @@ async function loadClips() {
         } catch (e) { log(`✗ transcribe: ${e.message}`, "err"); }
       };
       li.querySelector(".a-del").onclick = async () => {
-        if (!confirm(`Excluir ${c.name}?`)) return;
+        if (!(await brandedConfirm(`Excluir o clipe "${c.name}"?`, {title: "Excluir clipe", okText: "Excluir"}))) return;
         await api(`/api/projects/${state.current.id}/clips/${c.id}`, { method: "DELETE" });
         await loadClips();
       };
@@ -1895,7 +1924,10 @@ async function showWaveform() {
 
 async function archiveProject() {
   if (!state.current) return;
-  if (!confirm(`Arquivar "${state.current.name}"? Vai gerar zip e remover o projeto.`)) return;
+  if (!(await brandedConfirm(
+    `Arquivar "${state.current.name}"? Vai gerar um zip com tudo e remover o projeto da lista.`,
+    {title: "Arquivar projeto", okText: "Arquivar"}
+  ))) return;
   try {
     const r = await api(`/api/projects/${state.current.id}/archive`, { method: "POST" });
     log(`✓ archived: ${r.archived}`, "ok");
@@ -2062,7 +2094,10 @@ async function doExport() {
 
 async function deleteProject() {
   if (!state.current) return;
-  if (!confirm(`Excluir "${state.current.name}"?`)) return;
+  if (!(await brandedConfirm(
+    `Excluir o projeto "${state.current.name}"? Isso apaga toda a mídia + os planos. Não tem como desfazer.`,
+    {title: "Excluir projeto", okText: "Excluir"}
+  ))) return;
   await api(`/api/projects/${state.current.id}`, { method: "DELETE" });
   state.current = null;
   $("#project-view").classList.add("hidden");

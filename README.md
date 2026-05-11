@@ -602,6 +602,38 @@ da lista. Útil quando ficou pesado no disco.
 curl -X POST localhost:8765/api/projects/$PID/archive
 ```
 
+## Waves 34-42 — speech-aware cuts + UI moderna
+
+### Cortes que respeitam a fala
+`services/speech_cuts.py` arredonda qualquer timestamp pra fronteira de
+palavra ou frase (segment do Whisper + pausa ≥ 0.35s após pontuação).
+Aplicado em todos os pontos onde a gente corta:
+- `cut-silences` agora descarta silêncios cujo meio cai dentro de uma palavra
+  e snap cada range mantido pra borda de palavra
+- `roughcut` snap a partir dos soundbites
+- `highlights` e `hook` snap antes do encoding
+- `vlog/assemble` snap por clipe pra fronteira de frase
+
+### Vlog 1-click renderiza o MP4 final
+`POST /vlog/auto-pipeline {auto_assemble: true}` (default true) agora não para
+nas narrativas — pega a top, chama `vlog_assemble.run` inline, gera o MP4
+brandado e os assets sociais, e retorna a URL final. `aspect: "auto"` faz
+o orquestrador olhar a orientação dos clipes e escolher 9:16, 16:9 ou 1:1.
+
+### Crossfade entre clipes de vlog
+`POST /vlog/assemble {crossfade: 0.5}` faz um xfade de 0.5s entre cada bite
+do vlog (vídeo via ffmpeg `xfade`, áudio via `acrossfade`).
+
+### UI moderna
+- Sistema de design completo: tokens CSS para dark (padrão) e light theme,
+  shadows em 3 níveis, easing tokens, fonte Inter variável.
+- Toggle de tema persistido em localStorage (sem FOUC).
+- **Command palette ⌘K** com ~50 ações cobrindo todos os endpoints.
+- Hero animado com 3 cards de modo (Podcast / Vlog / Multicâmera).
+- Strip de progresso no header do projeto: cada etapa vira chip; a próxima
+  pulsa em accent + botão primário "Next step" sugere a ação certa.
+- Confirm dialog brandado substitui o `confirm()` nativo.
+
 ## Waves 18-32 — multicam inteligente + modo vlog
 
 ### Multicam inteligente
