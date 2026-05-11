@@ -695,10 +695,43 @@ async function buildRoughCut() {
   status.className = "status warn";
   log("▶ roughcut");
 
-  // Pick: if any checkboxes are manually checked beyond what the story has,
-  // use those as soundbite_ids; otherwise use the story.
+  // Decide source of bites:
+  //  1. If any checkbox is manually checked → use those (use_story=false).
+  //  2. Else if a story exists → use the story (use_story=true).
+  //  3. Else if soundbites exist → fall back to ALL soundbites in
+  //     chronological order so the user gets something useful.
+  //  4. Else → error.
   const checked = $$("input[data-bite]").filter(c => c.checked).map(c => c.dataset.bite);
-  const useStory = state.current.has_story && checked.length === 0;
+  let useStory;
+  let soundbiteIds = null;
+  if (checked.length > 0) {
+    useStory = false;
+    soundbiteIds = checked;
+  } else if (state.current.has_story) {
+    useStory = true;
+  } else if (state.current.has_soundbites) {
+    // grab all bite ids in chronological order
+    try {
+      const a = await api(`/api/projects/${state.current.id}/soundbites`);
+      const sorted = (a.soundbites || []).slice().sort((x, y) => (x.start || 0) - (y.start || 0));
+      soundbiteIds = sorted.map(s => s.id);
+    } catch (e) {
+      soundbiteIds = [];
+    }
+    if (!soundbiteIds.length) {
+      btn.disabled = false;
+      status.textContent = "Sem soundbites — extraia primeiro.";
+      status.className = "status error";
+      return;
+    }
+    useStory = false;
+    toast(`Sem roteiro — usando todos os ${soundbiteIds.length} soundbites`);
+  } else {
+    btn.disabled = false;
+    status.textContent = "Extraia soundbites e/ou gere um roteiro primeiro.";
+    status.className = "status error";
+    return;
+  }
 
   try {
     const r = await api(`/api/projects/${state.current.id}/roughcut`, {
@@ -706,7 +739,7 @@ async function buildRoughCut() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         use_story: useStory,
-        soundbite_ids: useStory ? null : checked,
+        soundbite_ids: useStory ? null : soundbiteIds,
         apply_lut: true,
         loudnorm: $("#rc-loudnorm")?.checked || false,
         denoise: $("#rc-denoise")?.checked || false,
