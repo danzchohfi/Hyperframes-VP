@@ -169,20 +169,9 @@ async function loadProject(id) {
     }
   }
 
-  // result
-  const result = $("#result");
-  if (p.has_render && p.last_export) {
-    const url = `/api/projects/${p.id}/exports/${p.last_export}`;
-    result.src = url;
-    $("#download-link").href = url;
-    $("#download-link").style.opacity = 1;
-    $("#download-link").style.pointerEvents = "auto";
-  } else {
-    result.removeAttribute("src");
-    $("#download-link").href = "#";
-    $("#download-link").style.opacity = 0.5;
-    $("#download-link").style.pointerEvents = "none";
-  }
+  // result preview: prefer the most recent video export from history,
+  // fall back to has_render + last_export, else show a placeholder.
+  await refreshExportPreview(p);
 
   renderAngles(p);
   renderMusicSuggestion(p.music_suggestion);
@@ -395,6 +384,65 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   }[c]));
+}
+
+/**
+ * Show the most recent video export in the #result <video> preview.
+ *
+ * Sources, in priority order:
+ *   1. The most recent .mp4/.mov/.webm entry in /api/projects/{id}/history
+ *      (covers burn-captions, highlights, hook, vlog, mix, shorts, reframe, ...)
+ *   2. has_render + last_export (legacy fallback)
+ *   3. Hide preview and show "Nada exportado ainda" placeholder
+ */
+async function refreshExportPreview(p) {
+  p = p || state.current;
+  if (!p) return;
+  const video = $("#result");
+  const placeholder = $("#result-empty");
+  const downloadLink = $("#download-link");
+  if (!video) return;
+
+  let url = null;
+  let label = null;
+  try {
+    const history = await api(`/api/projects/${p.id}/history`);
+    const videoExt = /\.(mp4|mov|webm)$/i;
+    const latest = (history || []).filter(h => h.name && videoExt.test(h.name)).slice(-1)[0];
+    if (latest) {
+      url = latest.url;
+      label = latest.name;
+    }
+  } catch {}
+
+  if (!url && p.has_render && p.last_export) {
+    url = `/api/projects/${p.id}/exports/${p.last_export}`;
+    label = p.last_export;
+  }
+
+  if (url) {
+    if (video.getAttribute("src") !== url) {
+      video.src = url;
+      video.load?.();
+    }
+    video.style.display = "";
+    if (placeholder) placeholder.style.display = "none";
+    if (downloadLink) {
+      downloadLink.href = url;
+      downloadLink.style.opacity = 1;
+      downloadLink.style.pointerEvents = "auto";
+      if (label) downloadLink.textContent = `⬇ ${label}`;
+    }
+  } else {
+    video.removeAttribute("src");
+    video.style.display = "none";
+    if (placeholder) placeholder.style.display = "";
+    if (downloadLink) {
+      downloadLink.href = "#";
+      downloadLink.style.opacity = 0.5;
+      downloadLink.style.pointerEvents = "none";
+    }
+  }
 }
 
 function attachEventStream(pid) {
@@ -864,6 +912,7 @@ async function burnCaptions() {
     a.href = r.url;
     a.style.display = "inline-block";
     a.textContent = `⬇ ${r.export}`;
+    await refreshHistory();
   } catch (e) {
     log(`✗ burn: ${e.message}`, "err");
   }
@@ -2028,19 +2077,23 @@ async function refreshHistory() {
   try {
     const list = await api(`/api/projects/${state.current.id}/history`);
     const root = $("#history-list");
-    root.innerHTML = "";
-    for (const e of list.slice().reverse().slice(0, 30)) {
-      const li = document.createElement("li");
-      const kb = (e.bytes / 1024).toFixed(0);
-      li.innerHTML = `
-        <span class="h-kind">${escapeHtml(e.kind)}</span>
-        <span class="h-name">${escapeHtml(e.name)}</span>
-        <span class="h-meta">${kb} KB · ${new Date(e.ts).toLocaleString()}</span>
-        <a href="${e.url}" download>⬇</a>
-      `;
-      root.appendChild(li);
+    if (root) {
+      root.innerHTML = "";
+      for (const e of list.slice().reverse().slice(0, 30)) {
+        const li = document.createElement("li");
+        const kb = (e.bytes / 1024).toFixed(0);
+        li.innerHTML = `
+          <span class="h-kind">${escapeHtml(e.kind)}</span>
+          <span class="h-name">${escapeHtml(e.name)}</span>
+          <span class="h-meta">${kb} KB · ${new Date(e.ts).toLocaleString()}</span>
+          <a href="${e.url}" download>⬇</a>
+        `;
+        root.appendChild(li);
+      }
     }
   } catch {}
+  // Keep the export preview in sync with whatever's in history
+  refreshExportPreview();
 }
 
 async function chapterThumbs() {
