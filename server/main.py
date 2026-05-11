@@ -93,6 +93,58 @@ app.add_middleware(
 )
 
 
+# ---- Basic-auth gate for public deploys --------------------------------------
+#
+# When HFVP_AUTH_PASSWORD is set, every request must include a valid
+# Authorization header. Use this when deploying to Railway / Fly / Render so
+# random people can't burn through your OpenAI quota.
+#
+# Optional: HFVP_AUTH_USER (defaults to "admin").
+# Skip the gate for /api/health (so Railway healthchecks work).
+
+import base64
+import os as _os
+import secrets as _secrets
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
+
+
+_AUTH_PASSWORD = _os.environ.get("HFVP_AUTH_PASSWORD") or ""
+_AUTH_USER = _os.environ.get("HFVP_AUTH_USER") or "admin"
+
+
+def _check_basic_auth(header: str | None) -> bool:
+    if not _AUTH_PASSWORD:
+        return True  # auth disabled
+    if not header or not header.startswith("Basic "):
+        return False
+    try:
+        raw = base64.b64decode(header.removeprefix("Basic ").strip()).decode()
+        user, _, pw = raw.partition(":")
+    except Exception:
+        return False
+    return _secrets.compare_digest(user, _AUTH_USER) and _secrets.compare_digest(pw, _AUTH_PASSWORD)
+
+
+class BasicAuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        if not _AUTH_PASSWORD:
+            return await call_next(request)
+        # Bypass health + favicon so monitors / browsers don't keep prompting.
+        if request.url.path in ("/api/health", "/favicon.ico"):
+            return await call_next(request)
+        if not _check_basic_auth(request.headers.get("authorization")):
+            return Response(
+                status_code=401,
+                headers={"WWW-Authenticate": 'Basic realm="HyperFrames VP"'},
+                content="Auth required",
+            )
+        return await call_next(request)
+
+
+app.add_middleware(BasicAuthMiddleware)
+
+
 # ---- request models ----------------------------------------------------------
 
 class CreateProjectIn(BaseModel):

@@ -18,6 +18,7 @@ Each project lives in `server/projects/<id>/` with this layout:
 from __future__ import annotations
 
 import json
+import os
 import secrets
 import time
 from datetime import datetime, timezone
@@ -27,7 +28,8 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 ROOT = Path(__file__).resolve().parent
-PROJECTS_DIR = ROOT / "projects"
+# Allow overriding via env so volumes mount cleanly on Railway / Fly / etc.
+PROJECTS_DIR = Path(os.environ.get("HFVP_PROJECTS_DIR") or (ROOT / "projects"))
 PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
 
 

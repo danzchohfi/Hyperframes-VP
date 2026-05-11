@@ -1,0 +1,23 @@
+# Railway service config — Railway auto-detects the Dockerfile and uses
+# this file only for restart policy / health check tuning.
+#
+# After the first deploy:
+#   1. Settings → Variables → add the env keys from .env.example
+#      (OPENAI_API_KEY is required; HFVP_AUTH_PASSWORD strongly recommended).
+#   2. Settings → Volumes → add a volume mounted at /data
+#      (this is where projects, exports, etc. persist between deploys).
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/api/health"
+healthcheckTimeout = 60
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
+
+# Body size + request timeout overrides for video uploads.
+# (Railway sets reasonable defaults; uncomment to override if needed.)
+# [deploy.envOverrides]
+# UVICORN_TIMEOUT_KEEP_ALIVE = "120"
