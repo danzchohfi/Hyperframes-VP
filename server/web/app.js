@@ -172,6 +172,7 @@ async function loadProject(id) {
   // result preview: prefer the most recent video export from history,
   // fall back to has_render + last_export, else show a placeholder.
   await refreshExportPreview(p);
+  refreshOverview();
 
   renderAngles(p);
   renderMusicSuggestion(p.music_suggestion);
@@ -2441,8 +2442,78 @@ function bindCmdK() {
   });
 }
 
-// ---- Workflow filter (mostra só os cards das categorias selecionadas) ------
+// ---- Workspace navigation (uma seção visível por vez) ----------------------
 
+const SECTION_CATS = {
+  overview:  ["overview"],
+  upload:    ["upload"],
+  edit:      ["edit"],
+  soundbites:["soundbites"],
+  podcast:   ["podcast"],
+  vlog:      ["vlog"],
+  multicam:  ["multicam"],
+  brand:     ["brand"],
+  music:     ["music"],
+  export:    ["export"],
+  all:       ["overview", "upload", "edit", "soundbites", "podcast", "vlog", "multicam", "brand", "music", "export"],
+};
+
+function activeSection() {
+  return localStorage.getItem("hfvp.section") || "overview";
+}
+
+function setSection(section) {
+  const cats = new Set(SECTION_CATS[section] || SECTION_CATS.overview);
+  for (const card of document.querySelectorAll(".card[data-cat]")) {
+    card.style.display = cats.has(card.dataset.cat) ? "" : "none";
+  }
+  for (const btn of document.querySelectorAll(".ws-section")) {
+    btn.classList.toggle("active", btn.dataset.section === section);
+  }
+  localStorage.setItem("hfvp.section", section);
+  if (section === "overview") refreshOverview();
+}
+
+function bindSections() {
+  for (const btn of document.querySelectorAll(".ws-section")) {
+    btn.addEventListener("click", () => setSection(btn.dataset.section));
+  }
+  setSection(activeSection());
+}
+
+function refreshOverview() {
+  const root = $("#overview-grid");
+  if (!root) return;
+  const p = state.current;
+  if (!p) { root.innerHTML = ""; return; }
+
+  function card(label, value, sub, cls = "") {
+    return `<div class="ov-card ${cls}">
+      <div class="ov-label">${escapeHtml(label)}</div>
+      <div class="ov-value">${escapeHtml(String(value))}</div>
+      ${sub ? `<div class="ov-sub">${escapeHtml(sub)}</div>` : ""}
+    </div>`;
+  }
+
+  const dur = p.source_duration ? `${p.source_duration.toFixed(1)}s` : "—";
+  const mode = (p.clips && p.clips.length) ? "vlog" : "single";
+  const cells = [];
+  cells.push(card("Modo", mode === "vlog" ? "Vlog" : "Single", mode === "vlog" ? `${p.clips.length} clipes` : (p.source_filename || "sem upload")));
+  cells.push(card("Duração", dur, p.source_filename || ""));
+  cells.push(card("Transcrição", p.has_transcript ? "ok" : "—", p.has_transcript ? "" : "rode /transcribe", p.has_transcript ? "ok" : "muted"));
+  cells.push(card("Cortes", p.has_cuts ? "ok" : (p.has_fillers ? "fillers" : "—"), "", (p.has_cuts || p.has_fillers) ? "ok" : "muted"));
+  cells.push(card("Soundbites", p.has_soundbites ? "ok" : "—", "", p.has_soundbites ? "ok" : "muted"));
+  cells.push(card("Roteiro", p.has_story ? "ok" : "—", "", p.has_story ? "ok" : "muted"));
+  cells.push(card("Rough cut", p.has_roughcut ? "ok" : "—", "", p.has_roughcut ? "ok" : "muted"));
+  cells.push(card("Render", p.has_render ? "ok" : "—", p.has_render ? (p.last_export || "") : "rode o render", p.has_render ? "ok" : "muted"));
+  cells.push(card("Brand", p.has_brand ? "ok" : "—", "", p.has_brand ? "ok" : "muted"));
+  cells.push(card("Multicam", (p.angles || []).length, (p.angles || []).length ? "ângulos" : "", (p.angles || []).length ? "ok" : "muted"));
+  if (p.render_active) cells.push(card("Status", "renderizando", "", "warn"));
+
+  root.innerHTML = cells.join("");
+}
+
+// ---- (legado) Workflow filter horizontal — ainda no DOM mas escondido -----
 const WORKFLOW_PRESETS = {
   caption:  ["upload", "edit", "brand", "export"],
   podcast:  ["upload", "edit", "podcast", "brand", "export"],
@@ -2524,7 +2595,9 @@ function bindWorkflow() {
 
 function bind() {
   bindCmdK();
-  bindWorkflow();
+  bindSections();
+  // Keep the legacy filter wiring alive in case data exists, but hidden:
+  try { bindWorkflow(); } catch {}
   $("#cmdk-open")?.addEventListener("click", () => openCmdK());
   // Theme toggle (dark ↔ light, persisted in localStorage)
   const themeBtn = $("#theme-toggle");

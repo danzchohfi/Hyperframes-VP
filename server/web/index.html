@@ -73,7 +73,7 @@
             </div>
           </header>
 
-          <nav class="workflow-bar" aria-label="Filtrar ferramentas">
+          <nav class="workflow-bar" aria-label="Filtrar ferramentas" style="display:none">
             <div class="wb-presets" role="tablist">
               <button class="wb-preset" data-preset="caption">⚡ Só legendas</button>
               <button class="wb-preset" data-preset="podcast">🎙 Podcast</button>
@@ -96,7 +96,55 @@
             </div>
           </nav>
 
-          <section class="card" data-cat="upload">
+          <div class="workspace">
+            <aside class="ws-nav" aria-label="Seções do projeto">
+              <button class="ws-section" data-section="overview">
+                <span class="ws-icon">🏠</span><span>Visão geral</span>
+              </button>
+              <div class="ws-divider"></div>
+              <button class="ws-section" data-section="upload">
+                <span class="ws-icon">📥</span><span>Upload</span>
+              </button>
+              <button class="ws-section" data-section="edit">
+                <span class="ws-icon">✂</span><span>Editar</span>
+              </button>
+              <button class="ws-section" data-section="soundbites">
+                <span class="ws-icon">🎯</span><span>Soundbites</span>
+              </button>
+              <button class="ws-section" data-section="podcast">
+                <span class="ws-icon">🎙</span><span>Podcast</span>
+              </button>
+              <button class="ws-section" data-section="vlog">
+                <span class="ws-icon">📹</span><span>Vlog</span>
+              </button>
+              <button class="ws-section" data-section="multicam">
+                <span class="ws-icon">🎬</span><span>Multicam</span>
+              </button>
+              <button class="ws-section" data-section="brand">
+                <span class="ws-icon">🎨</span><span>Brand</span>
+              </button>
+              <button class="ws-section" data-section="music">
+                <span class="ws-icon">🎵</span><span>Música</span>
+              </button>
+              <button class="ws-section" data-section="export">
+                <span class="ws-icon">📤</span><span>Exportar</span>
+              </button>
+              <div class="ws-divider"></div>
+              <button class="ws-section" data-section="all">
+                <span class="ws-icon">⚙</span><span>Tudo</span>
+              </button>
+            </aside>
+
+            <main class="ws-main">
+
+              <!-- OVERVIEW (only visible when section=overview) -->
+              <section class="card ws-overview" data-cat="overview">
+                <h3>Visão geral</h3>
+                <p class="card-help">Status do projeto. Use a navegação à esquerda pra abrir cada conjunto de ferramentas só quando precisar.</p>
+                <div id="overview-grid" class="overview-grid"></div>
+              </section>
+
+              <section class="card" data-cat="upload">
             <h3>1 · Vídeo de origem</h3>
             <div class="row">
               <label class="dropzone" id="dropzone">
@@ -526,6 +574,9 @@
             <h4 class="history-title">Histórico de renders</h4>
             <ul id="history-list" class="history-list"></ul>
           </section>
+
+            </main>
+          </div>
         </div>
       </main>
     </div>
