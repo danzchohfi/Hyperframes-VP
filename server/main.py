@@ -2548,6 +2548,16 @@ async def upload_clip(
         raise HTTPException(400, f"ffmpeg failed: {e}")
     raw.unlink(missing_ok=True)
 
+    # Probe to capture dimensions so we can later suggest the best aspect.
+    width = height = None
+    try:
+        info = await ff.probe(norm)
+        v = next((s for s in info.get("streams") or [] if s.get("codec_type") == "video"), {})
+        width = int(v.get("width") or 0) or None
+        height = int(v.get("height") or 0) or None
+    except Exception:
+        pass
+
     # Quick thumbnail at 0.5s (or middle, if shorter)
     thumb_dir = pdir / "clips" / "thumbs"
     thumb_dir.mkdir(exist_ok=True)
@@ -2564,6 +2574,8 @@ async def upload_clip(
         "name": name or file.filename or cid,
         "filename": norm.name,
         "duration": dur,
+        "width": width,
+        "height": height,
         "has_transcript": False,
         "thumbnail": thumb_url,
     }
@@ -2722,6 +2734,28 @@ class VlogPipelineIn(BaseModel):
     chapter_cards: bool = True
     do_face_clustering: bool = True
     auto_assemble: bool = True
+
+
+@app.get("/api/projects/{pid}/vlog/suggest-aspect")
+async def vlog_suggest_aspect(pid: str) -> dict[str, Any]:
+    state = _load(pid)
+    if not state.clips:
+        raise HTTPException(400, "no clips")
+    aspect = vlog_svc.suggest_aspect(state.clips)
+    by_orient = {"portrait": 0, "square": 0, "landscape": 0}
+    for c in state.clips:
+        w = c.get("width") or 0
+        h = c.get("height") or 0
+        if not w or not h:
+            continue
+        r = w / h
+        if r < 0.85:
+            by_orient["portrait"] += 1
+        elif r < 1.15:
+            by_orient["square"] += 1
+        else:
+            by_orient["landscape"] += 1
+    return {"aspect": aspect, "by_orientation": by_orient, "clips": len(state.clips)}
 
 
 @app.post("/api/projects/{pid}/vlog/group-takes")

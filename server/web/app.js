@@ -2283,6 +2283,7 @@ function bind() {
 
   $("#new-project").onclick = newProject;
   $("#empty-new").onclick = newProject;
+  $("#empty-cmdk")?.addEventListener("click", () => openCmdK());
   $("#delete-project").onclick = deleteProject;
   $("#save-brand").onclick = saveBrand;
   $("#do-export").onclick = doExport;

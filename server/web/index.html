@@ -34,10 +34,30 @@
 
       <main class="main">
         <div id="empty" class="empty">
-          <div class="empty-pill">● Whisper + ffmpeg + LUT + Hyperframes</div>
-          <h1>Video Editor</h1>
-          <p>Suba seu vídeo, descreva a edição que quer, e o pipeline cuida do resto.</p>
-          <button id="empty-new" class="btn-primary">+ Criar projeto</button>
+          <div class="empty-pill">● Whisper + Claude + ffmpeg + Hyperframes</div>
+          <h1>Edite vídeo<br/>com prompts e IA.</h1>
+          <p>Podcasts, vlogs e multicâmera. Suba a mídia, escolha um modo, e o pipeline transcreve, encontra soundbites, identifica pessoas, escolhe câmera, monta o cut, aplica seu brand book e exporta tudo de uma vez.</p>
+          <div class="empty-actions">
+            <button id="empty-new" class="btn-primary">+ Criar projeto</button>
+            <button id="empty-cmdk" class="btn-ghost">Comandos <kbd>⌘ K</kbd></button>
+          </div>
+          <div class="empty-modes">
+            <div class="mode-card">
+              <div class="mode-icon">🎙</div>
+              <div class="mode-title">Podcast</div>
+              <div class="mode-desc">Transcribe → diarize → chapters → corta silêncios + muletas → nivela falas → render brandado.</div>
+            </div>
+            <div class="mode-card">
+              <div class="mode-icon">📹</div>
+              <div class="mode-title">Vlog</div>
+              <div class="mode-desc">Vários clipes → IA descobre 3-5 narrativas → escolhe a melhor e renderiza o vlog automaticamente.</div>
+            </div>
+            <div class="mode-card">
+              <div class="mode-icon">🎬</div>
+              <div class="mode-title">Multicâmera</div>
+              <div class="mode-desc">Sync de áudio → identifica quem está em cada câmera → escolhe câmera que mostra o speaker atual.</div>
+            </div>
+          </div>
         </div>
 
         <div id="project-view" class="project-view hidden">

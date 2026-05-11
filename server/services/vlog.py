@@ -54,6 +54,31 @@ def new_clip_id() -> str:
     return f"clip_{secrets.token_hex(4)}"
 
 
+def suggest_aspect(clips: list[dict[str, Any]]) -> str:
+    """Pick a sensible aspect for the assembled vlog based on the mix of
+    orientations in the source clips. Returns 9:16 if the majority are
+    portrait, 1:1 if mostly square, else 16:9.
+    """
+    portrait = square = landscape = 0
+    for c in clips:
+        w = c.get("width") or 0
+        h = c.get("height") or 0
+        if w <= 0 or h <= 0:
+            continue
+        ratio = w / h
+        if ratio < 0.85:
+            portrait += 1
+        elif ratio < 1.15:
+            square += 1
+        else:
+            landscape += 1
+    if portrait >= max(square, landscape) and portrait > 0:
+        return "9:16"
+    if square >= landscape and square > 0:
+        return "1:1"
+    return "16:9"
+
+
 _SYSTEM = """You are a vlog editor. You're given the transcripts of N short
 clips (could be travel, daily life, tutorial fragments, anything). The clips
 have no single narrative — your job is to find 3-5 DIFFERENT narratives that

@@ -131,13 +131,20 @@ async def run(
     ctx.log(f"top narrative: {top.name} ({top.genre})")
     out["chosen_narrative"] = top.model_dump()
 
+    # Auto-pick aspect from clip orientations when user said "auto"
+    chosen_aspect = aspect
+    if aspect in ("auto", "", None):
+        chosen_aspect = vlog_svc.suggest_aspect(state.clips)
+        ctx.log(f"auto aspect: {chosen_aspect}")
+        out["auto_aspect"] = chosen_aspect
+
     if auto_assemble:
         ctx.progress(0.70, f"assembling: {top.name}")
         try:
             result = await vlog_assemble_svc.run(
                 project_id=pid,
                 narrative_id=top.id,
-                aspect=aspect,
+                aspect=chosen_aspect,
                 loudnorm=True,
                 apply_brand=apply_brand,
                 chapter_cards=chapter_cards,
