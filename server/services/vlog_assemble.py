@@ -47,6 +47,7 @@ async def run(
     apply_brand: bool = True,
     chapter_cards: bool = True,
     auto_social_copy: bool = True,
+    crossfade: float = 0.0,
     on_render_event: OnRenderEvent | None = None,
 ) -> dict[str, Any]:
     pid = project_id
@@ -87,7 +88,8 @@ async def run(
     raw = pdir / "exports" / f"{state.name.replace(' ', '_')}-vlog-{narrative.id}-raw.mp4"
     raw.parent.mkdir(exist_ok=True)
     emit_stage(pid, "vlog_assemble", "running", f"{len(items)} segments")
-    await ff.concat_segments_from_multiple(items, raw, width=w, height=h, loudnorm=loudnorm)
+    await ff.concat_segments_from_multiple(items, raw, width=w, height=h,
+                                          loudnorm=loudnorm, crossfade=crossfade)
 
     final_url = f"/api/projects/{pid}/exports/{raw.name}"
     final_path = raw

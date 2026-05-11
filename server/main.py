@@ -2952,6 +2952,7 @@ class VlogAssembleIn(BaseModel):
     apply_brand: bool = True
     chapter_cards: bool = True
     auto_social_copy: bool = True
+    crossfade: float = 0.0
 
 
 @app.post("/api/projects/{pid}/vlog/music-suggest")
@@ -3000,6 +3001,7 @@ async def vlog_assemble(pid: str, body: VlogAssembleIn) -> dict[str, Any]:
             apply_brand=body.apply_brand,
             chapter_cards=body.chapter_cards,
             auto_social_copy=body.auto_social_copy,
+            crossfade=body.crossfade,
         )
     except RuntimeError as e:
         raise HTTPException(400, str(e))

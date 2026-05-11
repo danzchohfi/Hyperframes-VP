@@ -215,6 +215,7 @@ async def concat_segments_from_multiple(
     width: int = 1920,
     height: int = 1080,
     loudnorm: bool = False,
+    crossfade: float = 0.0,
 ) -> None:
     """Concatenate (path, start, end) tuples from multiple files into one MP4.
 
@@ -228,18 +229,49 @@ async def concat_segments_from_multiple(
     for path, s, e in items:
         inputs += ["-ss", f"{s:.3f}", "-to", f"{e:.3f}", "-i", str(path)]
 
+    # Per-segment normalize chain (scale + pad + audio resample)
     parts: list[str] = []
     for i, _ in enumerate(items):
         parts.append(
             f"[{i}:v]scale={width}:{height}:force_original_aspect_ratio=decrease,"
-            f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1[v{i}];"
+            f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30[v{i}];"
             f"[{i}:a:0]aresample=async=1[a{i}]"
         )
     chain = ";".join(parts)
-    concat = "".join(f"[v{i}][a{i}]" for i in range(len(items))) + f"concat=n={len(items)}:v=1:a=1[v][a]"
-    full = chain + ";" + concat
 
-    audio_chain_extra = ""
+    cf = float(crossfade or 0.0)
+    if cf > 0.01 and len(items) >= 2:
+        # Chain xfade between consecutive segments.
+        # Each segment's effective duration after trim is (end - start).
+        durs = [max(0.04, e - s) for (_, s, e) in items]
+        # cumulative offset for xfade: sum(prev_durs) - cf * (idx - 0)
+        # but xfade uses absolute offset from start of the previous (chained) stream.
+        # Simpler: incrementally build, tracking the chain's current total length.
+        xchain_parts: list[str] = []
+        cur_v = "v0"
+        cur_a = "a0"
+        cur_len = durs[0]
+        for i in range(1, len(items)):
+            next_v = f"v{i}"
+            next_a = f"a{i}"
+            out_v = f"vx{i}"
+            out_a = f"ax{i}"
+            offset = max(0.0, cur_len - cf)
+            xchain_parts.append(
+                f"[{cur_v}][{next_v}]xfade=transition=fade:duration={cf:.3f}:offset={offset:.3f}[{out_v}];"
+                f"[{cur_a}][{next_a}]acrossfade=d={cf:.3f}[{out_a}]"
+            )
+            cur_v = out_v
+            cur_a = out_a
+            cur_len = cur_len + durs[i] - cf
+        chain += ";" + ";".join(xchain_parts)
+        v_label = f"[{cur_v}]"
+        a_label = f"[{cur_a}]"
+        full = chain + f";{v_label}null[v];{a_label}anull[a]"
+    else:
+        concat = "".join(f"[v{i}][a{i}]" for i in range(len(items))) + f"concat=n={len(items)}:v=1:a=1[v][a]"
+        full = chain + ";" + concat
+
     audio_map = "[a]"
     if loudnorm:
         full += ";[a]loudnorm=I=-14:LRA=11:TP=-1.5[al]"
