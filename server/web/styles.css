@@ -907,6 +907,83 @@ a { color: inherit; text-decoration: none; }
 .seq-details summary { cursor: pointer; font-size: 11px; color: var(--muted); margin: 6px 0; }
 .seq-details summary:hover { color: var(--text); }
 
+/* =========================================================================
+   Command palette (⌘K)
+   ========================================================================= */
+.cmdk-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(2, 4, 10, 0.55);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  display: grid; place-items: start center;
+  padding-top: 18vh;
+  z-index: 200;
+  animation: fade-in 160ms var(--ease);
+}
+.cmdk-backdrop.hidden { display: none; }
+.cmdk {
+  width: min(620px, 92vw);
+  background: var(--bg-elevated);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: cmdk-in 200ms var(--ease);
+}
+@keyframes cmdk-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.cmdk-search {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.cmdk-icon { font-weight: 700; color: var(--accent); }
+.cmdk-search input {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  padding: 0;
+}
+.cmdk-search input:focus { outline: none; }
+.cmdk-kbd, kbd {
+  background: var(--bg-input);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
+  color: var(--muted);
+}
+.cmdk-list { list-style: none; padding: 6px; margin: 0; max-height: 50vh; overflow-y: auto; }
+.cmdk-list li {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex; align-items: center; gap: 10px;
+  font-size: 14px;
+}
+.cmdk-list li[aria-selected="true"], .cmdk-list li:hover {
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-card));
+}
+.cmdk-list .ck-icon { width: 22px; text-align: center; opacity: 0.85; }
+.cmdk-list .ck-title { flex: 1; font-weight: 500; letter-spacing: -0.01em; }
+.cmdk-list .ck-section { color: var(--muted); font-size: 11px; }
+.cmdk-list .ck-empty { color: var(--muted); padding: 18px 12px; text-align: center; }
+.cmdk-footer {
+  display: flex; gap: 14px; align-items: center; justify-content: center;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+}
+.cmdk-footer kbd { font-size: 10px; }
+
 /* Subtle entry animation for cards */
 .card { animation: card-in 360ms var(--ease) backwards; }
 @keyframes card-in {

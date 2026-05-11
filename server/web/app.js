@@ -2115,7 +2115,151 @@ async function exportFcpxml() {
   }
 }
 
+// ---- Command palette (⌘K) ---------------------------------------------------
+
+const COMMANDS = [
+  { id: "new",       title: "Novo projeto",                         section: "Projeto", icon: "+", run: () => newProject() },
+  { id: "delete",    title: "Excluir projeto atual",                section: "Projeto", icon: "🗑", run: () => deleteProject() },
+  { id: "duplicate", title: "Duplicar projeto",                     section: "Projeto", icon: "🪞", run: () => duplicateProject() },
+  { id: "snapshot",  title: "Tirar snapshot",                       section: "Projeto", icon: "📸", run: () => takeSnapshot() },
+  { id: "theme",     title: "Alternar tema (claro/escuro)",         section: "App",     icon: "◐", run: () => $("#theme-toggle")?.click() },
+
+  { id: "transcribe", title: "Transcrever vídeo (Whisper)",         section: "Pipeline", icon: "📝", run: () => runStage("transcribe") },
+  { id: "silence",    title: "Detectar silêncios (sentence-safe)",  section: "Pipeline", icon: "🔇", run: () => runStage("silence") },
+  { id: "fillers",    title: "Remover muletas",                     section: "Pipeline", icon: "✂", run: () => runStage("fillers") },
+  { id: "apply",      title: "Aplicar edição → graded.mp4",         section: "Pipeline", icon: "⚙", run: () => runStage("apply") },
+  { id: "render",     title: "Renderizar com Hyperframes",          section: "Pipeline", icon: "🎬", run: () => runStage("render") },
+
+  { id: "sb",        title: "Extrair soundbites",                   section: "Eddie",    icon: "🎯", run: () => extractSoundbites() },
+  { id: "story",     title: "Propor roteiro",                       section: "Eddie",    icon: "📜", run: () => buildStory() },
+  { id: "rc",        title: "Gerar rough cut",                      section: "Eddie",    icon: "⚡", run: () => buildRoughCut() },
+  { id: "hl",        title: "Highlights reel",                      section: "Eddie",    icon: "⚡", run: () => buildHighlights() },
+  { id: "hook",      title: "Gerar hook 4s",                        section: "Eddie",    icon: "🪝", run: () => makeHook() },
+  { id: "social",    title: "Gerar social copy",                    section: "Eddie",    icon: "✍", run: () => generateSocialCopy() },
+
+  { id: "music",     title: "Sugerir música",                       section: "Áudio",    icon: "🎵", run: () => suggestMusic() },
+  { id: "musearch",  title: "Buscar música",                        section: "Áudio",    icon: "🔎", run: () => searchMusic() },
+  { id: "mix",       title: "Mixar música com voz",                 section: "Áudio",    icon: "🎚", run: () => mixMusic() },
+  { id: "audio",     title: "Exportar áudio (MP3/M4A)",             section: "Áudio",    icon: "🎧", run: () => exportAudio() },
+
+  { id: "podcast",   title: "Podcast pipeline 1-click",             section: "Podcast",  icon: "🎙", run: () => runPodcastPipeline() },
+  { id: "speakers",  title: "Detectar falas",                       section: "Podcast",  icon: "🎤", run: () => detectSpeakers() },
+  { id: "levels",    title: "Nivelar speakers",                     section: "Podcast",  icon: "🎚", run: () => levelSpeakers() },
+  { id: "chapters",  title: "Capítulos por tópico",                 section: "Podcast",  icon: "📑", run: () => detectChapters() },
+
+  { id: "vlog",      title: "Vlog 1-click (auto-monta o top)",      section: "Vlog",     icon: "⚡", run: () => vlogAutoPipeline() },
+  { id: "vltrans",   title: "Transcrever todos os clipes",          section: "Vlog",     icon: "📝", run: () => vlogTranscribeAll() },
+  { id: "vlnar",     title: "Sugerir narrativas",                   section: "Vlog",     icon: "🧭", run: () => vlogProposeNarratives() },
+  { id: "vlmus",     title: "Música pro vlog",                      section: "Vlog",     icon: "🎵", run: () => vlogMusicSuggest() },
+  { id: "faces",     title: "Identificar pessoas",                  section: "Vlog",     icon: "👥", run: () => detectFaceIdentities() },
+
+  { id: "shorts",    title: "Gerar N shorts",                       section: "Multicam", icon: "✂", run: () => generateShorts() },
+  { id: "mcpick",    title: "Multicam: escolher câmera por turno",  section: "Multicam", icon: "🎬", run: () => multicamPick() },
+  { id: "mcsync",    title: "Multicam: sync de áudio",              section: "Multicam", icon: "🔗", run: () => multicamSync() },
+  { id: "mcrender",  title: "Multicam: renderizar",                 section: "Multicam", icon: "🎞", run: () => multicamRender() },
+
+  { id: "fcpxml",    title: "Exportar FCPXML",                      section: "Exportar", icon: "📄", run: () => exportFcpxml() },
+  { id: "premiere",  title: "Exportar Premiere/Resolve XML",        section: "Exportar", icon: "📄", run: () => exportPremiere() },
+  { id: "srt",       title: "Exportar SRT",                         section: "Exportar", icon: "📝", run: () => exportCaptions("srt") },
+  { id: "vtt",       title: "Exportar VTT",                         section: "Exportar", icon: "📝", run: () => exportCaptions("vtt") },
+  { id: "ass",       title: "Exportar ASS karaoke",                 section: "Exportar", icon: "📝", run: () => exportCaptions("ass") },
+  { id: "burn",      title: "Queimar legendas no MP4",              section: "Exportar", icon: "🔥", run: () => burnCaptions() },
+  { id: "yt",        title: "Thumbnail YouTube",                    section: "Exportar", icon: "⭐", run: () => peakThumb() },
+  { id: "mp3",       title: "MP3 com chapter markers",              section: "Exportar", icon: "🎧", run: () => $("#audio-btn")?.click() },
+  { id: "bundle",    title: "Bundle .zip com tudo",                 section: "Exportar", icon: "📦", run: () => exportBundle() },
+];
+
+let cmdkIndex = 0;
+let cmdkFiltered = COMMANDS;
+
+function openCmdK() {
+  $("#cmdk-backdrop").classList.remove("hidden");
+  const inp = $("#cmdk-input");
+  inp.value = "";
+  cmdkFiltered = COMMANDS;
+  cmdkIndex = 0;
+  renderCmdK();
+  setTimeout(() => inp.focus(), 30);
+}
+
+function closeCmdK() {
+  $("#cmdk-backdrop").classList.add("hidden");
+}
+
+function renderCmdK() {
+  const list = $("#cmdk-list");
+  if (!cmdkFiltered.length) {
+    list.innerHTML = `<li class="ck-empty">Nada encontrado</li>`;
+    return;
+  }
+  list.innerHTML = cmdkFiltered.map((c, i) => `
+    <li data-idx="${i}" ${i === cmdkIndex ? 'aria-selected="true"' : ""}>
+      <span class="ck-icon">${c.icon}</span>
+      <span class="ck-title">${escapeHtml(c.title)}</span>
+      <span class="ck-section">${escapeHtml(c.section)}</span>
+    </li>
+  `).join("");
+  for (const li of list.querySelectorAll("li[data-idx]")) {
+    li.onclick = () => {
+      const cmd = cmdkFiltered[parseInt(li.dataset.idx, 10)];
+      closeCmdK();
+      try { cmd.run(); } catch (e) { log(`✗ ${cmd.id}: ${e.message}`, "err"); }
+    };
+  }
+}
+
+function filterCmdK(q) {
+  const needle = (q || "").trim().toLowerCase();
+  if (!needle) {
+    cmdkFiltered = COMMANDS;
+  } else {
+    cmdkFiltered = COMMANDS.filter(c =>
+      c.title.toLowerCase().includes(needle) ||
+      c.section.toLowerCase().includes(needle) ||
+      c.id.toLowerCase().includes(needle)
+    );
+  }
+  cmdkIndex = 0;
+  renderCmdK();
+}
+
+function bindCmdK() {
+  document.addEventListener("keydown", (e) => {
+    const meta = e.metaKey || e.ctrlKey;
+    if (meta && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      const isOpen = !$("#cmdk-backdrop").classList.contains("hidden");
+      if (isOpen) closeCmdK(); else openCmdK();
+      return;
+    }
+    const isOpen = !$("#cmdk-backdrop").classList.contains("hidden");
+    if (!isOpen) return;
+    if (e.key === "Escape") { e.preventDefault(); closeCmdK(); }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      cmdkIndex = Math.min(cmdkFiltered.length - 1, cmdkIndex + 1);
+      renderCmdK();
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      cmdkIndex = Math.max(0, cmdkIndex - 1);
+      renderCmdK();
+    }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const cmd = cmdkFiltered[cmdkIndex];
+      if (cmd) { closeCmdK(); try { cmd.run(); } catch (err) { log(`✗ ${cmd.id}: ${err.message}`, "err"); } }
+    }
+  });
+  $("#cmdk-input").addEventListener("input", (e) => filterCmdK(e.target.value));
+  $("#cmdk-backdrop").addEventListener("click", (e) => {
+    if (e.target === $("#cmdk-backdrop")) closeCmdK();
+  });
+}
+
 function bind() {
+  bindCmdK();
+  $("#cmdk-open")?.addEventListener("click", () => openCmdK());
   // Theme toggle (dark ↔ light, persisted in localStorage)
   const themeBtn = $("#theme-toggle");
   if (themeBtn) {

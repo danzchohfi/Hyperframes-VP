@@ -25,6 +25,7 @@
           <button id="theme-toggle" class="theme-toggle" title="Alternar tema" aria-label="Alternar tema">◐</button>
         </header>
         <button id="new-project" class="btn-primary">+ Novo projeto</button>
+        <button id="cmdk-open" class="btn-ghost" style="justify-content:space-between"><span>Comandos</span><kbd>⌘ K</kbd></button>
         <input id="search-q" type="search" placeholder="🔎 Buscar soundbites" class="search-input" />
         <div id="search-results" class="search-results"></div>
         <div id="project-list" class="project-list"></div>
@@ -477,6 +478,23 @@
           </section>
         </div>
       </main>
+    </div>
+
+    <!-- Command palette (⌘K) -->
+    <div id="cmdk-backdrop" class="cmdk-backdrop hidden" aria-hidden="true">
+      <div class="cmdk" role="dialog" aria-modal="true" aria-label="Comandos">
+        <div class="cmdk-search">
+          <span class="cmdk-icon">⌘</span>
+          <input id="cmdk-input" type="text" placeholder="Pesquisar ações… (digite para filtrar)" autocomplete="off" />
+          <kbd class="cmdk-kbd">esc</kbd>
+        </div>
+        <ul id="cmdk-list" class="cmdk-list"></ul>
+        <div class="cmdk-footer">
+          <span><kbd>↑↓</kbd> navegar</span>
+          <span><kbd>enter</kbd> executar</span>
+          <span><kbd>⌘ K</kbd> abrir/fechar</span>
+        </div>
+      </div>
     </div>
 
     <script src="/app.js" type="module"></script>
