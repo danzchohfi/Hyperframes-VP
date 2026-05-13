@@ -109,7 +109,10 @@ def build_composition(
 
     width, height = _aspect_dims(aspect)
     main_dur = max(video_duration, 0.1)
-    intro_dur = INTRO_DUR if (brand.intro_title or brand.name) else 0.0
+    # Intro/outro cards are opt-in. brand.name defaults to "Brand" so we
+    # explicitly require intro_title (or outro_text) — otherwise every
+    # render would get a random "Brand" splash that nobody asked for.
+    intro_dur = INTRO_DUR if brand.intro_title else 0.0
     outro_dur = OUTRO_DUR if brand.outro_text else 0.0
     total_dur = round(intro_dur + main_dur + outro_dur, 3)
 
@@ -173,7 +176,7 @@ def build_composition(
     caption_color = brand.caption_color or palette.foreground
     caption_highlight = brand.caption_highlight or palette.accent
 
-    intro_title = html.escape(brand.intro_title or brand.name)
+    intro_title = html.escape(brand.intro_title or "")
     intro_subtitle = html.escape(brand.intro_subtitle or (brand.tagline or ""))
     outro_text = html.escape(brand.outro_text or "")
 

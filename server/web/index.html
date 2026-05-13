@@ -182,6 +182,7 @@
               <video id="preview" controls playsinline class="preview"></video>
             </div>
             <div id="upload-status" class="status muted"></div>
+            <progress id="upload-bar" class="upload-bar" max="100" value="0" hidden></progress>
             <!-- Pipeline outputs (waveform, silence cuts, stale-state warnings,
                  archive). They live here only for the advanced "Tudo" kind;
                  hidden by default so the upload card stays clean for laymen. -->
@@ -220,14 +221,14 @@
               <label>Tagline
                 <input id="brand-tagline" type="text" placeholder="Subtítulo curto" />
               </label>
-              <label>Título do intro
-                <input id="brand-intro-title" type="text" placeholder="Mesmo que nome se vazio" />
+              <label>Título do intro <span class="muted">(opt-in)</span>
+                <input id="brand-intro-title" type="text" placeholder="Vazio = sem intro card" />
               </label>
               <label>Subtítulo do intro
                 <input id="brand-intro-sub" type="text" placeholder="Opcional" />
               </label>
-              <label>Texto do outro
-                <input id="brand-outro" type="text" placeholder="Ex.: Obrigado por assistir" />
+              <label>Texto do outro <span class="muted">(opt-in)</span>
+                <input id="brand-outro" type="text" placeholder="Vazio = sem outro card" />
               </label>
               <label>Posição da legenda
                 <select id="brand-cap-pos">

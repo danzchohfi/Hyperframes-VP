@@ -1000,27 +1000,39 @@ async function uploadFile(file) {
   el?.appendChild(line);
   el && (el.scrollTop = el.scrollHeight);
   if (window.HFIcons) HFIcons.render(line);
-  $("#upload-status").textContent = `Enviando ${file.name}...`;
-  $("#upload-status").className = "status warn";
+  const statusEl = $("#upload-status");
+  const barEl = $("#upload-bar");
+  statusEl.textContent = `Enviando ${file.name}… 0%`;
+  statusEl.className = "status warn";
+  if (barEl) {
+    barEl.hidden = false;
+    barEl.value = 0;
+  }
   try {
     await apiUpload(`/api/projects/${state.current.id}/upload`, fd, {
       onProgress: ({ loaded, total, pct }) => {
-        line.innerHTML = `<span data-icon="upload-cloud"></span> Subindo ${file.name} — ${(pct * 100).toFixed(0)}% (${fmtBytes(loaded)} / ${fmtBytes(total)})`;
+        const pctNum = pct * 100;
+        const pctStr = pctNum.toFixed(pct >= 0.99 ? 1 : 0);
+        line.innerHTML = `<span data-icon="upload-cloud"></span> Subindo ${file.name} — ${pctStr}% (${fmtBytes(loaded)} / ${fmtBytes(total)})`;
         if (window.HFIcons) HFIcons.render(line);
+        statusEl.textContent = `Enviando ${file.name}… ${pctStr}% (${fmtBytes(loaded)} / ${fmtBytes(total)})`;
+        if (barEl) barEl.value = pctNum;
       },
     });
     line.classList.add("ok");
     line.innerHTML = `<span data-icon="check"></span> Upload concluído: ${file.name}`;
     if (window.HFIcons) HFIcons.render(line);
-    $("#upload-status").textContent = `OK`;
-    $("#upload-status").className = "status ok";
+    statusEl.textContent = `OK`;
+    statusEl.className = "status ok";
+    if (barEl) barEl.hidden = true;
     await loadProject(state.current.id);
   } catch (e) {
     line.classList.add("err");
     line.innerHTML = `<span data-icon="alert-triangle"></span> Upload erro: ${e.message}`;
     if (window.HFIcons) HFIcons.render(line);
-    $("#upload-status").textContent = `Falha: ${e.message}`;
-    $("#upload-status").className = "status error";
+    statusEl.textContent = `Falha: ${e.message}`;
+    statusEl.className = "status error";
+    if (barEl) barEl.hidden = true;
   }
 }
 
