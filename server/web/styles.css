@@ -1297,6 +1297,26 @@ a { color: inherit; text-decoration: none; }
   color: var(--ok);
 }
 .nle-pill.muted { opacity: 0.6; }
+.nle-pill.log {
+  background: linear-gradient(180deg, color-mix(in srgb, #f0b400 22%, var(--bg-input)), var(--bg-input));
+  border-color: color-mix(in srgb, #f0b400 55%, transparent);
+  color: #f0b400;
+  font-weight: 600;
+}
+
+.color-profile-row {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+}
+.color-profile-row .cp-label {
+  font-size: 12px; font-weight: 600; color: var(--text-dim);
+}
+.color-profile-row .cp-hint {
+  font-size: 11px; color: var(--muted); font-style: italic;
+}
 .nle-warnings { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
 .nle-warn {
   font-size: 12px;

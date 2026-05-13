@@ -176,6 +176,7 @@ async function loadProject(id) {
   applyPrereqs();
   refreshNleExport();
   annotateSourcePickers(p);
+  syncColorProfileSelect(p);
 
   renderAngles(p);
   renderMusicSuggestion(p.music_suggestion);
@@ -2347,6 +2348,53 @@ function annotateSourcePickers(p) {
   }
 }
 
+// ---- Color profile (LOG support) ------------------------------------------
+
+const COLOR_PROFILE_LABELS = {
+  rec709:   "Rec. 709",
+  slog3:    "Sony S-Log3",
+  clog3:    "Canon C-Log3",
+  vlog:     "Panasonic V-Log",
+  applelog: "Apple Log",
+  logc:     "ARRI Log-C",
+  custom:   "Custom LUT",
+};
+
+function syncColorProfileSelect(p) {
+  const sel = $("#color-profile");
+  if (!sel) return;
+  const profile = p?.source_color_profile || "rec709";
+  if (sel.value !== profile) sel.value = profile;
+  const hint = $("#color-profile-hint");
+  if (hint) {
+    if (profile === "rec709") {
+      hint.textContent = "";
+    } else if (p?.color_profile_locked) {
+      hint.textContent = "· definido manualmente";
+    } else {
+      hint.textContent = "· detectado automaticamente do arquivo";
+    }
+  }
+}
+
+async function saveColorProfile(profile) {
+  if (!state.current) return;
+  try {
+    await api(`/api/projects/${state.current.id}/color-profile`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ profile }),
+    });
+    state.current.source_color_profile = profile;
+    state.current.color_profile_locked = true;
+    log(`✓ perfil de cor: ${COLOR_PROFILE_LABELS[profile] || profile}`, "ok");
+    refreshNleExport();
+    syncColorProfileSelect(state.current);
+  } catch (e) {
+    log(`✗ perfil de cor: ${e.message}`, "err");
+  }
+}
+
 // ---- NLE export panel ------------------------------------------------------
 
 function fmtTimecode(seconds) {
@@ -2367,8 +2415,13 @@ async function refreshNleExport() {
   try {
     const data = await api(`/api/projects/${state.current.id}/export/fcpxml/preview`);
     const a = data.available || {};
+    const color = data.color || { profile: "rec709", is_log: false, label: "Rec. 709" };
     const has = (k) => a[k] ? "ok" : "muted";
+    const colorPill = color.is_log
+      ? `<span class="nle-pill log" title="${escapeHtml(color.fcp_lut || '')}">🎨 LOG · ${escapeHtml(color.label)}</span>`
+      : `<span class="nle-pill muted">🎨 Rec. 709</span>`;
     pills.innerHTML = [
+      colorPill,
       `<span class="nle-pill ${has("multicam")}">${a.multicam ? "✓" : "·"} multicam (${(a.angles || []).length} ângulos)</span>`,
       `<span class="nle-pill ${has("camera_plan")}">${a.camera_plan ? "✓" : "·"} plano de câmera${a.camera_plan ? ` · ${data.edl_count} cortes` : ""}</span>`,
       `<span class="nle-pill ${has("rough_cut")}">${a.rough_cut ? "✓" : "·"} rough cut</span>`,
@@ -2911,6 +2964,9 @@ function bind() {
   const li = $("#lut-input");
   $("#lut-zone").addEventListener("click", () => li.click());
   li.addEventListener("change", () => li.files[0] && uploadLut(li.files[0]));
+
+  const cp = $("#color-profile");
+  if (cp) cp.addEventListener("change", () => saveColorProfile(cp.value));
 
   // angle uploader (don't trigger file picker when typing in the name field)
   const ai = $("#angle-input");

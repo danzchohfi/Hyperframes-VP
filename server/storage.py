@@ -68,6 +68,11 @@ class ProjectState(BaseModel):
     has_camera_plan: bool = False
     has_speakers: bool = False
     has_chapters: bool = False
+    # Camera color profile of the source footage. When non-rec709, the
+    # FCPXML export tags assets so the editor knows which Camera LUT to
+    # apply in Final Cut.
+    source_color_profile: str = "rec709"  # rec709 | slog3 | clog3 | vlog | applelog | logc | custom
+    color_profile_locked: bool = False    # user picked manually — don't auto-detect on next upload
     stages: dict[str, Stage] = Field(default_factory=dict)
 
     def stage(self, name: str) -> Stage:

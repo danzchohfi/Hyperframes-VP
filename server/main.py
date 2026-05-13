@@ -370,9 +370,32 @@ async def upload_source(pid: str, file: UploadFile = File(...)) -> dict[str, Any
 
     state.source_filename = file.filename
     state.source_duration = dur
+    # Auto-detect color profile from the *original* file (normalize strips
+    # some metadata). User can override via PATCH /color-profile.
+    if not state.color_profile_locked:
+        try:
+            state.source_color_profile = await ff.detect_color_profile(raw_path)
+        except Exception:
+            pass
     storage.save(state)
-    _stage(state, "upload", "done", f"{dur:.2f}s")
+    _stage(state, "upload", "done", f"{dur:.2f}s · {state.source_color_profile}")
     return state.model_dump()
+
+
+class ColorProfileIn(BaseModel):
+    profile: str  # rec709 | slog3 | clog3 | vlog | applelog | logc | custom
+
+
+@app.put("/api/projects/{pid}/color-profile")
+async def set_color_profile(pid: str, body: ColorProfileIn) -> dict[str, Any]:
+    state = _load(pid)
+    valid = {"rec709", "slog3", "clog3", "vlog", "applelog", "logc", "custom"}
+    if body.profile not in valid:
+        raise HTTPException(400, f"profile must be one of {sorted(valid)}")
+    state.source_color_profile = body.profile
+    state.color_profile_locked = True
+    storage.save(state)
+    return {"profile": state.source_color_profile, "locked": True}
 
 
 # ---- transcribe --------------------------------------------------------------
@@ -811,6 +834,7 @@ async def export_fcpxml(pid: str, body: FcpxmlIn) -> dict[str, Any]:
                 transcript=transcript,
                 broll_angles=broll_angles_paths,
                 broll_placements=broll_placements,
+                source_color_profile=state.source_color_profile,
             )
             kind = "multitrack"
         elif body.multicam and state.angles:
@@ -879,6 +903,7 @@ async def export_fcpxml(pid: str, body: FcpxmlIn) -> dict[str, Any]:
                 chapters=chapters,
                 soundbites=soundbites,
                 speakers=speakers,
+                source_color_profile=state.source_color_profile,
             )
             kind = "multicam+plan" if camera_cuts else "multicam"
         else:
@@ -887,6 +912,7 @@ async def export_fcpxml(pid: str, body: FcpxmlIn) -> dict[str, Any]:
                 source=source,
                 cuts=keep,
                 transcript=transcript,
+                source_color_profile=state.source_color_profile,
             )
             kind = "singlecam"
     except Exception as e:
@@ -986,8 +1012,23 @@ async def export_fcpxml_preview(pid: str) -> dict[str, Any]:
     if available["multicam"] and not state.has_speakers:
         warnings.append("Sem diarização de speakers — o plano de câmera vai usar só framing/qualidade.")
 
+    profile_spec = fcpxml.LOG_PROFILES.get(state.source_color_profile, {})
+    color = {
+        "profile": state.source_color_profile,
+        "label": profile_spec.get("label", state.source_color_profile),
+        "fcp_lut": profile_spec.get("fcp_lut", ""),
+        "is_log": state.source_color_profile != "rec709",
+        "locked": state.color_profile_locked,
+    }
+    if color["is_log"]:
+        warnings.append(
+            f"Fonte em {color['label']}. No FCP, atribua o Camera LUT "
+            f"'{color['fcp_lut']}' no inspector pra ver o look correto."
+        )
+
     return {
         "available": available,
+        "color": color,
         "edl": edl,
         "edl_count": len(edl),
         "total_duration": total,

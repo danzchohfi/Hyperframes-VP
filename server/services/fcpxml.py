@@ -18,6 +18,44 @@ from typing import Any
 from .ffmpeg import probe
 
 
+# --- color profile helpers ---------------------------------------------------
+
+# Maps our internal profile keys to user-facing labels + the Camera LUT name
+# Final Cut expects in its Inspector picker. The note is dropped as a hint on
+# every asset; FCPXML 1.10 doesn't have a standard attribute for non-Rec.709
+# log profiles, so the user assigns the LUT once in FCP and ripples it.
+LOG_PROFILES: dict[str, dict[str, str]] = {
+    "rec709":   {"label": "Rec. 709", "fcp_lut": ""},
+    "slog3":    {"label": "Sony S-Log3 / S-Gamut3.Cine", "fcp_lut": "Sony S-Log3 S-Gamut3.Cine to LC-709"},
+    "clog3":    {"label": "Canon C-Log3 / Cinema Gamut",  "fcp_lut": "Canon Log3 Cinema Gamut to Rec.709 BT.1886"},
+    "vlog":     {"label": "Panasonic V-Log / V-Gamut",    "fcp_lut": "Panasonic V-Log V-Gamut to BT.709"},
+    "applelog": {"label": "Apple Log",                    "fcp_lut": "Apple Log to Rec. 709"},
+    "logc":     {"label": "ARRI Log-C",                   "fcp_lut": "Arri LogC to Rec. 709"},
+    "custom":   {"label": "Custom LUT (uploaded)", "fcp_lut": ""},
+}
+
+
+def _attach_color_metadata(asset_el: ET.Element, profile: str) -> None:
+    """Stamp a log-profile hint on an <asset> so Final Cut can route the
+    user to the right Camera LUT. FCPXML 1.10 has no standardized attribute
+    for arbitrary log profiles, so we use a <note> (visible in the inspector)
+    plus a <metadata> entry for traceability."""
+    if not profile or profile == "rec709":
+        return
+    spec = LOG_PROFILES.get(profile, {})
+    label = spec.get("label", profile)
+    lut = spec.get("fcp_lut") or ""
+    hint = f"HyperFrames: source is {label}."
+    if lut:
+        hint += f" In FCP Inspector → Info → Settings → Camera LUT, pick '{lut}'."
+    note = ET.SubElement(asset_el, "note")
+    note.text = hint
+    md = ET.SubElement(asset_el, "metadata")
+    ET.SubElement(md, "md", {"key": "com.hyperframes.colorProfile", "value": profile})
+    if lut:
+        ET.SubElement(md, "md", {"key": "com.hyperframes.cameraLUT", "value": lut})
+
+
 # --- frame-rate helpers -------------------------------------------------------
 
 # (rate Hz, frame_duration string, format suffix, time_base)
@@ -78,6 +116,7 @@ async def build_single_cam_fcpxml(
     source: Path,
     cuts: list[tuple[float, float]] | None,
     transcript: dict | None = None,
+    source_color_profile: str = "rec709",
 ) -> str:
     meta = await _video_meta(source)
     tb = meta["time_base"]
@@ -98,7 +137,7 @@ async def build_single_cam_fcpxml(
             "colorSpace": "1-1-1 (Rec. 709)",
         },
     )
-    ET.SubElement(
+    asset_main = ET.SubElement(
         resources,
         "asset",
         {
@@ -115,6 +154,7 @@ async def build_single_cam_fcpxml(
             "audioRate": "48000",
         },
     )
+    _attach_color_metadata(asset_main, source_color_profile)
 
     library = ET.SubElement(fcpxml, "library")
     event = ET.SubElement(library, "event", {"name": f"HyperFrames · {project_name}"})
@@ -179,6 +219,7 @@ async def build_multitrack_fcpxml(
     transcript: dict | None = None,
     broll_angles: list[tuple[str, Path]] | None = None,
     broll_placements: list[dict] | None = None,
+    source_color_profile: str = "rec709",
 ) -> str:
     """A-roll spine on V1, B-roll inserts as connected clips on lane=1.
 
@@ -206,7 +247,7 @@ async def build_multitrack_fcpxml(
         },
     )
     # A-roll asset
-    ET.SubElement(
+    aroll_asset = ET.SubElement(
         resources,
         "asset",
         {
@@ -223,12 +264,13 @@ async def build_multitrack_fcpxml(
             "audioRate": "48000",
         },
     )
+    _attach_color_metadata(aroll_asset, source_color_profile)
     # B-roll assets
     angle_durations: dict[int, float] = {}
     for i, (name, path) in enumerate(broll_angles):
         m = await _video_meta(path)
         angle_durations[i] = m["duration"] or 0.0
-        ET.SubElement(
+        broll_asset = ET.SubElement(
             resources,
             "asset",
             {
@@ -245,6 +287,7 @@ async def build_multitrack_fcpxml(
                 "audioRate": "48000",
             },
         )
+        _attach_color_metadata(broll_asset, source_color_profile)
 
     library = ET.SubElement(fcpxml, "library")
     event = ET.SubElement(library, "event", {"name": f"HyperFrames · {project_name}"})
@@ -352,6 +395,7 @@ async def build_multicam_fcpxml(
     chapters: list[dict] | None = None,        # [{start, title}]
     soundbites: list[dict] | None = None,      # [{start, end, topic?, quote?}]
     speakers: list[dict] | None = None,        # [{start, end, speaker}]
+    source_color_profile: str = "rec709",
 ) -> str:
     """Build an FCPXML with a multicam media grouping all angles.
 
@@ -399,7 +443,7 @@ async def build_multicam_fcpxml(
         aid = f"a{i + 1}"
         asset_ids.append(aid)
         angle_durations.append(m["duration"] or 0.0)
-        ET.SubElement(
+        asset_el = ET.SubElement(
             resources,
             "asset",
             {
@@ -416,6 +460,7 @@ async def build_multicam_fcpxml(
                 "audioRate": "48000",
             },
         )
+        _attach_color_metadata(asset_el, source_color_profile)
 
     multi_id = "mc1"
     media = ET.SubElement(resources, "media", {"id": multi_id, "name": f"{project_name} Multicam"})

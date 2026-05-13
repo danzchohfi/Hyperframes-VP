@@ -246,7 +246,20 @@
           </section>
 
           <section class="card" data-cat="edit">
-            <h3>3 · LUT (.cube)</h3>
+            <h3>3 · Cor &amp; LUT</h3>
+            <div class="color-profile-row">
+              <label class="cp-label">Perfil de cor da fonte</label>
+              <select id="color-profile" class="inline-select">
+                <option value="rec709">Rec. 709 (padrão)</option>
+                <option value="slog3">Sony S-Log3 / S-Gamut3.Cine</option>
+                <option value="clog3">Canon C-Log3 / Cinema Gamut</option>
+                <option value="vlog">Panasonic V-Log / V-Gamut</option>
+                <option value="applelog">Apple Log</option>
+                <option value="logc">ARRI Log-C</option>
+                <option value="custom">Custom (LUT abaixo)</option>
+              </select>
+              <span id="color-profile-hint" class="cp-hint"></span>
+            </div>
             <div class="row">
               <label class="dropzone small" id="lut-zone">
                 <input id="lut-input" type="file" accept=".cube" hidden />

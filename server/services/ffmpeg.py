@@ -47,6 +47,53 @@ async def probe(path: Path) -> dict:
     return json.loads(out)
 
 
+async def detect_color_profile(path: Path) -> str:
+    """Best-effort guess of the camera color profile from the source file.
+
+    Returns one of: rec709 | slog3 | clog3 | vlog | applelog | logc.
+    The detection is intentionally conservative — only flips off rec709 when
+    we see strong evidence (camera tags, color matrix). The user can always
+    override via the UI.
+    """
+    try:
+        info = await probe(path)
+    except Exception:
+        return "rec709"
+    streams = info.get("streams") or []
+    fmt = info.get("format") or {}
+    v = next((s for s in streams if s.get("codec_type") == "video"), {})
+
+    primaries = (v.get("color_primaries") or "").lower()
+    transfer = (v.get("color_transfer") or "").lower()
+    space = (v.get("color_space") or "").lower()
+
+    # Combine all tag dicts we can see; cameras stash brand info under
+    # different keys (format.tags.encoder, stream.tags.handler_name, etc.)
+    tags: dict[str, str] = {}
+    for src in (fmt.get("tags") or {}, v.get("tags") or {}):
+        for k, val in src.items():
+            tags[str(k).lower()] = str(val)
+    blob = " ".join(tags.values()).lower()
+
+    if "slog3" in blob or "s-log3" in blob or "sgamut3" in blob:
+        return "slog3"
+    if "clog3" in blob or "c-log3" in blob or "canon log 3" in blob:
+        return "clog3"
+    if "v-log" in blob or "vlog" in blob:
+        return "vlog"
+    if "log-c" in blob or "logc" in blob or "arri" in blob:
+        return "logc"
+    if "apple log" in blob or "applelog" in blob:
+        return "applelog"
+
+    # Wide-gamut + non-standard transfer is a strong signal of log capture
+    # on Sony cameras (bt2020 + unknown trc).
+    if primaries in ("bt2020", "bt2020nc") and transfer in ("", "unknown", "unspecified", "smpte2084"):
+        return "slog3"
+
+    return "rec709"
+
+
 async def duration(path: Path) -> float:
     info = await probe(path)
     fmt = info.get("format", {})
