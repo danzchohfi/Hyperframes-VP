@@ -35,25 +35,58 @@ LOG_PROFILES: dict[str, dict[str, str]] = {
 }
 
 
-def _attach_color_metadata(asset_el: ET.Element, profile: str) -> None:
-    """Stamp a log-profile hint on an <asset> so Final Cut can route the
-    user to the right Camera LUT. FCPXML 1.10 has no standardized attribute
-    for arbitrary log profiles, so we use a <note> (visible in the inspector)
-    plus a <metadata> entry for traceability."""
-    if not profile or profile == "rec709":
-        return
-    spec = LOG_PROFILES.get(profile, {})
-    label = spec.get("label", profile)
-    lut = spec.get("fcp_lut") or ""
-    hint = f"HyperFrames: source is {label}."
-    if lut:
-        hint += f" In FCP Inspector → Info → Settings → Camera LUT, pick '{lut}'."
-    note = ET.SubElement(asset_el, "note")
-    note.text = hint
-    md = ET.SubElement(asset_el, "metadata")
-    ET.SubElement(md, "md", {"key": "com.hyperframes.colorProfile", "value": profile})
-    if lut:
-        ET.SubElement(md, "md", {"key": "com.hyperframes.cameraLUT", "value": lut})
+def _emit_asset(
+    resources: ET.Element,
+    *,
+    asset_id: str,
+    name: str,
+    src_path: Path,
+    duration_str: str,
+    format_id: str = "r1",
+    has_video: bool = True,
+    has_audio: bool = True,
+    audio_channels: int = 2,
+    audio_rate: int = 48000,
+    color_profile: str | None = None,
+) -> ET.Element:
+    """Emit a DTD-compliant <asset> for FCPXML 1.10.
+
+    Schema (1.10): <asset> body is `(media-rep+, metadata?)`. The actual
+    file path lives on a <media-rep kind="original-media" src="..."/>
+    child — NOT as a `src` attribute on `<asset>` (which DTD validation
+    in Final Cut rejects). Color/profile hints go into the optional
+    <metadata> block via `<md key value/>` entries.
+    """
+    attrs: dict[str, str] = {
+        "id": asset_id,
+        "name": name,
+        "start": "0s",
+        "duration": duration_str,
+        "hasVideo": "1" if has_video else "0",
+        "hasAudio": "1" if has_audio else "0",
+        "format": format_id,
+    }
+    if has_audio:
+        attrs["audioSources"] = "1"
+        attrs["audioChannels"] = str(audio_channels)
+        attrs["audioRate"] = str(audio_rate)
+    asset_el = ET.SubElement(resources, "asset", attrs)
+    ET.SubElement(asset_el, "media-rep", {
+        "kind": "original-media",
+        "src": _file_url(src_path),
+    })
+    # Optional metadata block: log profile hint for the editor + any
+    # internal traceability keys. Must follow <media-rep> per DTD.
+    if color_profile and color_profile != "rec709":
+        spec = LOG_PROFILES.get(color_profile, {})
+        label = spec.get("label", color_profile)
+        lut = spec.get("fcp_lut") or ""
+        md = ET.SubElement(asset_el, "metadata")
+        ET.SubElement(md, "md", {"key": "com.hyperframes.colorProfile", "value": color_profile})
+        ET.SubElement(md, "md", {"key": "com.hyperframes.colorProfileLabel", "value": label})
+        if lut:
+            ET.SubElement(md, "md", {"key": "com.hyperframes.cameraLUT", "value": lut})
+    return asset_el
 
 
 # --- frame-rate helpers -------------------------------------------------------
@@ -137,24 +170,14 @@ async def build_single_cam_fcpxml(
             "colorSpace": "1-1-1 (Rec. 709)",
         },
     )
-    asset_main = ET.SubElement(
+    _emit_asset(
         resources,
-        "asset",
-        {
-            "id": "r2",
-            "name": source.stem,
-            "src": _file_url(source),
-            "start": "0s",
-            "duration": _t(src_dur, tb),
-            "hasVideo": "1",
-            "hasAudio": "1",
-            "format": "r1",
-            "audioSources": "1",
-            "audioChannels": "2",
-            "audioRate": "48000",
-        },
+        asset_id="r2",
+        name=source.stem,
+        src_path=source,
+        duration_str=_t(src_dur, tb),
+        color_profile=source_color_profile,
     )
-    _attach_color_metadata(asset_main, source_color_profile)
 
     library = ET.SubElement(fcpxml, "library")
     event = ET.SubElement(library, "event", {"name": f"HyperFrames · {project_name}"})
@@ -247,47 +270,27 @@ async def build_multitrack_fcpxml(
         },
     )
     # A-roll asset
-    aroll_asset = ET.SubElement(
+    _emit_asset(
         resources,
-        "asset",
-        {
-            "id": "r2",
-            "name": source.stem,
-            "src": _file_url(source),
-            "start": "0s",
-            "duration": _t(src_dur, tb),
-            "hasVideo": "1",
-            "hasAudio": "1",
-            "format": "r1",
-            "audioSources": "1",
-            "audioChannels": "2",
-            "audioRate": "48000",
-        },
+        asset_id="r2",
+        name=source.stem,
+        src_path=source,
+        duration_str=_t(src_dur, tb),
+        color_profile=source_color_profile,
     )
-    _attach_color_metadata(aroll_asset, source_color_profile)
     # B-roll assets
     angle_durations: dict[int, float] = {}
     for i, (name, path) in enumerate(broll_angles):
         m = await _video_meta(path)
         angle_durations[i] = m["duration"] or 0.0
-        broll_asset = ET.SubElement(
+        _emit_asset(
             resources,
-            "asset",
-            {
-                "id": f"b{i + 1}",
-                "name": name,
-                "src": _file_url(path),
-                "start": "0s",
-                "duration": _t(m["duration"] or 0.0, tb),
-                "hasVideo": "1",
-                "hasAudio": "1",
-                "format": "r1",
-                "audioSources": "1",
-                "audioChannels": "2",
-                "audioRate": "48000",
-            },
+            asset_id=f"b{i + 1}",
+            name=name,
+            src_path=path,
+            duration_str=_t(m["duration"] or 0.0, tb),
+            color_profile=source_color_profile,
         )
-        _attach_color_metadata(broll_asset, source_color_profile)
 
     library = ET.SubElement(fcpxml, "library")
     event = ET.SubElement(library, "event", {"name": f"HyperFrames · {project_name}"})
@@ -443,24 +446,14 @@ async def build_multicam_fcpxml(
         aid = f"a{i + 1}"
         asset_ids.append(aid)
         angle_durations.append(m["duration"] or 0.0)
-        asset_el = ET.SubElement(
+        _emit_asset(
             resources,
-            "asset",
-            {
-                "id": aid,
-                "name": name,
-                "src": _file_url(path),
-                "start": "0s",
-                "duration": _t(m["duration"] or 0.0, tb),
-                "hasVideo": "1",
-                "hasAudio": "1",
-                "format": "r1",
-                "audioSources": "1",
-                "audioChannels": "2",
-                "audioRate": "48000",
-            },
+            asset_id=aid,
+            name=name,
+            src_path=path,
+            duration_str=_t(m["duration"] or 0.0, tb),
+            color_profile=source_color_profile,
         )
-        _attach_color_metadata(asset_el, source_color_profile)
 
     multi_id = "mc1"
     media = ET.SubElement(resources, "media", {"id": multi_id, "name": f"{project_name} Multicam"})
@@ -471,7 +464,6 @@ async def build_multicam_fcpxml(
             "format": "r1",
             "tcStart": "0s",
             "tcFormat": "NDF",
-            "renderColorSpace": "Rec. 709",
         },
     )
     for i, (name, _path) in enumerate(angles):
