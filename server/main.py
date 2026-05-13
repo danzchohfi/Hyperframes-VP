@@ -1511,6 +1511,58 @@ async def suggest_reels_animations(pid: str, body: ReelsSuggestIn) -> dict[str, 
     return {"animations": cleaned, "count": len(cleaned)}
 
 
+@app.post("/api/projects/{pid}/podcast-animations/auto")
+async def auto_podcast_animations(pid: str) -> dict[str, Any]:
+    """Heuristic generator for podcast overlays. Uses whatever metadata
+    is on disk (brand, chapters.json, soundbites.json, questions.json,
+    transcript.json) and writes `reels_animations.json`. Zero LLM cost.
+
+    The multicam 1-click pipeline runs this automatically; this endpoint
+    lets the user re-run after editing the brand, soundbites or chapters
+    without invoking the whole pipeline again.
+    """
+    from .services import podcast_animations as pa_svc
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    if not state.has_transcript:
+        raise HTTPException(400, "transcribe first — auto-animations need a transcript")
+    transcript = storage.read_json(pid, "transcript.json")
+    chapters_list = None
+    if (pdir / "chapters.json").exists():
+        try:
+            chapters_list = (storage.read_json(pid, "chapters.json") or {}).get("chapters") or []
+        except Exception:
+            chapters_list = None
+    soundbites_list = None
+    if (pdir / "soundbites.json").exists():
+        try:
+            soundbites_list = (storage.read_json(pid, "soundbites.json") or {}).get("soundbites") or []
+        except Exception:
+            soundbites_list = None
+    questions_list = None
+    if (pdir / "questions.json").exists():
+        try:
+            questions_list = (storage.read_json(pid, "questions.json") or {}).get("questions") or []
+        except Exception:
+            questions_list = None
+    brand = (
+        BrandBook.model_validate(storage.read_json(pid, "brand.json"))
+        if state.has_brand else BrandBook()
+    )
+    src = pdir / "source.mp4"
+    duration = state.source_duration or (await ff.duration(src) if src.exists() else 0.0)
+    plan = pa_svc.auto_generate(
+        source_duration=float(duration or 0.0),
+        transcript=transcript,
+        chapters=chapters_list,
+        soundbites=soundbites_list,
+        questions=questions_list,
+        brand=brand,
+    )
+    storage.write_json(pid, "reels_animations.json", plan)
+    return plan
+
+
 # ---- SFX library -------------------------------------------------------------
 
 @app.get("/api/sfx")
