@@ -11,16 +11,41 @@ filter that:
     locked even if other angles have different audio.
   - Concatenates the kept video segments.
 
-Output goes to <project>/exports/multicam-roughcut.mp4.
+Output goes to <project>/exports/<name>-multicam.mp4.
+
+A few non-obvious correctness bits the concat path depends on:
+- Every video chain forces fps=30 + scale 1920x1080 + sar=1, otherwise
+  concat refuses dissimilar streams or accumulates drift across segments
+  when the angles have different native frame rates.
+- The audio is fully re-sampled to 48 kHz stereo before concat for the
+  same reason.
+- We clamp each angle trim to its actual duration so a long source
+  segment that overruns a shorter angle doesn't hang ffmpeg.
 """
 
 from __future__ import annotations
 
-import shlex
 from pathlib import Path
 from typing import Any
 
 from . import ffmpeg as ff
+
+
+TARGET_FPS = 30
+TARGET_W, TARGET_H = 1920, 1080
+TARGET_SR = 48000
+
+
+async def _probe_duration(path: Path) -> float:
+    try:
+        info = await ff.probe(path)
+    except Exception:
+        return 0.0
+    fmt = info.get("format") or {}
+    try:
+        return float(fmt.get("duration") or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 async def render(
@@ -35,51 +60,71 @@ async def render(
     if not plan:
         raise RuntimeError("empty plan")
 
-    # Build the ffmpeg command:
-    #   -i source.mp4         (audio reference)
-    #   -i angle1.mp4
-    #   ...
-    # filter_complex:
-    #   For each segment k: take [angle_input:v]trim=start=Sk-off:end=Ek-off,setpts=PTS-STARTPTS[vk];
-    #   Concat all vk's.
-    # Map: [vout] + [0:a] trimmed/filtered to the union [Sk:Ek] (same as source span).
+    # Probe every angle once so we can clamp trim ranges to actual durations
+    # and avoid ffmpeg hangs when a segment overruns a shorter angle.
+    durations: list[float] = []
+    for p in angle_paths:
+        durations.append(await _probe_duration(p))
 
     inputs: list[str] = []
-    # angle[0] is source itself
     for path in angle_paths:
         inputs += ["-i", str(path)]
 
     filter_parts: list[str] = []
-    # Video chains per segment
+
+    # Per-segment video chains. Each is trimmed from its chosen angle and
+    # then normalized to TARGET_FPS / TARGET_W x TARGET_H / SAR 1 so concat
+    # can splice them without drift.
     video_labels: list[str] = []
     for k, c in enumerate(plan):
         ai = int(c.get("angle_index", 0))
+        if ai < 0 or ai >= len(angle_paths):
+            ai = 0
         s = float(c["start"])
         e = float(c["end"])
         off = angle_offsets[ai] if 0 <= ai < len(angle_offsets) else 0.0
-        # angle clock = source clock - offset  (an angle that lags by off shows source-time T at angle-time T-off)
         a_in = max(0.0, s - off)
         a_out = max(a_in + 0.04, e - off)
+        # Clamp to angle's actual duration so trim doesn't run past EOF.
+        ang_dur = durations[ai] if ai < len(durations) else 0.0
+        if ang_dur > 0:
+            a_in = min(a_in, max(0.0, ang_dur - 0.04))
+            a_out = min(a_out, ang_dur)
+            if a_out <= a_in + 0.04:
+                # Segment falls entirely outside angle's available footage.
+                # Fall back to source for this cut so the timeline doesn't
+                # have a gap (and audio stays in sync).
+                ai = 0
+                off = angle_offsets[0]
+                a_in = max(0.0, s - off)
+                a_out = max(a_in + 0.04, e - off)
         v_label = f"v{k}"
         filter_parts.append(
             f"[{ai}:v]trim=start={a_in:.3f}:end={a_out:.3f},"
-            f"setpts=PTS-STARTPTS,scale=1920:1080:force_original_aspect_ratio=decrease,"
-            f"pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1[{v_label}]"
+            f"setpts=PTS-STARTPTS,"
+            f"scale={TARGET_W}:{TARGET_H}:force_original_aspect_ratio=decrease,"
+            f"pad={TARGET_W}:{TARGET_H}:(ow-iw)/2:(oh-ih)/2,"
+            f"setsar=1,fps={TARGET_FPS}[{v_label}]"
         )
         video_labels.append(f"[{v_label}]")
 
-    # Concatenate video
     filter_parts.append(
         "".join(video_labels) + f"concat=n={len(plan)}:v=1:a=0[vout]"
     )
-    # For audio, build a parallel concat from source [0:a] for the same windows
+
+    # Per-segment audio chains. Always taken from SOURCE (input 0), which
+    # is the canonical timeline. Each segment is resampled + reformatted
+    # so concat sees identical streams.
     audio_labels: list[str] = []
     for k, c in enumerate(plan):
         s = float(c["start"])
         e = float(c["end"])
         a_label = f"a{k}"
         filter_parts.append(
-            f"[0:a]atrim=start={s:.3f}:end={e:.3f},asetpts=PTS-STARTPTS[{a_label}]"
+            f"[0:a]atrim=start={s:.3f}:end={e:.3f},"
+            f"asetpts=PTS-STARTPTS,"
+            f"aresample={TARGET_SR}:async=1:first_pts=0,"
+            f"aformat=sample_fmts=fltp:channel_layouts=stereo[{a_label}]"
         )
         audio_labels.append(f"[{a_label}]")
     filter_parts.append(
@@ -94,7 +139,9 @@ async def render(
         "-map", "[vout]", "-map", "[aout]",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
         "-pix_fmt", "yuv420p",
+        "-r", str(TARGET_FPS),
         "-c:a", "aac", "-b:a", "192k",
+        "-ar", str(TARGET_SR), "-ac", "2",
         "-movflags", "+faststart",
         str(out),
     ]

@@ -595,7 +595,6 @@ async def build_multicam_fcpxml(
                 "offset": _t(offset, tb),
                 "start": _t(s, tb),
                 "duration": _t(clip_dur, tb),
-                "tcFormat": "NDF",
             },
         )
         ET.SubElement(
