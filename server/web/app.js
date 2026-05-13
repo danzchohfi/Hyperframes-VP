@@ -442,11 +442,18 @@ async function loadProject(id) {
 
   const preview = $("#preview");
   if (p.source_filename) {
-    preview.src = `/api/projects/${p.id}/files/source.mp4`;
+    preview.src = `/api/projects/${p.id}/files/source.mp4?t=${Date.now()}`;
+    preview.load();
     $("#upload-status").textContent = `${p.source_filename} · ${p.source_duration?.toFixed?.(2) || 0}s`;
     $("#upload-status").className = "status ok";
   } else {
+    // Aggressive reset — some browsers keep the last frame on screen
+    // after removeAttribute("src"), which made switching projects look
+    // like the previous source had carried over.
+    preview.pause();
     preview.removeAttribute("src");
+    preview.src = "";
+    preview.load();
     $("#upload-status").textContent = "Aguardando vídeo";
     $("#upload-status").className = "status muted";
   }
@@ -3097,6 +3104,7 @@ function bindCmdK() {
 const SECTION_CATS = {
   overview:  ["overview"],
   upload:    ["upload"],
+  pipeline:  ["pipeline"],
   edit:      ["edit"],
   soundbites:["soundbites"],
   podcast:   ["podcast"],
@@ -3106,7 +3114,7 @@ const SECTION_CATS = {
   brand:     ["brand"],
   music:     ["music"],
   export:    ["export"],
-  all:       ["overview", "upload", "edit", "soundbites", "podcast", "vlog", "multicam", "reels", "brand", "music", "export"],
+  all:       ["overview", "upload", "pipeline", "edit", "soundbites", "podcast", "vlog", "multicam", "reels", "brand", "music", "export"],
 };
 
 function activeSection() {
@@ -3127,6 +3135,14 @@ function applyModeFiltering() {
   for (const btn of document.querySelectorAll(".ws-section")) {
     const modes = (btn.dataset.modes || "").split(/\s+/);
     btn.style.display = modes.includes(kind) ? "" : "none";
+  }
+  // Show the angle-uploader row only for multicam-podcast (and general
+  // advanced mode). For plain podcast kind it stays hidden — there are
+  // no extra cameras to add.
+  const angleRow = document.getElementById("angle-row");
+  if (angleRow) {
+    const showAngles = kind === "multicam_podcast" || kind === "general";
+    angleRow.classList.toggle("hidden", !showAngles);
   }
   // Update topbar kind pill to match.
   updateKindPill(kind);
@@ -3247,6 +3263,19 @@ function bindSections() {
   // Topbar pill — opens the kind popover.
   const pill = document.getElementById("topbar-kind");
   if (pill) pill.addEventListener("click", openKindPopover);
+  // Topbar folder button — toggles the project files panel (previously
+  // a permanent card; now hidden by default, surfaced on demand).
+  const filesBtn = document.getElementById("topbar-files");
+  if (filesBtn) filesBtn.addEventListener("click", () => {
+    const card = document.getElementById("media-card");
+    if (!card) return;
+    const wasHidden = card.classList.contains("hidden");
+    card.classList.toggle("hidden");
+    if (wasHidden) {
+      refreshMediaList?.();
+      card.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  });
   // Bind every kind-card click (both in the create modal and the popover)
   // via event delegation; selection logic differs per host.
   document.addEventListener("click", (e) => {
