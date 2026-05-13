@@ -4543,10 +4543,16 @@ async def export_captions(
             for seg in segments:
                 ss = float(seg.get("start") or 0.0)
                 se = float(seg.get("end") or ss)
+                # Overlap match — a word belongs to this segment if any
+                # part of the word lies inside [ss, se]. The previous
+                # strict end-bound (`w.end <= se + 0.05`) dropped words
+                # whose end happened to fall a few ms past the segment
+                # boundary (well within Whisper's ±100ms timestamp jitter),
+                # which is what the user noticed as "come palavras".
                 seg_words = [
                     {"word": w["word"], "start": float(w["start"]), "end": float(w["end"])}
                     for w in words
-                    if float(w.get("start", 0.0)) >= ss and float(w.get("end", 0.0)) <= se + 0.05
+                    if float(w.get("end", 0.0)) > ss and float(w.get("start", 0.0)) < se
                 ]
                 segs_with_words.append({**seg, "words": seg_words})
             segments = segs_with_words

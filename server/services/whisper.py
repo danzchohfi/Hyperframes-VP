@@ -32,6 +32,12 @@ log = logging.getLogger(__name__)
 MAX_BYTES = 24 * 1024 * 1024
 CHUNK_SECONDS = 15 * 60   # 15 min @ 32 kbps mono = ~3.6 MB, very safe.
 
+# libmp3lame prepends ~576-1152 audio samples (∼36-72 ms at 16 kHz) of
+# silence as encoder padding. Whisper sees that silence and shifts every
+# returned timestamp by that amount. Shave it off here so captions land on
+# the actual word rather than ~50 ms after it.
+LAME_PADDING_OFFSET = 0.050
+
 
 def _client() -> AsyncOpenAI:
     key = os.environ.get("OPENAI_API_KEY")
@@ -68,9 +74,20 @@ async def _split_audio(src: Path, dst_dir: Path, chunk_seconds: int = CHUNK_SECO
         "-reset_timestamps", "1",
         str(template),
     ])
+    # `-f segment` cuts on frame boundaries, so each chunk is within ~0.1s
+    # of the requested length but never exact. Using i*chunk_seconds as the
+    # offset accumulates drift in long podcasts (1h45+) — we'd see captions
+    # land hundreds of ms late by the end. Build offsets from the actual
+    # durations instead.
+    paths = sorted(dst_dir.glob("chunk_*.mp3"))
     out: list[tuple[Path, float]] = []
-    for i, p in enumerate(sorted(dst_dir.glob("chunk_*.mp3"))):
-        out.append((p, float(i * chunk_seconds)))
+    running = 0.0
+    for p in paths:
+        out.append((p, running))
+        try:
+            running += await ff.duration(p)
+        except Exception:
+            running += float(chunk_seconds)
     return out
 
 
@@ -88,19 +105,27 @@ async def _whisper_call(audio: Path, language: str | None) -> dict[str, Any]:
 
 
 def _normalize_payload(data: dict[str, Any], offset: float = 0.0) -> dict[str, Any]:
+    # offset is "where this chunk starts in the parent file". We additionally
+    # shift everything by -LAME_PADDING_OFFSET so caption timing matches the
+    # original audio, not the silence-padded MP3 Whisper actually saw.
+    shift = offset - LAME_PADDING_OFFSET
+
+    def _t(v: Any) -> float:
+        return max(0.0, float(v or 0.0) + shift)
+
     words: list[dict[str, Any]] = []
     for w in data.get("words", []) or []:
         words.append({
             "word": w.get("word") or w.get("text") or "",
-            "start": float(w.get("start", 0.0)) + offset,
-            "end": float(w.get("end", 0.0)) + offset,
+            "start": _t(w.get("start")),
+            "end": _t(w.get("end")),
         })
     segments: list[dict[str, Any]] = []
     for s in data.get("segments", []) or []:
         segments.append({
             "id": s.get("id"),
-            "start": float(s.get("start", 0.0)) + offset,
-            "end": float(s.get("end", 0.0)) + offset,
+            "start": _t(s.get("start")),
+            "end": _t(s.get("end")),
             "text": (s.get("text") or "").strip(),
         })
     return {
