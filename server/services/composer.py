@@ -22,26 +22,46 @@ MAX_LINE_CHARS = 28
 
 
 def _group_words_into_lines(words: list[dict]) -> list[dict]:
-    """Group word objects into caption lines of <= MAX_LINE_CHARS, preserving timing.
+    """Group word objects into caption lines preserving timing.
 
-    If words carry a `_speaker` field, lines never span more than one speaker.
+    Breaks on, in priority order:
+      1. Speaker changes (lines never span two speakers).
+      2. Sentence boundaries — punctuation `.`, `!`, `?`, `…` at end of
+         the previous word.
+      3. Long pauses — gap between words > 0.6s (≈ a natural breath).
+      4. Length cap — MAX_LINE_CHARS to keep lines readable.
+
+    The result is captions that read like spoken sentences instead of
+    arbitrary 28-char chunks, which makes the kinetic word-pop animation
+    feel like punctuation rather than ticker tape.
     """
+    SENTENCE_END = (".", "!", "?", "…")
+    PAUSE_GAP = 0.6  # seconds — anything bigger reads as a sentence break
+
     lines: list[dict] = []
     cur: list[dict] = []
     cur_len = 0
-    cur_speaker: str | None | object = object()  # sentinel
+    cur_speaker: str | None | object = object()
+    prev_end: float = 0.0
+    prev_word_text: str = ""
     for w in words:
         text = (w.get("word") or "").strip()
         if not text:
             continue
         wsp = w.get("_speaker")
+        start = float(w["start"])
         speaker_changed = cur and cur_speaker is not object() and wsp != cur_speaker
-        if cur and (speaker_changed or cur_len + 1 + len(text) > MAX_LINE_CHARS):
+        sentence_ended = bool(cur) and prev_word_text.endswith(SENTENCE_END)
+        long_pause = bool(cur) and (start - prev_end) > PAUSE_GAP
+        over_cap = cur and cur_len + 1 + len(text) > MAX_LINE_CHARS
+        if cur and (speaker_changed or sentence_ended or long_pause or over_cap):
             lines.append(_finalize_line(cur, cur_speaker if cur_speaker is not object() else None))
             cur, cur_len = [], 0
-        cur.append({"word": text, "start": float(w["start"]), "end": float(w["end"])})
+        cur.append({"word": text, "start": start, "end": float(w["end"])})
         cur_len += (1 if cur_len else 0) + len(text)
         cur_speaker = wsp
+        prev_end = float(w["end"])
+        prev_word_text = text
     if cur:
         lines.append(_finalize_line(cur, cur_speaker if cur_speaker is not object() else None))
     return lines
