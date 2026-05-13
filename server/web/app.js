@@ -206,6 +206,114 @@ function log(msg, kind = "") {
   el.scrollTop = el.scrollHeight;
 }
 
+// Step-by-step status panel used inside the Multicam section so users
+// see exactly what's missing before "Escolher câmera por turno" works.
+function renderMulticamChecklist(p) {
+  const root = $("#multicam-checklist");
+  if (!root || !p) return;
+  const steps = [
+    {
+      key: "source", label: "Vídeo de origem",
+      done: !!p.source_filename, action: null,
+      hint: p.source_filename ? p.source_filename : "Suba o vídeo principal em Captura",
+    },
+    {
+      key: "angles", label: "Câmeras adicionais",
+      done: (p.angles || []).length >= 1,
+      action: null,
+      hint: (p.angles || []).length
+        ? `${(p.angles || []).length} ângulo(s)`
+        : "Use 'Subir câmera' abaixo (B, C…)",
+    },
+    {
+      key: "sync", label: "Sincronizar áudio",
+      done: (p.angles || []).some(a => typeof a.audio_offset === "number"),
+      action: { id: "multicam-sync-btn", label: "Sincronizar" },
+      hint: "Alinha as câmeras pelo áudio comum",
+    },
+    {
+      key: "transcribe", label: "Transcrição",
+      done: !!p.has_transcript,
+      action: { id: "run-transcribe", label: "Transcrever", run: runTranscribeQuick },
+      hint: "Whisper extrai a fala — base do split por speaker",
+    },
+    {
+      key: "speakers", label: "Detectar falas (speakers)",
+      done: !!p.has_speakers,
+      action: { id: "run-speakers", label: "Detectar", run: detectSpeakersQuick },
+      hint: "Identifica quem fala quando — define cada turno",
+    },
+    {
+      key: "pick", label: "Escolher câmera por turno",
+      done: !!p.has_camera_plan,
+      action: { id: "multicam-pick-btn", label: "Escolher" },
+      hint: "IA atribui a melhor câmera a cada turno",
+    },
+    {
+      key: "render", label: "Renderizar multicam",
+      done: !!(p.last_export || "").includes("multicam"),
+      action: { id: "multicam-render-btn", label: "Renderizar" },
+      hint: "Produz o MP4 final com os cortes aplicados",
+    },
+  ];
+  // Find the first not-done step → highlight it so the next action is obvious.
+  const nextIdx = steps.findIndex(s => !s.done);
+  root.innerHTML = `<div class="cl-title">Pipeline multicam podcast</div>
+    <ol class="cl-steps">
+      ${steps.map((s, i) => {
+        const state = s.done ? "done" : (i === nextIdx ? "now" : "pending");
+        const icon = s.done ? "check" : (i === nextIdx ? "arrow-right" : "chevron-right");
+        const cta = (!s.done && s.action)
+          ? `<button class="btn btn-soft btn-sm cl-cta" data-step="${s.key}">${escapeHtml(s.action.label)}</button>`
+          : "";
+        return `<li class="cl-step cl-${state}">
+          <span class="cl-mark"><span data-icon="${icon}" data-icon-size="14"></span></span>
+          <span class="cl-body">
+            <span class="cl-label">${escapeHtml(s.label)}</span>
+            <span class="cl-hint">${escapeHtml(s.hint)}</span>
+          </span>
+          ${cta}
+        </li>`;
+      }).join("")}
+    </ol>`;
+  if (window.HFIcons) HFIcons.render(root);
+  // Wire each CTA → click the corresponding control / run the inline fn.
+  for (const btn of root.querySelectorAll(".cl-cta")) {
+    const key = btn.dataset.step;
+    const step = steps.find(s => s.key === key);
+    btn.addEventListener("click", () => {
+      if (!step?.action) return;
+      if (step.action.run) return step.action.run();
+      const target = document.getElementById(step.action.id);
+      if (target && !target.disabled) target.click();
+    });
+  }
+}
+
+async function runTranscribeQuick() {
+  if (!state.current) return;
+  toast?.("Transcrição iniciada…", "ok");
+  try {
+    await api(`/api/projects/${state.current.id}/transcribe`, { method: "POST" });
+    await loadProject(state.current.id);
+    toast?.("Transcrição pronta", "ok");
+  } catch (e) {
+    toast?.(`Falha: ${e.message}`, "err");
+  }
+}
+
+async function detectSpeakersQuick() {
+  if (!state.current) return;
+  toast?.("Detectando speakers…", "ok");
+  try {
+    await api(`/api/projects/${state.current.id}/speakers`, { method: "POST" });
+    await loadProject(state.current.id);
+    toast?.("Speakers detectados", "ok");
+  } catch (e) {
+    toast?.(`Falha: ${e.message}`, "err");
+  }
+}
+
 // Set a button label that may include data-icon spans. textContent would
 // render the markup literally; this hydrates icons after assignment.
 function setBtnHTML(btn, html) {
@@ -320,6 +428,7 @@ async function loadProject(id) {
   $("#topbar-project-name").textContent = p.name;
   refreshHeader();
   refreshMediaList();
+  renderMulticamChecklist(p);
 
   const preview = $("#preview");
   if (p.source_filename) {
@@ -1980,17 +2089,33 @@ function renderNarratives(narratives) {
 
 async function multicamPick() {
   if (!state.current) return;
-  log("<span data-icon=&quot;play&quot;></span> multicam pick");
+  // Pre-flight: bail with a friendly toast pointing at what's missing.
+  const p = state.current;
+  if (!(p.angles || []).length) {
+    toast?.("Suba pelo menos 1 ângulo (Câmera B) antes.", "err");
+    return;
+  }
+  if (!p.has_transcript) {
+    toast?.("Rode a transcrição antes — botão 'Transcrever' no checklist acima.", "err");
+    return;
+  }
+  if (!p.has_speakers) {
+    toast?.("Rode 'Detectar falas' antes — o multicam-pick precisa saber quem fala.", "err");
+    return;
+  }
+  log(`<span data-icon="play"></span> multicam pick`);
   try {
     const r = await api(`/api/projects/${state.current.id}/multicam-pick`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ intervals: "turns", min_dur: 1.4 }),
     });
-    log(`<span data-icon=&quot;check&quot;></span> ${r.cuts.length} cam cuts (intervalos: ${r.intervals})`, "ok");
+    log(`<span data-icon="check"></span> ${r.cuts.length} cam cuts (intervalos: ${r.intervals})`, "ok");
     toast(`Câmera escolhida pra ${r.cuts.length} segmentos`, "ok");
+    await loadProject(state.current.id);
   } catch (e) {
     log(`✗ multicam-pick: ${e.message}`, "err");
+    toast?.(`Falha: ${e.message}`, "err");
   }
 }
 
@@ -3015,7 +3140,7 @@ const PREREQS = {
   roughcut:        p => p.has_story || p.has_soundbites,
   highlights:      p => p.has_story,
   shorts:          p => p.has_story || p.has_soundbites,
-  multicam_pick:   p => (p.angles || []).length >= 1,
+  multicam_pick:   p => (p.angles || []).length >= 1 && p.has_transcript && p.has_speakers,
   multicam_render: p => p.has_camera_plan,
   fcpxml:          p => !!p.source_filename,
   burn_caps:       p => p.has_render && p.has_transcript,
@@ -3026,7 +3151,7 @@ const PREREQ_LABELS = {
   roughcut:        "Requer roteiro ou soundbites",
   highlights:      "Requer roteiro",
   shorts:          "Requer roteiro ou soundbites",
-  multicam_pick:   "Suba pelo menos 1 ângulo",
+  multicam_pick:   "Precisa: ângulos + transcrição + speakers",
   multicam_render: "Rode 'escolher câmera' primeiro",
   fcpxml:          "Suba o vídeo de origem",
   burn_caps:       "Precisa de render + transcrição",

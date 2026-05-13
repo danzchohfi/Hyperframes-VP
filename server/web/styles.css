@@ -1654,6 +1654,69 @@ a { color: inherit; text-decoration: none; }
 /* Dropzone drag highlight (now a div, not a label) */
 .dropzone.drag { border-color: var(--accent); background: var(--accent-soft); }
 
+/* Pipeline checklist (Multicam) */
+.checklist {
+  margin: 4px 0 16px;
+  padding: 12px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+.checklist .cl-title {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-mute);
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.checklist .cl-steps {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.checklist .cl-step {
+  display: flex; align-items: center; gap: 12px;
+  padding: 9px 10px;
+  border-radius: var(--r-sm);
+  transition: background var(--t-fast, 120ms) var(--ease, ease);
+}
+.checklist .cl-step:hover { background: var(--bg-hover); }
+.checklist .cl-mark {
+  width: 22px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 999px;
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  color: var(--text-mute);
+  flex-shrink: 0;
+}
+.checklist .cl-done .cl-mark {
+  background: color-mix(in srgb, var(--ok) 18%, transparent);
+  border-color: color-mix(in srgb, var(--ok) 50%, transparent);
+  color: var(--ok);
+}
+.checklist .cl-now .cl-mark {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  animation: cl-pulse 1.6s ease-in-out infinite;
+}
+@keyframes cl-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 40%, transparent); }
+  50%      { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 0%, transparent); }
+}
+.checklist .cl-body {
+  display: flex; flex-direction: column; gap: 1px;
+  flex: 1; min-width: 0;
+}
+.checklist .cl-label { font-size: 13px; font-weight: 500; color: var(--text); }
+.checklist .cl-done .cl-label { color: var(--text-dim); text-decoration: line-through; text-decoration-color: var(--line-strong); }
+.checklist .cl-hint { font-size: 11.5px; color: var(--text-mute); }
+.checklist .cl-cta {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .reels-templates-row {
   display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
   margin: 0 0 12px 0;
