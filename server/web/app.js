@@ -3548,6 +3548,8 @@ function bindPodcast1Click() {
   const btn = document.getElementById("podcast-1click-btn");
   if (!btn) return;
   btn.addEventListener("click", startPodcast1Click);
+  const cancelBtn = document.getElementById("hp-cancel");
+  if (cancelBtn) cancelBtn.addEventListener("click", cancelPodcast1Click);
   // Render the step list shell once
   const stepsEl = document.getElementById("hp-steps");
   if (stepsEl) {
@@ -3629,7 +3631,22 @@ function handlePodcast1ClickEvent(data) {
     document.getElementById("podcast-1click-btn").disabled = false;
   } else if (data.status === "error" || data.status === "cancelled") {
     document.getElementById("hp-step").textContent = `✗ ${data.message || "falhou"}`;
-    document.getElementById("podcast-1click-btn").disabled = false;
+    const btn = document.getElementById("podcast-1click-btn");
+    btn.disabled = false;
+    // Offer one-click retry on failure (cancel keeps state as-is so a
+    // retry is also safe — the pipeline is idempotent.).
+    const result = document.getElementById("podcast-1click-result");
+    if (result) {
+      result.classList.remove("hidden");
+      const summary = data.status === "cancelled" ? "Cancelado." : `Falhou: ${data.message || "erro"}`;
+      result.innerHTML = `
+        <div class="hr-head"><span data-icon="alert-triangle" data-icon-size="16"></span> <strong>${escapeHtml(summary)}</strong></div>
+        <div style="font-size:12px;color:var(--text-dim);margin:4px 0 8px">A pipeline é idempotente — clica em <em>Tentar de novo</em> e ela pula os passos já feitos.</div>
+        <button id="hp-retry" class="btn btn-primary btn-sm"><span data-icon="rotate-cw" data-icon-size="14"></span> Tentar de novo</button>`;
+      if (window.HFIcons) HFIcons.render(result);
+      const retry = document.getElementById("hp-retry");
+      if (retry) retry.addEventListener("click", startPodcast1Click);
+    }
   }
 
   // Step list: which step is "running" based on progress fraction.
@@ -3661,6 +3678,16 @@ function handlePodcast1ClickEvent(data) {
   });
 }
 
+async function cancelPodcast1Click() {
+  if (!_pod1clickJobId || !state.current) return;
+  if (!confirm("Cancelar a edição automática? Os passos já completados ficam salvos.")) return;
+  try {
+    await api(`/api/projects/${state.current.id}/jobs/${_pod1clickJobId}/cancel`, { method: "POST" });
+  } catch (e) {
+    log(`✗ cancel: ${e.message}`, "err");
+  }
+}
+
 function renderPodcast1ClickResult(result) {
   const root = document.getElementById("podcast-1click-result");
   if (!root) return;
@@ -3682,6 +3709,9 @@ function renderPodcast1ClickResult(result) {
   cards.push(card("Vídeo single-cam (graded)", outputs.graded));
   cards.push(card("Áudio com volumes nivelados", outputs.levelled));
   cards.push(card("FCPXML pro Final Cut Pro",   outputs.fcpxml));
+  const fcpxmlPath = outputs.fcpxml && outputs.fcpxml.url
+    ? `${pdirAbs(state.media)}/exports/${outputs.fcpxml.name}`
+    : null;
   root.innerHTML = `
     <div class="hr-head">
       <span data-icon="check" data-icon-size="16"></span>
@@ -3689,10 +3719,53 @@ function renderPodcast1ClickResult(result) {
       ${warnings.length ? `<span class="muted">${warnings.length} aviso(s) — veja o log.</span>` : ""}
     </div>
     <div class="hr-grid">${cards.join("")}</div>
+    <div class="hr-cta">
+      ${outputs.fcpxml ? `<button id="hr-open-fcp" class="btn btn-primary btn-sm" type="button"><span data-icon="film" data-icon-size="14"></span> Abrir no Final Cut Pro</button>` : ""}
+      ${outputs.multicam ? `<button id="hr-reveal-mc" class="btn btn-ghost btn-sm" type="button"><span data-icon="arrow-right" data-icon-size="14"></span> Mostrar multicam no Finder</button>` : ""}
+    </div>
     ${warnings.length ? `<details class="hr-warnings"><summary>${warnings.length} avisos</summary><ul>${warnings.map(w => `<li>${escapeHtml(w)}</li>`).join("")}</ul></details>` : ""}
   `;
   root.classList.remove("hidden");
   if (window.HFIcons) HFIcons.render(root);
+  const openBtn = document.getElementById("hr-open-fcp");
+  if (openBtn && outputs.fcpxml) {
+    openBtn.onclick = async () => {
+      if (!state.current) return;
+      try {
+        await api(`/api/projects/${state.current.id}/reveal`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            path: `${pdirAbs(state.media)}/exports/${outputs.fcpxml.name}`,
+            mode: "open",
+          }),
+        });
+        toast?.("Abrindo no Final Cut Pro…", "ok");
+      } catch (e) { log(`✗ open: ${e.message}`, "err"); }
+    };
+  }
+  const revealBtn = document.getElementById("hr-reveal-mc");
+  if (revealBtn && outputs.multicam) {
+    revealBtn.onclick = async () => {
+      if (!state.current) return;
+      try {
+        await api(`/api/projects/${state.current.id}/reveal`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            path: `${pdirAbs(state.media)}/exports/${outputs.multicam.name}`,
+            mode: "reveal",
+          }),
+        });
+      } catch (e) { log(`✗ reveal: ${e.message}`, "err"); }
+    };
+  }
+}
+
+// Returns the absolute project dir cached on state.media (populated by
+// refreshMediaList), so we can ask the server to open files in /exports.
+function pdirAbs(media) {
+  return media && media.project_dir ? media.project_dir : "";
 }
 
 async function restoreActiveProject() {

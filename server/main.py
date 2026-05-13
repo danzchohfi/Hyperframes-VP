@@ -4259,6 +4259,10 @@ async def list_project_media(pid: str) -> dict[str, Any]:
 
 class RevealIn(BaseModel):
     path: str | None = None  # if None, reveals the project root
+    # "reveal" → highlight in Finder/Explorer (default, used by Mídia panel).
+    # "open"   → ask the OS to open the file with its default app — e.g.
+    #            an .fcpxml opens directly in Final Cut Pro.
+    mode: str = "reveal"
 
 
 @app.post("/api/projects/{pid}/reveal")
@@ -4278,20 +4282,30 @@ async def reveal_in_finder(pid: str, body: RevealIn | None = None) -> dict[str, 
             raise HTTPException(400, "path fora do projeto")
     if not target.exists():
         raise HTTPException(404, "arquivo não encontrado")
+    mode = (body and body.mode) or "reveal"
     import subprocess
     try:
         if sys.platform == "darwin":
-            # -R reveals the file in Finder rather than opening it
-            args = ["open", "-R", str(target)] if target.is_file() else ["open", str(target)]
-            subprocess.run(args, check=False)
+            if mode == "open" and target.is_file():
+                # Opens with default app — .fcpxml lands in Final Cut Pro,
+                # .mp4 in QuickTime, etc.
+                subprocess.run(["open", str(target)], check=False)
+            elif target.is_file():
+                # -R reveals the file in Finder (selects it).
+                subprocess.run(["open", "-R", str(target)], check=False)
+            else:
+                subprocess.run(["open", str(target)], check=False)
         elif sys.platform == "win32":
-            subprocess.run(["explorer", f"/select,{target}"] if target.is_file()
-                           else ["explorer", str(target)], check=False)
+            if mode == "open" and target.is_file():
+                subprocess.run(["cmd", "/c", "start", "", str(target)], check=False)
+            else:
+                subprocess.run(["explorer", f"/select,{target}"] if target.is_file()
+                               else ["explorer", str(target)], check=False)
         else:
-            subprocess.run(["xdg-open", str(target if target.is_dir() else target.parent)], check=False)
+            subprocess.run(["xdg-open", str(target if target.is_file() and mode == "open" else (target if target.is_dir() else target.parent))], check=False)
     except Exception as e:
         raise HTTPException(500, f"reveal falhou: {e}")
-    return {"opened": str(target), "host_os": sys.platform}
+    return {"opened": str(target), "host_os": sys.platform, "mode": mode}
 
 
 @app.post("/api/projects/{pid}/duplicate")
