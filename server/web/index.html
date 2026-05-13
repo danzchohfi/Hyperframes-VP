@@ -160,6 +160,25 @@
             </div>
             <div id="upload-status" class="status muted"></div>
             <progress id="upload-bar" class="upload-bar" max="100" value="0" hidden></progress>
+
+            <div id="angle-row" class="angle-row hidden">
+              <p class="card-help"><strong>Câmeras extras (opcional):</strong> suba a B, C, D… O <em>Vídeo de origem</em> acima já é a Câmera A. O sistema sincroniza pelo áudio e escolhe qual câmera mostrar em cada turno do podcast — ou em cada beat do reel.</p>
+              <label class="angle-name-label">Nome do próximo ângulo
+                <input id="angle-name" type="text" placeholder="Ex.: Wide, Close, Overhead" class="angle-name-input" />
+              </label>
+              <div class="row">
+                <div class="dropzone small" id="angle-zone" role="button" tabindex="0">
+                  <input id="angle-input" type="file" accept="video/*" hidden />
+                  <div class="dz-icon"><span data-icon="film" data-icon-size="22"></span></div>
+                  <div class="dz-title">Subir câmera</div>
+                  <div class="dz-sub">MP4 / MOV · sync automático pelo áudio</div>
+                </div>
+                <ul id="angle-list" class="angle-list"></ul>
+              </div>
+              <div id="angle-status" class="status muted"></div>
+              <progress id="angle-bar" class="upload-bar" max="100" value="0" hidden></progress>
+            </div>
+
             <!-- Pipeline outputs (waveform, silence cuts, stale-state warnings,
                  archive). They live here only for the advanced "Tudo" kind;
                  hidden by default so the upload card stays clean for laymen. -->
@@ -461,24 +480,6 @@
           <section class="card" data-cat="pipeline">
             <header class="section-head"><span class="eyebrow">Pipeline</span><h2>Edição automática</h2></header>
 
-            <div id="angle-row" class="angle-row hidden">
-              <p class="card-help"><strong>Câmeras extras (opcional):</strong> suba a B, C, D… O <em>Vídeo de origem</em> já é a Câmera A. O sistema sincroniza pelo áudio e escolhe qual câmera mostrar em cada turno do podcast — ou em cada beat do reel.</p>
-              <label class="angle-name-label">Nome do próximo ângulo
-                <input id="angle-name" type="text" placeholder="Ex.: Wide, Close, Overhead" class="angle-name-input" />
-              </label>
-              <div class="row">
-                <div class="dropzone small" id="angle-zone" role="button" tabindex="0">
-                  <input id="angle-input" type="file" accept="video/*" hidden />
-                  <div class="dz-icon"><span data-icon="film" data-icon-size="22"></span></div>
-                  <div class="dz-title">Subir câmera</div>
-                  <div class="dz-sub">MP4 / MOV · sync automático pelo áudio</div>
-                </div>
-                <ul id="angle-list" class="angle-list"></ul>
-              </div>
-              <div id="angle-status" class="status muted"></div>
-              <progress id="angle-bar" class="upload-bar" max="100" value="0" hidden></progress>
-            </div>
-
             <div id="podcast-1click-banner" class="hero-cta">
               <div class="hero-cta-body">
                 <div class="hero-cta-eyebrow"><span data-icon="wand-2"></span> Edição automática</div>
@@ -494,6 +495,10 @@
                   <option value="es">Espanhol</option>
                 </select>
               </div>
+              <label class="hero-cta-opt" title="Em vez de cortar silêncios pelo volume, mantém só os trechos do host. Útil quando tem conversa de fundo de outras pessoas que o detector de silêncio não pega.">
+                <input type="checkbox" id="podcast-1click-host-only" />
+                <span>Cortar conversa de fundo (manter só o host)</span>
+              </label>
               <div id="podcast-1click-progress" class="hero-progress hidden">
                 <div class="hp-bar"><div class="hp-bar-fill" id="hp-fill"></div></div>
                 <div class="hp-label">
@@ -505,23 +510,6 @@
                 <ol class="hp-steps" id="hp-steps"></ol>
               </div>
               <div id="podcast-1click-result" class="hero-result hidden"></div>
-              <details class="hero-help">
-                <summary>Como funciona? (clique pra ver os 11 passos)</summary>
-                <ol class="hero-help-steps">
-                  <li><strong>Transcrição</strong> — Whisper converte fala em texto com timestamp por palavra.</li>
-                  <li><strong>Speakers</strong> — diariza o áudio: identifica quem fala em cada trecho.</li>
-                  <li><strong>Capítulos</strong> — agrupa o conteúdo em tópicos pra YouTube/podcast.</li>
-                  <li><strong>Silêncios + muletas</strong> — acha pausas longas e "ééé", "tipo", "hum", "you know".</li>
-                  <li><strong>Aplicar cortes</strong> — gera o vídeo editado (sem silêncios/muletas) + aplica LUT.</li>
-                  <li><strong>Nivelar speakers</strong> — equilibra o volume entre as vozes.</li>
-                  <li><strong>Sincronizar câmeras</strong> — alinha as câmeras pelo áudio comum (cross-correlation).</li>
-                  <li><strong>Escolher câmera</strong> — pra cada turno de fala, decide qual ângulo mostrar (face, qualidade, framing).</li>
-                  <li><strong>Renderizar multicam</strong> — junta tudo num MP4 final 1080p H.264.</li>
-                  <li><strong>FCPXML</strong> — gera o XML pro Final Cut com cortes, capítulos, perguntas e soundbites já marcados.</li>
-                  <li><strong>Copy social</strong> — sugere hook, descrição e hashtags pro Instagram/YouTube.</li>
-                </ol>
-                <p class="hero-help-note">Cada passo é <strong>idempotente</strong>: se já rodou antes, pula. Pode parar e continuar quando quiser.</p>
-              </details>
             </div>
 
             <div id="multicam-checklist" class="checklist"></div>

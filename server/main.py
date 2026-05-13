@@ -53,6 +53,7 @@ from .services import smartcrop
 from .services import brand_presets
 from .services import bundle as bundle_svc
 from .services import speakers as speakers_svc
+from .services import primary_speaker_cuts as ps_cuts_svc
 from .services import highlights as highlights_svc
 from .services import social_copy as social_svc
 from .services import templates as templates_svc
@@ -572,6 +573,68 @@ async def cut_silences(pid: str, body: CutOptionsIn) -> dict[str, Any]:
         f"{len(silences)} silences → kept {plan['kept_duration']:.2f}s of {dur:.2f}s",
     )
     return plan
+
+
+class PrimarySpeakerCutsIn(BaseModel):
+    padding: float = 0.15           # seconds before/after each turn
+    gap_merge: float = 0.50         # merge kept ranges with gaps < this
+    primary_speaker: str | None = None  # override which speaker to keep
+
+
+@app.post("/api/projects/{pid}/primary-speaker-cuts")
+async def primary_speaker_cuts(pid: str, body: PrimarySpeakerCutsIn) -> dict[str, Any]:
+    """Build a cut plan that keeps only the primary speaker's turns.
+
+    Useful when the recording has background chatter from non-host speakers
+    that's loud enough to escape the silence detector but shouldn't end up
+    in the final edit. Requires speakers.json (run diarization first).
+    """
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    sp_path = pdir / "speakers.json"
+    if not sp_path.exists():
+        raise HTTPException(400, "no speakers.json — run diarization first")
+
+    src = pdir / "source.mp4"
+    dur = state.source_duration or (await ff.duration(src) if src.exists() else 0.0)
+    speakers_json = storage.read_json(pid, "speakers.json")
+
+    _stage(state, "silence", "running", "primary-speaker plan")
+    try:
+        plan = ps_cuts_svc.build_keep_plan(
+            speakers_json,
+            total_duration=float(dur or 0.0),
+            padding=body.padding,
+            gap_merge=body.gap_merge,
+            primary_speaker=body.primary_speaker,
+        )
+    except Exception as e:
+        _stage(state, "silence", "error", str(e))
+        raise HTTPException(500, str(e))
+
+    if not plan.get("keep"):
+        _stage(state, "silence", "error", "no segments matched primary speaker")
+        raise HTTPException(400, "no segments matched primary speaker")
+
+    full = {
+        "options": body.model_dump(),
+        "source_duration": float(dur or 0.0),
+        "silences": [],
+        "keep": plan["keep"],
+        "kept_duration": plan["kept_duration"],
+        "primary_speaker": plan["primary_speaker"],
+        "source": "primary_speaker",
+    }
+    storage.write_json(pid, "cuts.json", full)
+    state.has_cuts = True
+    storage.save(state)
+    _stage(
+        state,
+        "silence",
+        "done",
+        f"primary={plan['primary_speaker']} → kept {plan['kept_duration']:.2f}s of {dur:.2f}s",
+    )
+    return full
 
 
 # ---- LUT ---------------------------------------------------------------------
@@ -3902,6 +3965,7 @@ async def serve_short(pid: str, name: str):
 
 class PodcastPipelineIn(BaseModel):
     language: str | None = None  # auto-detect when None
+    cut_strategy: str = "silence"  # "silence" | "primary_speaker"
 
 
 @app.post("/api/projects/{pid}/podcast-pipeline")
@@ -3930,7 +3994,11 @@ async def podcast_multicam_pipeline_endpoint(pid: str, body: PodcastPipelineIn) 
         raise HTTPException(400, "Suba o vídeo de origem antes de rodar o pipeline.")
 
     async def _run(ctx: jobs_svc.JobContext) -> dict[str, Any]:
-        return await podcast_mc_pipeline_svc.run(ctx, language=body.language)
+        return await podcast_mc_pipeline_svc.run(
+            ctx,
+            language=body.language,
+            cut_strategy=body.cut_strategy,
+        )
 
     job_id = await jobs_svc.manager.submit(pid, "podcast_multicam_pipeline", _run)
     return {"job_id": job_id, "status": "pending"}

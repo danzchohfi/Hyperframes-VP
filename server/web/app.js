@@ -2705,15 +2705,19 @@ async function uploadAngle(file) {
     if (window.HFIcons) HFIcons.render(line);
     if (statusEl) {
       statusEl.textContent = `"${r.name}" recebido — normalizando…`;
-      statusEl.className = "status ok";
+      statusEl.className = "status warn";
     }
     if (barEl) barEl.hidden = true;
     if (nameEl) nameEl.value = "";
     // Poll project state so the angle reflects "ok" when the background
     // ffmpeg finalize finishes. SSE events would be nicer but this is reliable.
+    const startedAt = Date.now();
     let attempts = 0;
+    const tickStr = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
     const poll = async () => {
       attempts++;
+      const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+      const spinner = tickStr[attempts % tickStr.length];
       try {
         const p = await api(`/api/projects/${state.current.id}`);
         const target = (p.angles || []).find(a => a.filename === r.filename);
@@ -2721,6 +2725,10 @@ async function uploadAngle(file) {
           state.current = p;
           line.innerHTML = `<span data-icon="check"></span> "${target.name}" pronto (${(target.duration || 0).toFixed(1)}s)`;
           if (window.HFIcons) HFIcons.render(line);
+          if (statusEl) {
+            statusEl.textContent = `"${target.name}" pronto · ${(target.duration || 0).toFixed(1)}s · ${elapsed}s de normalização`;
+            statusEl.className = "status ok";
+          }
           await loadProject(state.current.id);
           return;
         }
@@ -2728,10 +2736,21 @@ async function uploadAngle(file) {
           line.classList.add("err");
           line.innerHTML = `<span data-icon="alert-triangle"></span> "${target.name}" falhou: ${target.error || "ffmpeg"}`;
           if (window.HFIcons) HFIcons.render(line);
+          if (statusEl) {
+            statusEl.textContent = `Falha na normalização: ${target.error || "ffmpeg"}`;
+            statusEl.className = "status error";
+          }
           return;
+        }
+        const targetStatus = target?.status || "pending";
+        if (statusEl) {
+          statusEl.textContent = `${spinner} Normalizando "${r.name}" (${targetStatus}) · ${elapsed}s decorridos`;
         }
         if (attempts < 240) setTimeout(poll, 2000);  // up to 8 min
       } catch {
+        if (statusEl) {
+          statusEl.textContent = `${spinner} Normalizando "${r.name}" · ${elapsed}s (sem resposta — reconectando)`;
+        }
         if (attempts < 240) setTimeout(poll, 4000);
       }
     };
@@ -3432,29 +3451,15 @@ function applyPrereqs() {
 
 function computeNextStep(p) {
   if (!p) return null;
-  const mode = activeMode();
   const renders = p.has_render;
   if (!p.source_filename) return { msg: "Suba o vídeo de origem", section: "upload" };
-  // Fresh project with source uploaded → point at the 1-click pipeline
-  // (works for single-cam too; angles make the output richer).
-  if (!p.has_transcript) {
-    return (mode === "podcast" || mode === "multicam")
-      ? { msg: "Roda a edição automática (Multicam → 1-clique)", section: "multicam" }
-      : { msg: "Rode a transcrição", section: "edit" };
-  }
-  if (mode === "multicam" && (p.angles || []).length === 0)
-    return { msg: "Suba os outros ângulos", section: "multicam" };
-  if (mode === "multicam" && !p.has_speakers)
-    return { msg: "Detecte os speakers (ou roda o 1-clique)", section: "multicam" };
-  if (mode === "multicam" && !p.has_camera_plan)
-    return { msg: "Rode 'escolher câmera por turno' (ou o 1-clique)", section: "multicam" };
-  if (mode === "multicam" && p.has_camera_plan && !renders)
-    return { msg: "Renderize o multicam", section: "multicam" };
-  if (mode === "podcast" && !p.has_cuts && !p.has_fillers)
-    return { msg: "Detecte silêncios e muletas", section: "edit" };
-  if (mode === "podcast" && !p.has_soundbites)
-    return { msg: "Extraia soundbites pra montar um rough cut", section: "soundbites" };
-  if (renders && !p.last_export?.endsWith?.(".fcpxml"))
+  // Default flow for everyone: hand off to the 1-click pipeline. It already
+  // handles transcribe + speakers + cuts + render + FCPXML idempotently, so
+  // there's no longer a reason to surface "rode a transcrição" / "detecte
+  // silêncios" as standalone CTAs from the overview — those just confused
+  // users into picking the manual path.
+  if (!renders) return { msg: "Roda a edição automática (1-clique)", section: "pipeline" };
+  if (!p.last_export?.endsWith?.(".fcpxml"))
     return { msg: "Exporte FCPXML pro Final Cut", section: "export" };
   return { msg: "Pronto — refinar no Final Cut", section: "export" };
 }
@@ -3755,11 +3760,15 @@ async function startPodcast1Click() {
   document.getElementById("hp-pct").textContent = "0%";
   document.getElementById("hp-fill").style.width = "0%";
   const lang = document.getElementById("podcast-1click-lang")?.value || "";
+  const hostOnly = !!document.getElementById("podcast-1click-host-only")?.checked;
   try {
+    const body = {};
+    if (lang) body.language = lang;
+    if (hostOnly) body.cut_strategy = "primary_speaker";
     const res = await api(`/api/projects/${state.current.id}/podcast-multicam-pipeline`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(lang ? { language: lang } : {}),
+      body: JSON.stringify(body),
     });
     _pod1clickJobId = res.job_id;
   } catch (e) {

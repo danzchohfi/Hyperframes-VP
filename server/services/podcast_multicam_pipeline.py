@@ -76,7 +76,12 @@ def _step_starts() -> dict[str, float]:
 _STARTS = _step_starts()
 
 
-async def run(ctx: jobs_svc.JobContext, *, language: str | None = None) -> dict[str, Any]:
+async def run(
+    ctx: jobs_svc.JobContext,
+    *,
+    language: str | None = None,
+    cut_strategy: str = "silence",   # "silence" | "primary_speaker"
+) -> dict[str, Any]:
     pid = ctx.project_id
     state = storage.load(pid)
     pdir = storage.project_dir(pid)
@@ -148,16 +153,38 @@ async def run(ctx: jobs_svc.JobContext, *, language: str | None = None) -> dict[
     # ── 4. silences + fillers ─────────────────────────────────────────
     step("silences", "Achando silêncios e muletas…", 0.05)
     try:
-        silences = await ff.detect_silences(src, noise_db=-32.0, min_silence=0.5)
         dur = state.source_duration or (await ff.duration(src))
-        keep = silence_svc.plan_keep_segments(dur, silences)
-        storage.write_json(pid, "cuts.json", {
-            "options": {"noise_db": -32.0, "min_silence": 0.5, "pad": 0.08},
-            "source_duration": dur,
-            "silences": [{"start": s, "end": e} for s, e in silences],
-            "keep": [{"start": s, "end": e} for s, e in keep],
-            "kept_duration": silence_svc.total_kept(keep),
-        })
+        if cut_strategy == "primary_speaker" and spk:
+            # Speaker-aware cut: keep only the dominant speaker's turns.
+            # Catches the "background chatter louder than the silence
+            # threshold" case where pure RMS-based detection leaves
+            # other-people audio in.
+            from . import primary_speaker_cuts as ps_cuts_svc
+            plan = ps_cuts_svc.build_keep_plan(spk, total_duration=float(dur or 0.0))
+            keep_segments = [(seg["start"], seg["end"]) for seg in plan.get("keep") or []]
+            storage.write_json(pid, "cuts.json", {
+                "options": {"padding": 0.15, "gap_merge": 0.50},
+                "source_duration": dur,
+                "silences": [],
+                "keep": plan["keep"],
+                "kept_duration": plan["kept_duration"],
+                "primary_speaker": plan["primary_speaker"],
+                "source": "primary_speaker",
+            })
+            silences_count = 0
+            keep_summary = f"primary={plan.get('primary_speaker')} · {len(plan['keep'])} blocos"
+        else:
+            silences = await ff.detect_silences(src, noise_db=-32.0, min_silence=0.5)
+            keep = silence_svc.plan_keep_segments(dur, silences)
+            storage.write_json(pid, "cuts.json", {
+                "options": {"noise_db": -32.0, "min_silence": 0.5, "pad": 0.08},
+                "source_duration": dur,
+                "silences": [{"start": s, "end": e} for s, e in silences],
+                "keep": [{"start": s, "end": e} for s, e in keep],
+                "kept_duration": silence_svc.total_kept(keep),
+            })
+            silences_count = len(silences)
+            keep_summary = f"{silences_count} silêncios"
         state.has_cuts = True
         lang = language or transcript.get("language") or "auto"
         filler_ranges = fillers_svc.detect_filler_ranges(
@@ -171,7 +198,7 @@ async def run(ctx: jobs_svc.JobContext, *, language: str | None = None) -> dict[
         state.has_fillers = True
         state.fillers_count = len(filler_ranges)
         storage.save(state)
-        done("silences", f"{len(silences)} silêncios · {len(filler_ranges)} muletas")
+        done("silences", f"{keep_summary} · {len(filler_ranges)} muletas")
     except Exception as e:
         warn("silences", str(e))
         keep = None
