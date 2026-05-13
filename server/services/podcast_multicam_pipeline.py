@@ -439,7 +439,23 @@ async def run(
             plan = storage.read_json(pid, "camera_plan.json")
             state_cur = storage.load(pid)
             angles_dir = pdir / "angles"
-            angle_paths: list[Path] = [src]
+            # When the user asked for audio enhancement we want it in the
+            # multicam.mp4 too. The earlier enhance step worked on the
+            # post-cut timeline (graded → enhanced.mp4), but multicam_render
+            # atrims by SOURCE timecode, so we need an enhanced copy that
+            # still matches source timecode. Generate it on demand — video
+            # is stream-copied so this is fast.
+            src_for_multicam = src
+            if enhance_audio:
+                try:
+                    from . import audio_enhance as audio_enhance_svc
+                    src_enhanced = pdir / "source_enhanced.mp4"
+                    if not src_enhanced.exists():
+                        await audio_enhance_svc.enhance(src, src_enhanced)
+                    src_for_multicam = src_enhanced
+                except Exception as e:
+                    ctx.log(f"source-enhance for multicam failed, falling back to raw source: {e}", level="warn")
+            angle_paths: list[Path] = [src_for_multicam]
             angle_offsets: list[float] = [0.0]
             for a in state_cur.angles:
                 angle_paths.append(angles_dir / a["filename"])

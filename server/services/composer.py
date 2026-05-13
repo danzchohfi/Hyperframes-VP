@@ -322,7 +322,10 @@ def build_composition(
             parts.append(
                 f'<div class="cta-card clip" id="cta{i}" '
                 f'data-start="{start_tl:.3f}" data-duration="{dur_tl:.3f}" '
-                f'data-track-index="6" '
+                # Track 7 to avoid colliding with auto chapter cards on
+                # track 6 — CTAs are deliberately above chapter cards in
+                # visual stack and on the lint timeline.
+                f'data-track-index="7" '
                 f'style="{pos_css}">'
                 f'<div class="cta-text">{html.escape(c.text)}</div>{sub}'
                 f'</div>'
