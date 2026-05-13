@@ -332,7 +332,28 @@ def build_composition(
     if animations:
         from . import reels_animations as ra
         normalized = [ra.normalize_animation(a, main_dur) for a in animations]
-        payload = ra.build_animations_payload(brand, normalized, width, intro_offset=intro_dur)
+        # Resolve a local logo path so hook_card/cta_end variants can show it
+        # offline during render. The composer already copies the brand logo
+        # for the bug-style overlay; reuse the same target.
+        anim_logo_src: str | None = None
+        if brand.logo_url:
+            src = brand.logo_url
+            if src.startswith("/api/projects/"):
+                try:
+                    local = project_dir / src.split("/files/")[-1]
+                    if local.exists():
+                        dst = comp_dir / f"logo{local.suffix}"
+                        if not dst.exists():
+                            shutil.copy2(local, dst)
+                        anim_logo_src = dst.name
+                except Exception:
+                    anim_logo_src = None
+            else:
+                anim_logo_src = src
+        payload = ra.build_animations_payload(
+            brand, normalized, width,
+            intro_offset=intro_dur, logo_src=anim_logo_src,
+        )
         animations_css = payload["css"]
         animations_html = payload["html"]
         animations_js = payload["js"]

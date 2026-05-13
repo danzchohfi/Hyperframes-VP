@@ -482,6 +482,7 @@
               <label class="cb"><input id="reels-use-llm" type="checkbox" checked /> usar IA pra refinar</label>
               <label class="cb"><input id="reels-replace" type="checkbox" checked /> substituir as atuais</label>
               <button id="reels-add-btn" class="btn-ghost">➕ Adicionar manual</button>
+              <button id="reels-preview-btn" class="btn-ghost">👁 Preview ao vivo</button>
               <span id="reels-status" class="status muted"></span>
             </div>
             <div id="reels-list" class="reels-list"></div>
@@ -490,16 +491,28 @@
                 <label>Início (s)<input id="ra-start" type="number" step="0.1" min="0" value="0" /></label>
                 <label>Duração (s)<input id="ra-duration" type="number" step="0.1" min="0.3" value="1.5" /></label>
                 <label>Tipo<select id="ra-type"></select></label>
+                <label>Variant<select id="ra-variant"></select></label>
               </div>
               <div class="reels-form-row">
                 <label class="grow">Texto<input id="ra-text" type="text" placeholder="ex: Watch this" /></label>
                 <label>Subtexto<input id="ra-sub" type="text" placeholder="opcional" /></label>
                 <label>Emoji<input id="ra-emoji" type="text" maxlength="3" placeholder="🔥" /></label>
               </div>
+              <div class="reels-form-row" id="ra-logo-row">
+                <label class="cb"><input id="ra-show-logo" type="checkbox" checked /> mostrar logo da marca (hook/cta)</label>
+              </div>
               <div class="reels-form-row">
                 <button id="reels-save-btn" class="btn-primary">Salvar</button>
                 <button id="reels-cancel-btn" class="btn-ghost">Cancelar</button>
               </div>
+            </div>
+            <div id="reels-preview-pane" class="reels-preview-pane hidden">
+              <div class="reels-preview-head">
+                <strong>Preview ao vivo</strong>
+                <button id="reels-preview-reload" class="btn-ghost">↻ recarregar</button>
+                <button id="reels-preview-close" class="btn-ghost">✕ fechar</button>
+              </div>
+              <iframe id="reels-preview-iframe" class="reels-preview-iframe" title="Preview reels"></iframe>
             </div>
           </section>
 

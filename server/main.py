@@ -1086,6 +1086,136 @@ async def put_reels_animations(pid: str, body: ReelsAnimationsIn) -> dict[str, A
     return {"animations": cleaned, "count": len(cleaned)}
 
 
+@app.get("/api/projects/{pid}/reels/preview")
+async def reels_preview(pid: str, source: str = "source") -> Response:
+    """Standalone HTML page with the source video + reel animations overlaid,
+    scrubbable. Used by the in-app preview iframe."""
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    candidates = {
+        "source": pdir / "source.mp4",
+        "graded": pdir / "graded.mp4",
+        "roughcut": pdir / "roughcut.mp4",
+    }
+    video = candidates.get(source) or candidates["source"]
+    if not video.exists():
+        for pick in ("source", "graded", "roughcut"):
+            if candidates[pick].exists():
+                video = candidates[pick]
+                source = pick
+                break
+    if not video.exists():
+        raise HTTPException(400, "no source video to preview")
+
+    brand = (
+        BrandBook.model_validate(storage.read_json(pid, "brand.json"))
+        if state.has_brand else BrandBook()
+    )
+    animations: list[dict] = []
+    if (pdir / "reels_animations.json").exists():
+        try:
+            data = storage.read_json(pid, "reels_animations.json")
+            animations = data.get("animations") or []
+        except Exception:
+            animations = []
+    normalized = [reels_anim_svc.normalize_animation(a, state.source_duration or 0.0) for a in animations]
+
+    # The preview is rendered at 540x960 (half a 9:16 frame) so the embed
+    # iframe stays light; the CSS is sized off `width=540` to scale font.
+    preview_width = 540
+    logo_src = brand.logo_url or None
+    payload = reels_anim_svc.build_animations_payload(
+        brand, normalized, preview_width, intro_offset=0.0, logo_src=logo_src,
+    )
+    video_url = f"/api/projects/{pid}/files/{video.name}"
+
+    page = f"""<!doctype html>
+<html><head><meta charset="utf-8"><title>Reels preview</title>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<style>
+  html, body {{ margin: 0; padding: 0; background: #0a0a0a;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+    color: #fff; }}
+  .stage {{
+    position: relative; width: {preview_width}px; height: {int(preview_width * 16/9)}px;
+    margin: 12px auto; background: #000; overflow: hidden;
+    border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+  }}
+  .stage video {{
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; background: #000;
+  }}
+  .controls {{
+    display: flex; gap: 10px; align-items: center;
+    max-width: {preview_width}px; margin: 0 auto 12px; padding: 0 4px;
+    font-size: 12px;
+  }}
+  .controls input[type=range] {{ flex: 1; accent-color: {brand.palette.accent}; }}
+  .controls button {{
+    background: {brand.palette.primary}; color: #fff;
+    border: 0; border-radius: 999px; padding: 6px 14px; cursor: pointer;
+    font-weight: 600;
+  }}
+  .hint {{
+    max-width: {preview_width}px; margin: 0 auto;
+    font-size: 11px; color: #888; padding: 0 4px;
+  }}
+  {payload["css"]}
+</style>
+</head>
+<body>
+  <div class="stage" id="stage">
+    <video id="v" src="{video_url}" preload="auto" muted playsinline></video>
+    {payload["html"]}
+  </div>
+  <div class="controls">
+    <button id="play">▶︎</button>
+    <input id="seek" type="range" min="0" max="100" value="0" step="0.1" />
+    <span id="time" style="font-variant-numeric:tabular-nums">0.00 / 0.00</span>
+    <label style="display:flex;gap:4px;align-items:center"><input id="mute" type="checkbox" /> som</label>
+  </div>
+  <div class="hint">Os tempos são os mesmos que vão ser usados no render final. Cores e variants vêm do Brand.</div>
+<script>
+const v = document.getElementById('v');
+const seek = document.getElementById('seek');
+const tEl = document.getElementById('time');
+const playBtn = document.getElementById('play');
+const muteBox = document.getElementById('mute');
+
+const tl = gsap.timeline({{ paused: true, defaults: {{ ease: "power3.out" }} }});
+{payload["js"]}
+
+function fmt(s) {{ return (Number(s)||0).toFixed(2); }}
+function syncTimeline(t) {{
+  if (!isFinite(t)) t = 0;
+  // GSAP timeline duration may be longer than the video; clamp.
+  const d = Math.min(t, tl.duration());
+  tl.time(d);
+}}
+v.addEventListener('loadedmetadata', () => {{
+  seek.max = v.duration || 0;
+  tEl.textContent = `${{fmt(v.currentTime)}} / ${{fmt(v.duration)}}`;
+  syncTimeline(0);
+}});
+v.addEventListener('timeupdate', () => {{
+  seek.value = v.currentTime;
+  tEl.textContent = `${{fmt(v.currentTime)}} / ${{fmt(v.duration)}}`;
+  syncTimeline(v.currentTime);
+}});
+seek.addEventListener('input', () => {{
+  v.currentTime = parseFloat(seek.value) || 0;
+  syncTimeline(v.currentTime);
+}});
+playBtn.addEventListener('click', () => {{
+  if (v.paused) {{ v.play(); playBtn.textContent = '⏸'; }}
+  else {{ v.pause(); playBtn.textContent = '▶︎'; }}
+}});
+muteBox.addEventListener('change', () => {{ v.muted = !muteBox.checked; }});
+</script>
+</body></html>"""
+    return Response(content=page, media_type="text/html")
+
+
 @app.post("/api/projects/{pid}/reels/suggest")
 async def suggest_reels_animations(pid: str, body: ReelsSuggestIn) -> dict[str, Any]:
     state = _load(pid)

@@ -3082,6 +3082,25 @@ function populateReelsTypeSelect() {
   sel.innerHTML = Object.entries(REELS_STATE.types).map(([k, v]) =>
     `<option value="${k}">${escapeHtml(v.label || k)}</option>`
   ).join("");
+  sel.onchange = () => populateReelsVariantSelect();
+  populateReelsVariantSelect();
+}
+
+function populateReelsVariantSelect(selected) {
+  const sel = $("#ra-variant");
+  if (!sel) return;
+  const t = $("#ra-type").value;
+  const spec = REELS_STATE.types[t] || {};
+  const variants = spec.variants || ["default"];
+  sel.innerHTML = variants.map(v =>
+    `<option value="${v}">${escapeHtml(v)}</option>`
+  ).join("");
+  if (selected && variants.includes(selected)) sel.value = selected;
+  // Hide variant select if there's only one (cosmetic).
+  sel.closest("label").style.display = variants.length > 1 ? "" : "none";
+  // Logo row only relevant for hook/cta.
+  const logoRow = $("#ra-logo-row");
+  if (logoRow) logoRow.style.display = (t === "hook_card" || t === "cta_end") ? "" : "none";
 }
 
 function renderReelsList() {
@@ -3097,8 +3116,8 @@ function renderReelsList() {
     <tbody>${anims.map((a, i) => `<tr data-idx="${i}">
       <td>${a.start.toFixed(2)}s</td>
       <td>${a.duration.toFixed(1)}s</td>
-      <td class="ra-type-cell">${escapeHtml((REELS_STATE.types[a.type]?.label) || a.type)}</td>
-      <td><strong>${escapeHtml(a.text || "")}</strong>${a.sub ? `<br><span class="muted">${escapeHtml(a.sub)}</span>` : ""}</td>
+      <td class="ra-type-cell">${escapeHtml((REELS_STATE.types[a.type]?.label) || a.type)}${a.variant && a.variant !== "default" ? `<br><span class="muted ra-variant-tag">${escapeHtml(a.variant)}</span>` : ""}</td>
+      <td><strong>${escapeHtml(a.text || "")}</strong>${a.sub ? `<br><span class="muted">${escapeHtml(a.sub)}</span>` : ""}${(a.type === "hook_card" || a.type === "cta_end") && a.show_logo ? ` <span class="ra-logo-tag" title="usa logo da marca">🏷</span>` : ""}</td>
       <td class="muted">${escapeHtml(a.source || a.reason || "")}</td>
       <td class="ra-actions">
         <button class="btn-ghost reels-edit" data-idx="${i}" title="Editar">✎</button>
@@ -3118,13 +3137,16 @@ function openReelsForm(idx) {
   REELS_STATE.editing_index = idx;
   const form = $("#reels-add-form");
   form.classList.remove("hidden");
-  const a = (idx >= 0) ? REELS_STATE.animations[idx] : { start: 0, duration: 1.5, type: "text_callout", text: "", sub: "", emoji: "" };
+  const a = (idx >= 0) ? REELS_STATE.animations[idx] : { start: 0, duration: 1.5, type: "text_callout", text: "", sub: "", emoji: "", variant: "", show_logo: true };
   $("#ra-start").value = a.start ?? 0;
   $("#ra-duration").value = a.duration ?? 1.5;
   $("#ra-type").value = a.type || "text_callout";
+  populateReelsVariantSelect(a.variant);
   $("#ra-text").value = a.text || "";
   $("#ra-sub").value = a.sub || "";
   $("#ra-emoji").value = a.emoji || "";
+  const sl = $("#ra-show-logo");
+  if (sl) sl.checked = a.show_logo !== false;
 }
 
 function closeReelsForm() {
@@ -3138,15 +3160,22 @@ async function saveReelAnim() {
     start: parseFloat($("#ra-start").value) || 0,
     duration: parseFloat($("#ra-duration").value) || 1.5,
     type: $("#ra-type").value,
+    variant: $("#ra-variant").value || undefined,
     text: $("#ra-text").value.trim(),
     sub: $("#ra-sub").value.trim() || null,
     emoji: $("#ra-emoji").value.trim() || null,
+    show_logo: $("#ra-show-logo")?.checked ?? true,
     source: "manual",
   };
   if (idx >= 0) REELS_STATE.animations[idx] = anim;
   else REELS_STATE.animations.push(anim);
   await persistReels();
   closeReelsForm();
+  // If the preview is open, reload it so changes show up immediately.
+  const iframe = $("#reels-preview-iframe");
+  if (iframe && !$("#reels-preview-pane").classList.contains("hidden")) {
+    reloadReelsPreview();
+  }
 }
 
 async function deleteReelAnim(idx) {
@@ -3195,6 +3224,32 @@ async function suggestReelAnims() {
   }
 }
 
+function openReelsPreview() {
+  if (!state.current) return;
+  const pane = $("#reels-preview-pane");
+  pane.classList.remove("hidden");
+  reloadReelsPreview();
+}
+
+function reloadReelsPreview() {
+  if (!state.current) return;
+  const iframe = $("#reels-preview-iframe");
+  if (!iframe) return;
+  // Pick the freshest source the preview can stream.
+  const p = state.current;
+  let pick = "source";
+  if (p.has_roughcut) pick = "roughcut";
+  else if (p.has_render || p.has_cuts) pick = "graded";
+  // Cache-bust so changes to animations are visible without a hard reload.
+  iframe.src = `/api/projects/${state.current.id}/reels/preview?source=${pick}&t=${Date.now()}`;
+}
+
+function closeReelsPreview() {
+  const pane = $("#reels-preview-pane");
+  pane.classList.add("hidden");
+  $("#reels-preview-iframe").src = "about:blank";
+}
+
 function bindReels() {
   const b1 = $("#reels-suggest-btn");
   if (b1) b1.onclick = suggestReelAnims;
@@ -3204,6 +3259,12 @@ function bindReels() {
   if (b3) b3.onclick = saveReelAnim;
   const b4 = $("#reels-cancel-btn");
   if (b4) b4.onclick = closeReelsForm;
+  const b5 = $("#reels-preview-btn");
+  if (b5) b5.onclick = openReelsPreview;
+  const b6 = $("#reels-preview-reload");
+  if (b6) b6.onclick = reloadReelsPreview;
+  const b7 = $("#reels-preview-close");
+  if (b7) b7.onclick = closeReelsPreview;
 }
 
 async function refreshReelsOnLoad() {

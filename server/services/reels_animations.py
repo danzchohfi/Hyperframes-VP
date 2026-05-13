@@ -21,55 +21,63 @@ from .brand import BrandBook
 
 # --- supported animation types ---------------------------------------------
 
-# Each entry: {label, default_duration, default_anchor, ui_fields}
+# Each entry: {label, default_duration, default_anchor, ui_fields, variants?}
 ANIMATION_TYPES: dict[str, dict[str, Any]] = {
     "hook_card": {
         "label": "Hook intro (full-screen)",
         "default_duration": 1.4,
         "default_anchor": "center",
         "fields": ["text", "sub"],
+        "variants": ["bold", "gradient", "minimal"],
     },
     "cta_end": {
         "label": "CTA final",
         "default_duration": 2.0,
         "default_anchor": "center",
         "fields": ["text", "sub"],
+        "variants": ["bold", "gradient", "minimal"],
     },
     "text_callout": {
         "label": "Callout em sticker",
         "default_duration": 1.6,
         "default_anchor": "bottom-left",
         "fields": ["text", "emoji"],
+        "variants": ["pill", "block"],
     },
     "word_zoom": {
         "label": "Palavra em destaque",
         "default_duration": 0.9,
         "default_anchor": "center",
         "fields": ["text"],
+        "variants": ["accent"],
     },
     "lower_third": {
         "label": "Lower-third (nome + cargo)",
         "default_duration": 3.0,
         "default_anchor": "bottom-left",
         "fields": ["text", "sub"],
+        "variants": ["default"],
     },
     "emoji_burst": {
         "label": "Emoji burst",
         "default_duration": 1.0,
         "default_anchor": "center-right",
         "fields": ["emoji"],
+        "variants": ["default"],
     },
     "number_pop": {
         "label": "Número grande",
         "default_duration": 1.2,
         "default_anchor": "center",
         "fields": ["text", "sub"],
+        "variants": ["accent"],
     },
     "arrow_highlight": {
         "label": "Seta + destaque",
         "default_duration": 1.4,
         "default_anchor": "bottom",
         "fields": ["text", "anchor"],
+        "variants": ["default"],
     },
 }
 
@@ -91,6 +99,14 @@ def normalize_animation(anim: dict, source_duration: float | None = None) -> dic
     a["text"] = (a.get("text") or "").strip()
     a["sub"] = (a.get("sub") or "").strip() or None
     a["emoji"] = (a.get("emoji") or "").strip() or None
+    # variant — clamp to the supported list, fall back to the first variant
+    variants = spec.get("variants") or ["default"]
+    requested = (a.get("variant") or variants[0]).strip()
+    a["variant"] = requested if requested in variants else variants[0]
+    # show_logo only applies to hook_card / cta_end; default True so users
+    # don't have to set it explicitly. The composer/preview drops it when
+    # there's no brand logo, so it's safe to leave on.
+    a["show_logo"] = bool(a.get("show_logo", True)) if t in ("hook_card", "cta_end") else False
     return a
 
 
@@ -101,6 +117,7 @@ def shared_css(brand: BrandBook, width: int) -> str:
     big = int(width * 0.085)
     med = int(width * 0.05)
     sml = int(width * 0.024)
+    logo_size = int(width * 0.10)
     return f"""
       .reels-anim {{ position: absolute; z-index: 80; pointer-events: none; }}
       .reels-anim.anchor-center      {{ inset: 0; display:flex; align-items:center; justify-content:center; }}
@@ -118,14 +135,43 @@ def shared_css(brand: BrandBook, width: int) -> str:
         border-radius: 999px;
         box-shadow: 0 8px 24px {p.primary}55;
       }}
+      .reels-anim .ra-pill-block {{
+        background: {p.background}ee;
+        border: 1px solid {p.accent}66;
+        border-left: 4px solid {p.accent};
+        border-radius: 10px;
+        padding: 14px 20px;
+        max-width: 70%;
+        text-align: left;
+      }}
+      .reels-anim .ra-pill-block .ra-title {{
+        font-size: {int(sml * 1.1)}px;
+        font-weight: 800;
+        color: {p.foreground};
+      }}
+      /* Hook / CTA — three visual variants */
       .reels-anim .ra-card {{
         padding: 28px 36px;
+        border-radius: 18px;
+        text-align: center;
+        display: flex; flex-direction: column; align-items: center; gap: 14px;
+      }}
+      .reels-anim .ra-card.variant-bold {{
         background: linear-gradient(160deg, {p.background}dd, {p.background}99);
         border: 1px solid {p.primary}55;
-        border-radius: 18px;
         backdrop-filter: blur(14px);
         box-shadow: 0 24px 60px rgba(0,0,0,0.55);
-        text-align: center;
+      }}
+      .reels-anim .ra-card.variant-gradient {{
+        position: absolute; inset: 0;
+        padding: 0; border-radius: 0;
+        justify-content: center;
+        background: linear-gradient(135deg, {p.primary} 0%, {p.accent} 60%, {p.secondary} 100%);
+        box-shadow: inset 0 -120px 200px rgba(0,0,0,0.35);
+      }}
+      .reels-anim .ra-card.variant-minimal {{
+        background: transparent;
+        text-shadow: 0 4px 28px rgba(0,0,0,0.7), 0 2px 6px rgba(0,0,0,0.5);
       }}
       .reels-anim .ra-card .ra-title {{
         font-size: {med}px;
@@ -134,11 +180,24 @@ def shared_css(brand: BrandBook, width: int) -> str:
         letter-spacing: -0.025em;
         line-height: 1.05;
       }}
+      .reels-anim .ra-card.variant-gradient .ra-title {{
+        font-size: {int(med * 1.3)}px;
+        text-transform: uppercase;
+      }}
+      .reels-anim .ra-card.variant-minimal .ra-title {{
+        font-size: {int(med * 1.2)}px;
+      }}
       .reels-anim .ra-card .ra-sub {{
         font-size: {sml}px;
         font-weight: 500;
         color: {p.foreground}b0;
-        margin-top: 8px;
+        margin-top: 4px;
+      }}
+      .reels-anim .ra-card.variant-gradient .ra-sub {{ color: {p.foreground}; }}
+      .reels-anim .ra-logo {{
+        width: {logo_size}px; height: auto; max-height: {logo_size}px;
+        object-fit: contain;
+        filter: drop-shadow(0 4px 16px rgba(0,0,0,0.4));
       }}
       .reels-anim .ra-bigword {{
         font-size: {big}px;
@@ -184,7 +243,7 @@ def _safe(text: str) -> str:
     return html.escape(text or "")
 
 
-def build_animation_html(anim: dict, index: int) -> str:
+def build_animation_html(anim: dict, index: int, logo_src: str | None = None) -> str:
     """Return a single <div class='reels-anim clip ...'> for the animation."""
     t = anim["type"]
     aid = f"ra-{index}"
@@ -199,9 +258,18 @@ def build_animation_html(anim: dict, index: int) -> str:
     text = _safe(anim.get("text") or "")
     sub = _safe(anim.get("sub") or "")
     emoji = _safe(anim.get("emoji") or "")
+    variant = anim.get("variant") or "bold"
 
     if t == "hook_card" or t == "cta_end":
-        body = f'<div class="ra-card"><div class="ra-title">{text}</div>'
+        show_logo = anim.get("show_logo") and logo_src
+        logo_html = (
+            f'<img class="ra-logo" src="{_safe(logo_src)}" alt="" />'
+            if show_logo else ""
+        )
+        body = f'<div class="ra-card variant-{_safe(variant)}">'
+        if logo_html:
+            body += logo_html
+        body += f'<div class="ra-title">{text}</div>'
         if sub:
             body += f'<div class="ra-sub">{sub}</div>'
         body += "</div>"
@@ -209,6 +277,13 @@ def build_animation_html(anim: dict, index: int) -> str:
 
     if t == "text_callout":
         prefix = f"{emoji} " if emoji else ""
+        if variant == "block":
+            return (
+                f'<div {common}><div class="ra-pill-block">'
+                f'<div class="ra-title">{prefix}{text}</div>'
+                + (f'<div class="ra-sub" style="color:inherit;opacity:0.75">{sub}</div>' if sub else "")
+                + "</div></div>"
+            )
         return f'<div {common}><div class="ra-pill">{prefix}{text}</div></div>'
 
     if t == "word_zoom" or t == "number_pop":
@@ -287,16 +362,19 @@ def build_animations_payload(
     animations: list[dict],
     width: int,
     intro_offset: float = 0.0,
+    logo_src: str | None = None,
 ) -> dict[str, str]:
     """Return {'css': ..., 'html': ..., 'js': ...} ready for the composer.
 
     `intro_offset` is added to each animation's start so they align with the
     main video segment when the composition has an intro card.
+    `logo_src` is the URL/path the hook_card / cta_end variants should use
+    when their show_logo flag is on.
     """
     css = shared_css(brand, width)
     parts = []
     for i, a in enumerate(animations):
         shifted = dict(a)
         shifted["start"] = float(a["start"]) + intro_offset
-        parts.append(build_animation_html(shifted, i))
+        parts.append(build_animation_html(shifted, i, logo_src=logo_src))
     return {"css": css, "html": "\n      ".join(parts), "js": JS_TWEENS}
