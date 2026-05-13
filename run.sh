@@ -4,6 +4,13 @@
 # Usage:
 #   ./run.sh                          → http://127.0.0.1:8765 (localhost only)
 #   HOST=0.0.0.0 PORT=8000 ./run.sh   → expose to LAN (test from iPad on same Wi-Fi)
+#   AUTOPULL=0 ./run.sh               → disable the auto git pull loop
+#
+# By default the server polls `origin/<current-branch>` every 10s and
+# fast-forwards your working tree when a new commit lands. Uvicorn's
+# --reload picks up the Python changes; static files are served fresh
+# per request, so a browser Cmd+Shift+R is enough to see UI updates.
+# Local uncommitted edits suspend auto-pull so nothing is lost.
 #
 # Edit .env to set OPENAI_API_KEY.
 
@@ -53,6 +60,43 @@ fi
 
 HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-8765}"
+
+# ── auto-pull (default on) ────────────────────────────────────────────────
+# Background loop that fast-forwards the working tree when the remote
+# branch advances. Skipped silently if the repo isn't on a tracked branch
+# or has uncommitted edits.
+AUTOPULL="${AUTOPULL:-1}"
+AUTOPULL_INTERVAL="${AUTOPULL_INTERVAL:-10}"
+WATCH_PID=""
+if [ "$AUTOPULL" = "1" ] && command -v git >/dev/null 2>&1 && [ -d .git ]; then
+  BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo HEAD)"
+  if [ -n "$BRANCH" ] && [ "$BRANCH" != "HEAD" ]; then
+    echo "→ auto-pull on  · origin/${BRANCH} a cada ${AUTOPULL_INTERVAL}s  (AUTOPULL=0 desliga)"
+    (
+      while sleep "$AUTOPULL_INTERVAL"; do
+        # Skip when there are unstaged or staged changes — we never reset over local work.
+        if ! git diff --quiet || ! git diff --cached --quiet; then
+          continue
+        fi
+        git fetch --quiet origin "$BRANCH" 2>/dev/null || continue
+        LOCAL_SHA="$(git rev-parse HEAD 2>/dev/null || echo)"
+        REMOTE_SHA="$(git rev-parse "origin/${BRANCH}" 2>/dev/null || echo)"
+        if [ -n "$LOCAL_SHA" ] && [ -n "$REMOTE_SHA" ] && [ "$LOCAL_SHA" != "$REMOTE_SHA" ]; then
+          SHORT_LOCAL="${LOCAL_SHA:0:7}"
+          SHORT_REMOTE="${REMOTE_SHA:0:7}"
+          MSG="$(git log -1 --format=%s "$REMOTE_SHA" 2>/dev/null || echo)"
+          echo
+          echo "↓ auto-pull · ${SHORT_LOCAL} → ${SHORT_REMOTE} · ${MSG}"
+          git reset --hard --quiet "origin/${BRANCH}"
+          # Sync any new Python deps that might have shipped with the commit.
+          .venv/bin/pip install --quiet -r server/requirements.txt 2>/dev/null || true
+        fi
+      done
+    ) &
+    WATCH_PID=$!
+    trap 'kill $WATCH_PID 2>/dev/null || true' EXIT INT TERM
+  fi
+fi
 
 echo "→ http://${HOST}:${PORT}"
 # Long keep-alive so 400 MB+ uploads + minutes-long ffmpeg jobs don't get
