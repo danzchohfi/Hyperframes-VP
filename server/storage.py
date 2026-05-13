@@ -227,7 +227,13 @@ def append_render_history(
     bytes: int,
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Track every export that produces a downloadable artifact."""
+    """Track every export that produces a downloadable artifact.
+
+    Idempotent on `name`: re-exporting the same file overwrites the
+    previous row rather than appending a duplicate. So clicking
+    "Exportar" twice leaves exactly one entry per unique output file,
+    with the latest timestamp + byte count.
+    """
     p = project_dir(project_id) / "history.json"
     entries: list[dict[str, Any]] = []
     if p.exists():
@@ -244,6 +250,8 @@ def append_render_history(
     }
     if extra:
         entry.update({k: v for k, v in extra.items() if k not in entry})
+    # Dedupe by name: drop any earlier rows referring to the same file.
+    entries = [e for e in entries if e.get("name") != name]
     entries.append(entry)
     # cap history to 200 most recent
     if len(entries) > 200:

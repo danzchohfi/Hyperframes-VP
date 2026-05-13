@@ -2499,10 +2499,17 @@ async function refreshHistory() {
   if (!state.current) return;
   try {
     const list = await api(`/api/projects/${state.current.id}/history`);
+    // Defensive dedupe by name: legacy history files may still hold
+    // duplicate rows from clicks before the backend dedupe shipped.
+    // Keep the latest occurrence of each file name (latest ts wins).
+    const byName = new Map();
+    for (const e of list) byName.set(e.name, e);
+    const deduped = Array.from(byName.values())
+      .sort((a, b) => (new Date(a.ts) - new Date(b.ts)));
     const root = $("#history-list");
     if (root) {
       root.innerHTML = "";
-      for (const e of list.slice().reverse().slice(0, 30)) {
+      for (const e of deduped.slice().reverse().slice(0, 30)) {
         const li = document.createElement("li");
         const kb = (e.bytes / 1024).toFixed(0);
         li.innerHTML = `
