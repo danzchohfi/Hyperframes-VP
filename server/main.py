@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any
 
 import aiofiles
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -4644,7 +4644,7 @@ async def get_cuts(pid: str):
 
 
 @app.get("/api/projects/{pid}/events")
-async def project_events(pid: str):
+async def project_events(pid: str, request: Request):
     """SSE stream of stage/log/state events for a project."""
     _load(pid)  # 404 if not found
 
@@ -4653,8 +4653,15 @@ async def project_events(pid: str):
         try:
             yield f"data: {_json.dumps({'type': 'hello', 'pid': pid})}\n\n"
             while True:
+                # Bail fast when the client has gone away (refresh, tab
+                # close, etc.). Without this the keepalive loop just
+                # spins for the full 15s window before noticing — and
+                # if uvicorn is trying to shut down for a --reload, it
+                # gets stuck waiting for these streams to drain.
+                if await request.is_disconnected():
+                    break
                 try:
-                    ev = await asyncio.wait_for(q.get(), timeout=15.0)
+                    ev = await asyncio.wait_for(q.get(), timeout=10.0)
                     yield f"data: {_json.dumps(ev)}\n\n"
                 except asyncio.TimeoutError:
                     yield ": keepalive\n\n"
