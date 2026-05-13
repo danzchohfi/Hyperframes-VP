@@ -298,10 +298,12 @@ async def run(ctx: jobs_svc.JobContext, *, language: str | None = None) -> dict[
                 angle_offsets.append(float(a.get("audio_offset") or 0.0))
             mc_out = pdir / "exports" / f"{state.name.replace(' ', '_')}-multicam.mp4"
             mc_out.parent.mkdir(exist_ok=True)
+            lut_path = pdir / "lut.cube" if state_cur.has_lut else None
             await mc_render_svc.render(
                 project_dir=pdir, source=src,
                 angle_paths=angle_paths, angle_offsets=angle_offsets,
                 plan=plan["cuts"], out=mc_out,
+                lut=lut_path,
             )
             out["outputs"]["multicam"] = {
                 "name": mc_out.name,

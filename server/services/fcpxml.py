@@ -223,6 +223,10 @@ async def build_single_cam_fcpxml(
     spine = ET.SubElement(sequence, "spine")
 
     offset = 0.0
+    # Prefer segment-level markers — a marker per sentence is what an editor
+    # can actually use to navigate. Per-word markers (the old default)
+    # flooded the timeline with "the", "and", "podcast" pins.
+    segments = (transcript or {}).get("segments") or []
     words = (transcript or {}).get("words") or []
     for i, (s, e) in enumerate(keep):
         clip_dur = max(e - s, 1.0 / 30.0)
@@ -238,19 +242,59 @@ async def build_single_cam_fcpxml(
                 "tcFormat": "NDF",
             },
         )
-        for w in words:
-            ws = float(w.get("start") or 0.0)
-            we = float(w.get("end") or ws)
-            if ws >= s and ws < e:
+
+        def _truncate(text: str, n: int = 80) -> str:
+            text = (text or "").strip().replace("\n", " ")
+            return text if len(text) <= n else text[: n - 1] + "…"
+
+        if segments:
+            for seg in segments:
+                ss = float(seg.get("start") or 0.0)
+                se = float(seg.get("end") or ss)
+                # overlap with the kept range
+                if se <= s or ss >= e:
+                    continue
+                label = _truncate(str(seg.get("text") or ""), 80)
+                if not label:
+                    continue
+                m_start = max(ss, s)
+                m_end = min(se, e)
                 ET.SubElement(
                     clip,
                     "marker",
                     {
-                        "start": _t(ws, tb, fd_num),
-                        "duration": _t(max(we - ws, 1 / 30.0), tb, fd_num),
-                        "value": str(w.get("word", "")).strip(),
+                        "start": _t(m_start, tb, fd_num),
+                        "duration": _t(max(m_end - m_start, 1 / 30.0), tb, fd_num),
+                        "value": label,
                     },
                 )
+        else:
+            # Fallback: group consecutive words into ~6-word phrases so a
+            # transcript without segment data still gives the editor
+            # navigable chunks instead of per-word pins.
+            phrase: list[dict] = []
+            for w in words:
+                ws = float(w.get("start") or 0.0)
+                we = float(w.get("end") or ws)
+                if ws >= s and ws < e:
+                    phrase.append({"start": ws, "end": we, "word": str(w.get("word") or "").strip()})
+                    if len(phrase) >= 6:
+                        ps = phrase[0]["start"]
+                        pe = phrase[-1]["end"]
+                        ET.SubElement(clip, "marker", {
+                            "start": _t(ps, tb, fd_num),
+                            "duration": _t(max(pe - ps, 1 / 30.0), tb, fd_num),
+                            "value": _truncate(" ".join(p["word"] for p in phrase)),
+                        })
+                        phrase = []
+            if phrase:
+                ps = phrase[0]["start"]
+                pe = phrase[-1]["end"]
+                ET.SubElement(clip, "marker", {
+                    "start": _t(ps, tb, fd_num),
+                    "duration": _t(max(pe - ps, 1 / 30.0), tb, fd_num),
+                    "value": _truncate(" ".join(p["word"] for p in phrase)),
+                })
         offset += clip_dur
 
     return _render(fcpxml)
@@ -337,7 +381,16 @@ async def build_multitrack_fcpxml(
     spine = ET.SubElement(sequence, "spine")
 
     offset = 0.0
+    # Same change as build_single_cam_fcpxml: emit markers grouped per
+    # transcript segment (sentence) rather than per word so the editor
+    # actually has something to navigate.
+    segments = (transcript or {}).get("segments") or []
     words = (transcript or {}).get("words") or []
+
+    def _truncate(text: str, n: int = 80) -> str:
+        text = (text or "").strip().replace("\n", " ")
+        return text if len(text) <= n else text[: n - 1] + "…"
+
     aroll_clips: list[ET.Element] = []
     aroll_offsets: list[tuple[float, float, ET.Element]] = []  # (timeline_start, timeline_end, element)
     for i, (s, e) in enumerate(keep):
@@ -356,19 +409,44 @@ async def build_multitrack_fcpxml(
         )
         aroll_clips.append(clip)
         aroll_offsets.append((offset, offset + clip_dur, clip))
-        for w in words:
-            ws = float(w.get("start") or 0.0)
-            we = float(w.get("end") or ws)
-            if ws >= s and ws < e:
-                ET.SubElement(
-                    clip,
-                    "marker",
-                    {
-                        "start": _t(ws, tb, fd_num),
-                        "duration": _t(max(we - ws, 1 / 30.0), tb, fd_num),
-                        "value": str(w.get("word", "")).strip(),
-                    },
-                )
+        if segments:
+            for seg in segments:
+                ss = float(seg.get("start") or 0.0)
+                se = float(seg.get("end") or ss)
+                if se <= s or ss >= e:
+                    continue
+                label = _truncate(str(seg.get("text") or ""), 80)
+                if not label:
+                    continue
+                m_start = max(ss, s)
+                m_end = min(se, e)
+                ET.SubElement(clip, "marker", {
+                    "start": _t(m_start, tb, fd_num),
+                    "duration": _t(max(m_end - m_start, 1 / 30.0), tb, fd_num),
+                    "value": label,
+                })
+        else:
+            phrase: list[dict] = []
+            for w in words:
+                ws = float(w.get("start") or 0.0)
+                we = float(w.get("end") or ws)
+                if ws >= s and ws < e:
+                    phrase.append({"start": ws, "end": we, "word": str(w.get("word") or "").strip()})
+                    if len(phrase) >= 6:
+                        ps = phrase[0]["start"]; pe = phrase[-1]["end"]
+                        ET.SubElement(clip, "marker", {
+                            "start": _t(ps, tb, fd_num),
+                            "duration": _t(max(pe - ps, 1 / 30.0), tb, fd_num),
+                            "value": _truncate(" ".join(p["word"] for p in phrase)),
+                        })
+                        phrase = []
+            if phrase:
+                ps = phrase[0]["start"]; pe = phrase[-1]["end"]
+                ET.SubElement(clip, "marker", {
+                    "start": _t(ps, tb, fd_num),
+                    "duration": _t(max(pe - ps, 1 / 30.0), tb, fd_num),
+                    "value": _truncate(" ".join(p["word"] for p in phrase)),
+                })
         offset += clip_dur
 
     # Attach B-roll placements as connected clips on lane=1, anchored to the
@@ -663,24 +741,52 @@ async def build_multicam_fcpxml(
             "mc-source",
             {"angleID": angle_id, "srcEnable": "all"},
         )
-        # Word markers from transcript — only when explicitly requested.
-        # Defaults to off because one marker per spoken word floods the
-        # FCP marker list and drowns out the chapters/soundbites/questions
-        # we actually want the editor to see.
+        # Transcript markers — when the caller asks for them, emit one
+        # marker per segment (sentence) rather than per word. Per-word
+        # markers (the old behavior) gave the editor a wall of "the",
+        # "and", "podcast" pins instead of navigable phrases.
         if include_word_markers:
-            for w in words:
-                ws = float(w.get("start") or 0.0)
-                we = float(w.get("end") or ws)
-                if ws >= s and ws < e:
-                    ET.SubElement(
-                        mc,
-                        "marker",
-                        {
-                            "start": _t(ws, tb, fd_num),
-                            "duration": _t(max(we - ws, 1 / 30.0), tb, fd_num),
-                            "value": str(w.get("word", "")).strip(),
-                        },
-                    )
+            seg_list = (transcript or {}).get("segments") or []
+            if seg_list:
+                for seg in seg_list:
+                    ss = float(seg.get("start") or 0.0)
+                    se = float(seg.get("end") or ss)
+                    if se <= s or ss >= e:
+                        continue
+                    label = _truncate(str(seg.get("text") or ""), 80)
+                    if not label:
+                        continue
+                    m_start = max(ss, s)
+                    m_end = min(se, e)
+                    ET.SubElement(mc, "marker", {
+                        "start": _t(m_start, tb, fd_num),
+                        "duration": _t(max(m_end - m_start, 1 / 30.0), tb, fd_num),
+                        "value": label,
+                    })
+            else:
+                # No segments — fall back to ~6-word phrases so markers
+                # are still useful for an editor.
+                phrase: list[dict] = []
+                for w in words:
+                    ws = float(w.get("start") or 0.0)
+                    we = float(w.get("end") or ws)
+                    if ws >= s and ws < e:
+                        phrase.append({"start": ws, "end": we, "word": str(w.get("word") or "").strip()})
+                        if len(phrase) >= 6:
+                            ps = phrase[0]["start"]; pe = phrase[-1]["end"]
+                            ET.SubElement(mc, "marker", {
+                                "start": _t(ps, tb, fd_num),
+                                "duration": _t(max(pe - ps, 1 / 30.0), tb, fd_num),
+                                "value": _truncate(" ".join(p["word"] for p in phrase)),
+                            })
+                            phrase = []
+                if phrase:
+                    ps = phrase[0]["start"]; pe = phrase[-1]["end"]
+                    ET.SubElement(mc, "marker", {
+                        "start": _t(ps, tb, fd_num),
+                        "duration": _t(max(pe - ps, 1 / 30.0), tb, fd_num),
+                        "value": _truncate(" ".join(p["word"] for p in phrase)),
+                    })
         # Chapter/soundbite/speaker markers.
         for mt, mattrs in extra_markers:
             if mt >= s and mt < e:

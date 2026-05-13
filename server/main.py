@@ -3301,6 +3301,7 @@ async def multicam_render_endpoint(pid: str) -> dict[str, Any]:
     out.parent.mkdir(exist_ok=True)
     _stage(state, "multicam_render", "running", f"{len(plan['cuts'])} cuts")
     try:
+        lut_path = pdir / "lut.cube" if state.has_lut else None
         await mc_render_svc.render(
             project_dir=pdir,
             source=src,
@@ -3308,6 +3309,7 @@ async def multicam_render_endpoint(pid: str) -> dict[str, Any]:
             angle_offsets=angle_offsets,
             plan=plan["cuts"],
             out=out,
+            lut=lut_path,
         )
     except Exception as e:
         _stage(state, "multicam_render", "error", str(e))

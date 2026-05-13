@@ -48,6 +48,19 @@ async def _probe_duration(path: Path) -> float:
         return 0.0
 
 
+def _ff_path_escape(p: Path) -> str:
+    """Escape a path so it can sit inside an ffmpeg filter_complex value.
+    Inside a filter chain ffmpeg parses ':' as an option separator and '\'
+    as the escape char, so a LUT path with colons (Windows drive letters,
+    URLs) or spaces would otherwise break parsing.
+    """
+    s = str(p)
+    s = s.replace("\\", "\\\\")
+    s = s.replace(":", "\\:")
+    s = s.replace("'", "\\'")
+    return s
+
+
 async def render(
     *,
     project_dir: Path,
@@ -56,6 +69,7 @@ async def render(
     angle_offsets: list[float],       # in seconds; positive means clip starts later than source
     plan: list[dict[str, Any]],       # [{start, end, angle_index}, ...]  (source timecode)
     out: Path,
+    lut: Path | None = None,         # optional .cube — applied to every video chain
 ) -> Path:
     if not plan:
         raise RuntimeError("empty plan")
@@ -99,12 +113,13 @@ async def render(
                 a_in = max(0.0, s - off)
                 a_out = max(a_in + 0.04, e - off)
         v_label = f"v{k}"
+        lut_clause = f",lut3d=file='{_ff_path_escape(lut)}'" if lut else ""
         filter_parts.append(
             f"[{ai}:v]trim=start={a_in:.3f}:end={a_out:.3f},"
             f"setpts=PTS-STARTPTS,"
             f"scale={TARGET_W}:{TARGET_H}:force_original_aspect_ratio=decrease,"
             f"pad={TARGET_W}:{TARGET_H}:(ow-iw)/2:(oh-ih)/2,"
-            f"setsar=1,fps={TARGET_FPS}[{v_label}]"
+            f"setsar=1,fps={TARGET_FPS}{lut_clause}[{v_label}]"
         )
         video_labels.append(f"[{v_label}]")
 

@@ -3545,91 +3545,9 @@ function refreshOverview() {
   }
 }
 
-// ---- (legado) Workflow filter horizontal — ainda no DOM mas escondido -----
-const WORKFLOW_PRESETS = {
-  caption:  ["upload", "edit", "brand", "export"],
-  podcast:  ["upload", "edit", "podcast", "brand", "export"],
-  vlog:     ["vlog", "brand", "music", "export"],
-  multicam: ["upload", "edit", "multicam", "export"],
-  eddie:    ["upload", "edit", "soundbites", "brand", "export"],
-  all:      ["upload", "edit", "soundbites", "podcast", "vlog", "multicam", "brand", "music", "export"],
-};
-
-const ALL_CATS = WORKFLOW_PRESETS.all;
-
-function activeCats() {
-  try {
-    const raw = localStorage.getItem("hfvp.workflow_cats");
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return ALL_CATS.slice();
-}
-
-function activePreset() {
-  return localStorage.getItem("hfvp.workflow_preset") || "all";
-}
-
-function applyWorkflow(cats) {
-  // Show / hide cards by data-cat
-  const set = new Set(cats);
-  for (const card of document.querySelectorAll(".card[data-cat]")) {
-    const c = card.dataset.cat;
-    card.style.display = set.has(c) ? "" : "none";
-  }
-  // Mark cat buttons as active / muted
-  for (const btn of document.querySelectorAll(".wb-cat")) {
-    if (set.has(btn.dataset.cat)) {
-      btn.classList.add("active");
-      btn.classList.remove("muted-cat");
-    } else {
-      btn.classList.remove("active");
-      btn.classList.add("muted-cat");
-    }
-  }
-  localStorage.setItem("hfvp.workflow_cats", JSON.stringify(cats));
-}
-
-function setPreset(preset) {
-  const cats = WORKFLOW_PRESETS[preset] || WORKFLOW_PRESETS.all;
-  for (const btn of document.querySelectorAll(".wb-preset")) {
-    btn.classList.toggle("active", btn.dataset.preset === preset);
-  }
-  applyWorkflow(cats);
-  localStorage.setItem("hfvp.workflow_preset", preset);
-}
-
-function bindWorkflow() {
-  for (const btn of document.querySelectorAll(".wb-preset")) {
-    btn.addEventListener("click", () => setPreset(btn.dataset.preset));
-  }
-  for (const btn of document.querySelectorAll(".wb-cat")) {
-    btn.addEventListener("click", () => {
-      const cur = new Set(activeCats());
-      const cat = btn.dataset.cat;
-      if (cur.has(cat)) cur.delete(cat);
-      else cur.add(cat);
-      // toggling individual cats moves us into "custom" preset
-      for (const p of document.querySelectorAll(".wb-preset")) {
-        p.classList.toggle("active", false);
-      }
-      localStorage.removeItem("hfvp.workflow_preset");
-      applyWorkflow(Array.from(cur));
-    });
-  }
-  // Initial state: restore last preset, fall back to active cats
-  const preset = activePreset();
-  if (preset && WORKFLOW_PRESETS[preset]) {
-    setPreset(preset);
-  } else {
-    applyWorkflow(activeCats());
-  }
-}
-
 function bind() {
   bindCmdK();
   bindSections();
-  // Keep the legacy filter wiring alive in case data exists, but hidden:
-  try { bindWorkflow(); } catch {}
   $("#cmdk-open")?.addEventListener("click", () => openCmdK());
   $("#topbar-cmdk")?.addEventListener("click", () => openCmdK());
   // Theme toggle (dark ↔ light, persisted in localStorage)
