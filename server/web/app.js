@@ -31,7 +31,7 @@ function brandedConfirm(message, { title = "Tem certeza?", okText = "Confirmar",
   });
 }
 
-function toast(msg, kind = "") {
+function toast(msg, kind = "", duration = 2400) {
   let el = document.querySelector(".live-toast");
   if (!el) {
     el = document.createElement("div");
@@ -39,10 +39,17 @@ function toast(msg, kind = "") {
     document.body.appendChild(el);
   }
   el.className = `live-toast ${kind}`;
-  el.textContent = msg;
+  // Allow callers to pass HTML (our own templates use data-icon spans).
+  // External text from API errors stays escaped at the call site.
+  if (msg && msg.includes("<")) {
+    el.innerHTML = msg;
+    if (window.HFIcons) HFIcons.render(el);
+  } else {
+    el.textContent = msg;
+  }
   requestAnimationFrame(() => el.classList.add("show"));
   clearTimeout(toast._t);
-  toast._t = setTimeout(() => el.classList.remove("show"), 2400);
+  toast._t = setTimeout(() => el.classList.remove("show"), Math.max(1000, duration));
 }
 
 async function api(path, opts = {}) {
@@ -431,6 +438,7 @@ async function loadProject(id) {
   renderMulticamChecklist(p);
   const etaEl = document.getElementById("podcast-1click-eta");
   if (etaEl) etaEl.textContent = podcastEtaHint(p);
+  maybeSuggestMulticamMode(p);
 
   const preview = $("#preview");
   if (p.source_filename) {
@@ -3040,6 +3048,35 @@ function inferMode(p) {
   if ((p.clips || []).length > 0) return "vlog";
   if ((p.angles || []).length > 0) return "multicam";
   return "podcast";
+}
+
+// When the project picks up angles and the user is still on the default
+// "podcast" mode, prompt them to switch to multicam. We track the
+// project ids we've already nudged so the toast doesn't reappear.
+const _multicamNudged = new Set();
+function maybeSuggestMulticamMode(p) {
+  if (!p || !p.id) return;
+  if (_multicamNudged.has(p.id)) return;
+  if ((p.angles || []).length < 1) return;
+  if (activeMode() !== "podcast") return;   // already on multicam / vlog / all
+  _multicamNudged.add(p.id);
+  // Subtle toast with a switch action — non-blocking.
+  if (typeof toast === "function") {
+    toast(
+      `<span data-icon="film" data-icon-size="14"></span> ${p.angles.length} câmera(s) extra(s) detectadas. <a href="#" data-act="switch-multicam" style="color:var(--accent);font-weight:600">Mudar pra Multicam?</a>`,
+      "info",
+      8000,
+    );
+    // The toast container is dynamic — wire the click via event delegation.
+    setTimeout(() => {
+      const link = document.querySelector('[data-act="switch-multicam"]');
+      if (link) link.addEventListener("click", (e) => {
+        e.preventDefault();
+        setMode("multicam");
+        setSection("multicam");
+      });
+    }, 50);
+  }
 }
 
 function setMode(mode) {
