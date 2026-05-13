@@ -486,6 +486,9 @@
 
             <div id="angle-row" class="angle-row hidden">
               <p class="card-help"><strong>Câmeras extras (opcional):</strong> suba a B, C, D… O <em>Vídeo de origem</em> já é a Câmera A. O sistema sincroniza pelo áudio e escolhe qual câmera mostrar em cada turno do podcast — ou em cada beat do reel.</p>
+              <label class="angle-name-label">Nome do próximo ângulo
+                <input id="angle-name" type="text" placeholder="Ex.: Wide, Close, Overhead" class="angle-name-input" />
+              </label>
               <div class="row">
                 <div class="dropzone small" id="angle-zone" role="button" tabindex="0">
                   <input id="angle-input" type="file" accept="video/*" hidden />
@@ -493,9 +496,10 @@
                   <div class="dz-title">Subir câmera</div>
                   <div class="dz-sub">MP4 / MOV · sync automático pelo áudio</div>
                 </div>
-                <input id="angle-name" type="text" placeholder="Nome (ex.: Wide, Close)" class="angle-name-input" />
                 <ul id="angle-list" class="angle-list"></ul>
               </div>
+              <div id="angle-status" class="status muted"></div>
+              <progress id="angle-bar" class="upload-bar" max="100" value="0" hidden></progress>
             </div>
 
             <div id="podcast-1click-banner" class="hero-cta">

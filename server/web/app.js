@@ -662,9 +662,14 @@ function renderAngles(p) {
       try {
         const updated = await api(`/api/projects/${p.id}/angles/${a.index}/tag`, { method: "POST" });
         log(`<span data-icon=&quot;check&quot;></span> Ângulo "${updated.name}" → ${updated.tags.summary}`, "ok");
+        toast?.(`Ângulo "${updated.name}" taggeado: ${updated.tags.summary}`, "ok", 4500);
         await loadProject(p.id);
       } catch (err) {
         log(`✗ tag: ${err.message}`, "err");
+        const hint = /OPENAI_API_KEY/i.test(err.message)
+          ? "Configure OPENAI_API_KEY no servidor pra rodar Tag IA."
+          : err.message;
+        toast?.(`Tag IA falhou: ${hint}`, "err", 7000);
         btn.disabled = false;
         setBtnHTML(btn, "<span data-icon=&quot;tag&quot;></span> Tag IA");
       }
@@ -2661,28 +2666,49 @@ async function deleteProject() {
 
 async function uploadAngle(file) {
   if (!state.current) return;
+  const nameEl = $("#angle-name");
+  const angleName = nameEl?.value?.trim() || `Ângulo ${(state.current.angles?.length || 0) + 1}`;
   const fd = new FormData();
   fd.append("file", file);
-  fd.append("name", $("#angle-name").value || `Ângulo ${(state.current.angles?.length || 0) + 1}`);
+  fd.append("name", angleName);
+
+  const statusEl = $("#angle-status");
+  const barEl = $("#angle-bar");
+  if (statusEl) {
+    statusEl.textContent = `Enviando "${angleName}" (${file.name})… 0%`;
+    statusEl.className = "status warn";
+  }
+  if (barEl) {
+    barEl.hidden = false;
+    barEl.value = 0;
+  }
 
   // Sticky log line we update in place with upload progress
   const el = $("#pipeline-log");
   const line = document.createElement("div");
-  line.innerHTML = `<span data-icon="upload-cloud"></span> Subindo ângulo: ${file.name} (${fmtBytes(file.size)}) — 0%`;
+  line.innerHTML = `<span data-icon="upload-cloud"></span> Subindo ângulo "${angleName}": ${file.name} (${fmtBytes(file.size)}) — 0%`;
   el?.appendChild(line);
   el && (el.scrollTop = el.scrollHeight);
 
   try {
     const r = await apiUpload(`/api/projects/${state.current.id}/angles`, fd, {
       onProgress: ({ loaded, total, pct }) => {
-        line.innerHTML = `<span data-icon="upload-cloud"></span> Subindo ${file.name} — ${(pct * 100).toFixed(0)}% (${fmtBytes(loaded)} / ${fmtBytes(total)})`;
+        const pctStr = (pct * 100).toFixed(pct >= 0.99 ? 1 : 0);
+        line.innerHTML = `<span data-icon="upload-cloud"></span> Subindo "${angleName}" — ${pctStr}% (${fmtBytes(loaded)} / ${fmtBytes(total)})`;
         if (window.HFIcons) HFIcons.render(line);
+        if (statusEl) statusEl.textContent = `Enviando "${angleName}"… ${pctStr}% (${fmtBytes(loaded)} / ${fmtBytes(total)})`;
+        if (barEl) barEl.value = pct * 100;
       },
     });
     line.classList.add("ok");
     line.innerHTML = `<span data-icon="check"></span> "${r.name}" recebido — normalizando em background…`;
     if (window.HFIcons) HFIcons.render(line);
-    $("#angle-name").value = "";
+    if (statusEl) {
+      statusEl.textContent = `"${r.name}" recebido — normalizando…`;
+      statusEl.className = "status ok";
+    }
+    if (barEl) barEl.hidden = true;
+    if (nameEl) nameEl.value = "";
     // Poll project state so the angle reflects "ok" when the background
     // ffmpeg finalize finishes. SSE events would be nicer but this is reliable.
     let attempts = 0;
@@ -2714,6 +2740,11 @@ async function uploadAngle(file) {
     line.classList.add("err");
     line.innerHTML = `<span data-icon="alert-triangle"></span> Ângulo: ${e.message}`;
     if (window.HFIcons) HFIcons.render(line);
+    if (statusEl) {
+      statusEl.textContent = `Falha: ${e.message}`;
+      statusEl.className = "status error";
+    }
+    if (barEl) barEl.hidden = true;
   }
 }
 

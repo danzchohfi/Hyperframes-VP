@@ -4898,4 +4898,17 @@ async def health() -> dict[str, str]:
 # ---- static SPA --------------------------------------------------------------
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
-app.mount("/", StaticFiles(directory=str(WEB_DIR), html=True), name="web")
+
+
+class _NoCacheStaticFiles(StaticFiles):
+    # Force browsers to revalidate the SPA shell on every load. Without this,
+    # users keep running stale app.js after we push a fix (e.g. the TDZ bug
+    # in #fa224aa where the cached bundle kept throwing).
+    async def get_response(self, path, scope):
+        resp = await super().get_response(path, scope)
+        if path.endswith((".html", ".js", ".css")) or path in ("", "/"):
+            resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        return resp
+
+
+app.mount("/", _NoCacheStaticFiles(directory=str(WEB_DIR), html=True), name="web")
