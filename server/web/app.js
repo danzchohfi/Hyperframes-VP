@@ -1028,12 +1028,25 @@ async function uploadLut(file) {
   if (!state.current) return;
   const fd = new FormData();
   fd.append("file", file);
+  // Clear "uploading" state — easy for the user to think nothing happened
+  // because the LUT just sits as a file until the pipeline applies it.
+  const status = document.getElementById("lut-status");
+  if (status) {
+    status.textContent = `Subindo LUT: ${file.name}…`;
+    status.className = "status warn";
+  }
   try {
     await api(`/api/projects/${state.current.id}/lut`, { method: "POST", body: fd });
     log(`LUT enviada: ${file.name}`, "ok");
+    toast?.(`LUT salva: ${file.name}. Será aplicada quando você editar o vídeo.`, "ok", 4500);
     await loadProject(state.current.id);
   } catch (e) {
     log(`LUT erro: ${e.message}`, "err");
+    toast?.(`LUT falhou: ${e.message}`, "err");
+    if (status) {
+      status.textContent = `Falha: ${e.message}`;
+      status.className = "status error";
+    }
   }
 }
 

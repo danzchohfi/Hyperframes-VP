@@ -171,7 +171,7 @@
 
               <section class="card" data-cat="upload">
             <header class="section-head"><span class="eyebrow">Captura</span><h2>Vídeo de origem</h2></header>
-            <p class="card-help">Este é o <strong>ângulo principal</strong>. Pra adicionar mais câmeras (multicam), use a seção <strong>Multicam → Subir ângulo</strong> abaixo — não sobreponha o source aqui.</p>
+            <p class="card-help" id="upload-help">Solta o vídeo principal aqui. Em modo <strong>Podcast multicam</strong> você sobe as câmeras extras na próxima seção (Editar 1-click).</p>
             <div class="row">
               <label class="dropzone" id="dropzone">
                 <input id="file-input" type="file" accept="video/*" hidden />
@@ -182,11 +182,16 @@
               <video id="preview" controls playsinline class="preview"></video>
             </div>
             <div id="upload-status" class="status muted"></div>
-            <svg id="cuts-timeline" class="cuts-timeline" viewBox="0 0 1000 60" preserveAspectRatio="none" hidden></svg>
-            <svg id="waveform" class="waveform" viewBox="0 0 1000 60" preserveAspectRatio="none" hidden></svg>
-            <div class="actions" style="margin-top:8px">
-              <button id="waveform-btn" class="btn-ghost">📈 Mostrar waveform</button>
-              <button id="archive-btn" class="btn-ghost danger"><span data-icon="upload-cloud"></span> Arquivar (zip + remover)</button>
+            <!-- Pipeline outputs (waveform, silence cuts, stale-state warnings,
+                 archive). They live here only for the advanced "Tudo" kind;
+                 hidden by default so the upload card stays clean for laymen. -->
+            <div class="advanced-tools hidden" id="upload-advanced-tools">
+              <svg id="cuts-timeline" class="cuts-timeline" viewBox="0 0 1000 60" preserveAspectRatio="none" hidden></svg>
+              <svg id="waveform" class="waveform" viewBox="0 0 1000 60" preserveAspectRatio="none" hidden></svg>
+              <div class="actions" style="margin-top:8px">
+                <button id="waveform-btn" class="btn-ghost">📈 Mostrar waveform</button>
+                <button id="archive-btn" class="btn-ghost danger"><span data-icon="upload-cloud"></span> Arquivar (zip + remover)</button>
+              </div>
             </div>
             <div id="stale-warnings" class="stale-warnings"></div>
           </section>
@@ -261,14 +266,17 @@
             </div>
           </section>
 
-          <section class="card" data-cat="brand">
+          <!-- Snapshots removed from the UI per user request. The elements
+               stay hidden in the DOM so app.js bindings (snap-take-btn,
+               snap-list, snap-label) don't throw on lookup. Still
+               accessible via the command palette → "Tirar snapshot". -->
+          <section class="card" data-cat="__hidden__" style="display:none" aria-hidden="true">
             <h3>Snapshots</h3>
-            <p class="card-help">Salve "fotos" do estado (cuts, soundbites, story…) pra comparar depois.</p>
             <div class="actions">
-              <input id="snap-label" type="text" placeholder="rótulo (opcional)" class="snap-input" />
-              <button id="snap-take-btn" class="btn-primary"><span data-icon="camera"></span> Tirar snapshot</button>
+              <input id="snap-label" type="text" />
+              <button id="snap-take-btn" type="button"></button>
             </div>
-            <ul id="snap-list" class="snap-list"></ul>
+            <ul id="snap-list"></ul>
           </section>
 
           <section class="card" data-cat="edit">
