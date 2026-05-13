@@ -113,8 +113,12 @@ async def render(
     )
 
     # Per-segment audio chains. Always taken from SOURCE (input 0), which
-    # is the canonical timeline. Each segment is resampled + reformatted
-    # so concat sees identical streams.
+    # is the canonical timeline. Source segments share the same input so
+    # they already have identical sample-rate/channel-layout; we just
+    # atrim + asetpts (PTS-STARTPTS) so concat can splice them. The
+    # aresample/aformat dance is left to the AAC encoder at the output
+    # stage — adding it inside the filter graph caused certain ffmpeg
+    # builds to emit MP4s that QuickTime refused to open.
     audio_labels: list[str] = []
     for k, c in enumerate(plan):
         s = float(c["start"])
@@ -122,9 +126,7 @@ async def render(
         a_label = f"a{k}"
         filter_parts.append(
             f"[0:a]atrim=start={s:.3f}:end={e:.3f},"
-            f"asetpts=PTS-STARTPTS,"
-            f"aresample={TARGET_SR}:async=1:first_pts=0,"
-            f"aformat=sample_fmts=fltp:channel_layouts=stereo[{a_label}]"
+            f"asetpts=PTS-STARTPTS[{a_label}]"
         )
         audio_labels.append(f"[{a_label}]")
     filter_parts.append(
@@ -146,4 +148,23 @@ async def render(
         str(out),
     ]
     await ff.run(cmd)
+
+    # Sanity-check the output: ffmpeg occasionally exits 0 on a
+    # filter-graph hiccup with a moov-less / truncated MP4 that won't
+    # open in QuickTime. If ffprobe can't read it back, raise so the
+    # user sees a clear error instead of getting a broken download.
+    if not out.exists() or out.stat().st_size < 1024:
+        raise RuntimeError("multicam render produced an empty file")
+    try:
+        info = await ff.probe(out)
+    except Exception as e:
+        raise RuntimeError(f"output mp4 unreadable ({e}); ffmpeg likely failed mid-write")
+    streams = info.get("streams") or []
+    has_v = any(s.get("codec_type") == "video" for s in streams)
+    has_a = any(s.get("codec_type") == "audio" for s in streams)
+    if not (has_v and has_a):
+        raise RuntimeError(
+            f"output mp4 missing streams (video={has_v}, audio={has_a}); "
+            f"check the filter_complex"
+        )
     return out
