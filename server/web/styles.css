@@ -1360,6 +1360,15 @@ a { color: inherit; text-decoration: none; }
 .ra-variant-tag, .ra-logo-tag {
   font-size: 10px;
 }
+.reels-templates-row {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  margin: 0 0 12px 0;
+  padding: 10px 12px;
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+}
+.reels-templates-row select.inline-select { min-width: 200px; }
+
 .reels-preview-pane {
   margin-top: 16px;
   padding: 12px;

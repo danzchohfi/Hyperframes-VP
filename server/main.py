@@ -71,6 +71,7 @@ from .services import speaker_camera as speaker_cam_svc
 from .services import multicam_render as mc_render_svc
 from .services import reels_suggest as reels_suggest_svc
 from .services import reels_animations as reels_anim_svc
+from .services import reel_templates as reel_tpl_svc
 from .services import vlog as vlog_svc
 from .services import vlog_assemble as vlog_assemble_svc
 from .services import vlog_pipeline as vlog_pipeline_svc
@@ -1258,6 +1259,95 @@ async def suggest_reels_animations(pid: str, body: ReelsSuggestIn) -> dict[str, 
     storage.write_json(pid, "reels_animations.json", {"animations": cleaned})
     _stage(state, "reels_suggest", "done", f"{len(cleaned)} animações")
     return {"animations": cleaned, "count": len(cleaned)}
+
+
+# ---- reel templates ----------------------------------------------------------
+
+class ReelTemplateSaveIn(BaseModel):
+    name: str
+    description: str = ""
+
+
+class ReelTemplateApplyIn(BaseModel):
+    replace: bool = True
+    append_to_existing: bool = False
+
+
+@app.get("/api/reel-templates")
+async def list_reel_templates() -> dict[str, Any]:
+    return {"templates": reel_tpl_svc.list_templates()}
+
+
+@app.get("/api/reel-templates/{tid}")
+async def get_reel_template(tid: str) -> dict[str, Any]:
+    try:
+        return reel_tpl_svc.get_template(tid)
+    except FileNotFoundError:
+        raise HTTPException(404, f"template {tid} not found")
+
+
+@app.post("/api/projects/{pid}/reels/save-as-template")
+async def save_reels_as_template(pid: str, body: ReelTemplateSaveIn) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    path = pdir / "reels_animations.json"
+    if not path.exists():
+        raise HTTPException(400, "no animations to save — gere ou crie animações primeiro")
+    animations = (storage.read_json(pid, "reels_animations.json").get("animations") or [])
+    if not animations:
+        raise HTTPException(400, "lista de animações está vazia")
+    saved = reel_tpl_svc.save_template(
+        name=body.name,
+        description=body.description,
+        animations=animations,
+        duration=state.source_duration or 0.0,
+    )
+    return saved
+
+
+@app.delete("/api/reel-templates/{tid}")
+async def delete_reel_template(tid: str) -> dict[str, Any]:
+    if not reel_tpl_svc.delete_template(tid):
+        raise HTTPException(400, "template embutido ou inexistente")
+    return {"deleted": tid}
+
+
+@app.post("/api/projects/{pid}/reels/apply-template/{tid}")
+async def apply_reel_template(
+    pid: str, tid: str, body: ReelTemplateApplyIn,
+) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    if not state.source_duration:
+        raise HTTPException(400, "suba o vídeo de origem antes de aplicar um template")
+    brand = (
+        storage.read_json(pid, "brand.json")
+        if state.has_brand else None
+    )
+    try:
+        applied = reel_tpl_svc.apply_template(tid, state.source_duration, brand)
+    except FileNotFoundError:
+        raise HTTPException(404, f"template {tid} not found")
+
+    cleaned = [reels_anim_svc.normalize_animation(a, state.source_duration) for a in applied]
+
+    if body.append_to_existing and (pdir / "reels_animations.json").exists():
+        try:
+            existing = storage.read_json(pid, "reels_animations.json").get("animations") or []
+            cleaned = existing + cleaned
+        except Exception:
+            pass
+    elif not body.replace and (pdir / "reels_animations.json").exists():
+        try:
+            existing = storage.read_json(pid, "reels_animations.json").get("animations") or []
+            cleaned = existing + cleaned
+        except Exception:
+            pass
+
+    cleaned.sort(key=lambda a: a["start"])
+    storage.write_json(pid, "reels_animations.json", {"animations": cleaned})
+    _stage(state, "reels_template_apply", "done", f"{tid} · {len(cleaned)} animações")
+    return {"animations": cleaned, "count": len(cleaned), "template_id": tid}
 
 
 # ---- music suggestion --------------------------------------------------------

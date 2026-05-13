@@ -3071,8 +3071,104 @@ async function loadReels() {
     REELS_STATE.duration = data.source_duration || 0;
     populateReelsTypeSelect();
     renderReelsList();
+    await loadReelTemplates();
   } catch (e) {
     log(`✗ reels: ${e.message}`, "err");
+  }
+}
+
+async function loadReelTemplates() {
+  const sel = $("#reels-template-select");
+  if (!sel) return;
+  try {
+    const data = await api(`/api/reel-templates`);
+    REELS_STATE.templates = data.templates || [];
+    sel.innerHTML = REELS_STATE.templates.map(t =>
+      `<option value="${escapeHtml(t._id)}" ${t.builtin ? 'data-builtin="1"' : ""}>${escapeHtml(t.name)}${t.builtin ? " · embutido" : ""}</option>`
+    ).join("");
+    if (REELS_STATE.templates.length === 0) {
+      sel.innerHTML = `<option value="">— sem templates —</option>`;
+    }
+    updateReelTemplateHint();
+  } catch (e) {
+    sel.innerHTML = `<option value="">erro: ${escapeHtml(e.message)}</option>`;
+  }
+}
+
+function updateReelTemplateHint() {
+  const sel = $("#reels-template-select");
+  const hint = $("#reels-template-hint");
+  const delBtn = $("#reels-template-delete-btn");
+  if (!sel || !hint) return;
+  const tpl = REELS_STATE.templates?.find(t => t._id === sel.value);
+  if (!tpl) {
+    hint.textContent = "";
+    if (delBtn) delBtn.disabled = true;
+    return;
+  }
+  hint.textContent = tpl.description || `${(tpl.animations || []).length} animações`;
+  if (delBtn) delBtn.disabled = !!tpl.builtin;
+}
+
+async function applyReelTemplate() {
+  if (!state.current) return;
+  const sel = $("#reels-template-select");
+  const tid = sel.value;
+  if (!tid) return;
+  const append = $("#reels-template-append").checked;
+  try {
+    const res = await api(`/api/projects/${state.current.id}/reels/apply-template/${tid}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ replace: !append, append_to_existing: append }),
+    });
+    REELS_STATE.animations = res.animations;
+    renderReelsList();
+    log(`✓ template aplicado: ${res.count} animações`, "ok");
+    const iframe = $("#reels-preview-iframe");
+    if (iframe && !$("#reels-preview-pane").classList.contains("hidden")) {
+      reloadReelsPreview();
+    }
+  } catch (e) {
+    log(`✗ aplicar template: ${e.message}`, "err");
+  }
+}
+
+async function saveReelsAsTemplate() {
+  if (!state.current) return;
+  if (REELS_STATE.animations.length === 0) {
+    log("✗ sem animações pra salvar", "err");
+    return;
+  }
+  const name = prompt("Nome do template:");
+  if (!name) return;
+  const description = prompt("Descrição (opcional):") || "";
+  try {
+    await api(`/api/projects/${state.current.id}/reels/save-as-template`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name, description }),
+    });
+    log(`✓ template '${name}' salvo`, "ok");
+    await loadReelTemplates();
+  } catch (e) {
+    log(`✗ salvar template: ${e.message}`, "err");
+  }
+}
+
+async function deleteReelTemplate() {
+  const sel = $("#reels-template-select");
+  const tid = sel.value;
+  if (!tid) return;
+  const tpl = REELS_STATE.templates?.find(t => t._id === tid);
+  if (!tpl || tpl.builtin) return;
+  if (!confirm(`Apagar template '${tpl.name}'?`)) return;
+  try {
+    await api(`/api/reel-templates/${tid}`, { method: "DELETE" });
+    log(`✓ template '${tpl.name}' apagado`, "ok");
+    await loadReelTemplates();
+  } catch (e) {
+    log(`✗ delete template: ${e.message}`, "err");
   }
 }
 
@@ -3265,6 +3361,14 @@ function bindReels() {
   if (b6) b6.onclick = reloadReelsPreview;
   const b7 = $("#reels-preview-close");
   if (b7) b7.onclick = closeReelsPreview;
+  const t1 = $("#reels-template-select");
+  if (t1) t1.addEventListener("change", updateReelTemplateHint);
+  const t2 = $("#reels-template-apply-btn");
+  if (t2) t2.onclick = applyReelTemplate;
+  const t3 = $("#reels-template-save-btn");
+  if (t3) t3.onclick = saveReelsAsTemplate;
+  const t4 = $("#reels-template-delete-btn");
+  if (t4) t4.onclick = deleteReelTemplate;
 }
 
 async function refreshReelsOnLoad() {
