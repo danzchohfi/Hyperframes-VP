@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import shutil
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -4046,6 +4047,146 @@ async def export_bundle(pid: str, include_source: bool = True) -> dict[str, Any]
 
 
 # ---- duplicate project ------------------------------------------------------
+
+@app.get("/api/projects/{pid}/media")
+async def list_project_media(pid: str) -> dict[str, Any]:
+    """All video files in a project + their on-disk paths.
+
+    Used by the UI's "Mídia do projeto" panel so the user can see at a
+    glance what was uploaded vs generated and where each file lives.
+    """
+    state = _load(pid)
+    pdir = storage.project_dir(pid).resolve()
+
+    def _info(path: Path, role: str, extra: dict[str, Any] | None = None) -> dict[str, Any] | None:
+        if not path.exists() or not path.is_file():
+            return None
+        rel = path.relative_to(pdir)
+        item = {
+            "role": role,
+            "name": path.name,
+            "path": str(path),
+            "rel": str(rel),
+            "url": f"/api/projects/{pid}/files/{rel.as_posix()}",
+            "size": path.stat().st_size,
+            "mtime": path.stat().st_mtime,
+        }
+        if extra:
+            item.update(extra)
+        return item
+
+    items: list[dict[str, Any]] = []
+    # Originals
+    src = _info(pdir / "source.mp4", "source")
+    if src:
+        src["label"] = "Vídeo de origem (ângulo principal)"
+        src["duration"] = state.source_duration
+        items.append(src)
+    # Angles (multicam)
+    for a in state.angles:
+        ap = pdir / "angles" / a["filename"]
+        rec = _info(ap, "angle", {
+            "label": a.get("name") or f"Ângulo {a.get('index', 0) + 1}",
+            "angle_index": a.get("index"),
+            "duration": a.get("duration"),
+            "status": a.get("status", "ok"),
+            "error": a.get("error"),
+        })
+        if rec:
+            items.append(rec)
+        else:
+            # Show even when not on disk yet (during normalize, briefly).
+            items.append({
+                "role": "angle",
+                "label": a.get("name") or f"Ângulo {a.get('index', 0) + 1}",
+                "name": a["filename"],
+                "path": str(ap),
+                "rel": f"angles/{a['filename']}",
+                "url": f"/api/projects/{pid}/files/angles/{a['filename']}",
+                "size": 0,
+                "duration": a.get("duration"),
+                "status": a.get("status", "processing"),
+                "error": a.get("error"),
+            })
+    # Vlog clips (when the project is in vlog mode)
+    for c in state.clips:
+        cp = pdir / "clips" / c.get("filename", "")
+        rec = _info(cp, "clip", {
+            "label": c.get("name") or "Clip",
+            "duration": c.get("duration"),
+            "summary": c.get("summary"),
+        })
+        if rec:
+            items.append(rec)
+    # Intermediates / derivatives
+    derivatives = [
+        ("graded.mp4",   "graded",      "Edição aplicada (cuts + muletas + LUT)"),
+        ("cut.mp4",      "cut",         "Cortes de silêncio aplicados"),
+        ("roughcut.mp4", "roughcut",    "Rough cut do roteiro"),
+        ("highlights.mp4","highlights", "Highlights reel"),
+        ("preview.mp4",  "preview",     "Preview MP4 das reels"),
+        ("hook.mp4",     "hook",        "Hook 4s"),
+    ]
+    for fname, role, label in derivatives:
+        rec = _info(pdir / fname, role, {"label": label})
+        if rec:
+            items.append(rec)
+    # Exports
+    exp_dir = pdir / "exports"
+    if exp_dir.exists():
+        for ep in sorted(exp_dir.iterdir(), key=lambda p: p.stat().st_mtime if p.exists() else 0, reverse=True):
+            if ep.is_file() and ep.suffix.lower() in (".mp4", ".mov", ".webm", ".fcpxml", ".xml"):
+                rec = _info(ep, "export", {"label": f"Export · {ep.suffix.lower().lstrip('.')}"})
+                if rec:
+                    items.append(rec)
+
+    total_bytes = sum(it.get("size", 0) or 0 for it in items)
+    return {
+        "project_id": pid,
+        "project_name": state.name,
+        "project_dir": str(pdir),
+        "items": items,
+        "total_bytes": total_bytes,
+        "host_os": sys.platform,   # "darwin" on Mac, "linux", "win32"
+    }
+
+
+class RevealIn(BaseModel):
+    path: str | None = None  # if None, reveals the project root
+
+
+@app.post("/api/projects/{pid}/reveal")
+async def reveal_in_finder(pid: str, body: RevealIn | None = None) -> dict[str, Any]:
+    """Open the project (or a specific file inside it) in the host OS
+    file manager. Works on macOS via `open -R`, Linux via xdg-open,
+    Windows via explorer. Only paths inside the project dir are allowed."""
+    state = _load(pid)
+    pdir = storage.project_dir(pid).resolve()
+    target = pdir
+    if body and body.path:
+        try:
+            cand = Path(body.path).resolve()
+            cand.relative_to(pdir)  # raises ValueError if outside
+            target = cand
+        except (ValueError, OSError):
+            raise HTTPException(400, "path fora do projeto")
+    if not target.exists():
+        raise HTTPException(404, "arquivo não encontrado")
+    import subprocess
+    try:
+        if sys.platform == "darwin":
+            # -R reveals the file in Finder rather than opening it
+            args = ["open", "-R", str(target)] if target.is_file() else ["open", str(target)]
+            subprocess.run(args, check=False)
+        elif sys.platform == "win32":
+            subprocess.run(["explorer", f"/select,{target}"] if target.is_file()
+                           else ["explorer", str(target)], check=False)
+        else:
+            subprocess.run(["xdg-open", str(target if target.is_dir() else target.parent)], check=False)
+    except Exception as e:
+        raise HTTPException(500, f"reveal falhou: {e}")
+    return {"opened": str(target), "host_os": sys.platform}
+
 
 @app.post("/api/projects/{pid}/duplicate")
 async def duplicate_project(pid: str) -> dict[str, Any]:

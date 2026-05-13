@@ -94,6 +94,102 @@ function fmtBytes(n) {
   return `${n.toFixed(n >= 100 ? 0 : 1)} ${u[i]}`;
 }
 
+const MEDIA_ROLE_ICON = {
+  source: "video", angle: "film", clip: "video", graded: "sliders",
+  cut: "scissors", roughcut: "wand-2", highlights: "sparkles",
+  preview: "eye", hook: "zap", export: "package",
+};
+const MEDIA_ROLE_LABEL = {
+  source: "Source", angle: "Multicam", clip: "Vlog",
+  graded: "Edição", cut: "Edição", roughcut: "Rough", highlights: "Highlights",
+  preview: "Preview", hook: "Hook", export: "Export",
+};
+
+async function refreshMediaList() {
+  const card = $("#media-card");
+  if (!card || !state.current) return;
+  const list = $("#media-list");
+  const pathEl = $("#media-project-path");
+  list.innerHTML = `<div class="muted" style="padding:12px">carregando…</div>`;
+  try {
+    const data = await api(`/api/projects/${state.current.id}/media`);
+    pathEl.textContent = data.project_dir;
+    pathEl.dataset.path = data.project_dir;
+    state.media = data;
+    if (!data.items.length) {
+      list.innerHTML = `<div class="muted" style="padding:12px">Nada subido ainda.</div>`;
+      return;
+    }
+    list.innerHTML = `<table class="media-table">
+      <thead><tr><th></th><th>Arquivo</th><th>Tipo</th><th>Dur</th><th>Tamanho</th><th></th></tr></thead>
+      <tbody>${data.items.map((it, i) => `<tr data-i="${i}">
+        <td class="m-icon"><span data-icon="${MEDIA_ROLE_ICON[it.role] || 'file-text'}"></span></td>
+        <td>
+          <strong>${escapeHtml(it.label || it.name)}</strong>
+          ${it.status === "processing" ? ` <span class="pill" data-tone="warn">processando</span>` : ""}
+          ${it.status === "error" ? ` <span class="pill" data-tone="danger" title="${escapeHtml(it.error || '')}">erro</span>` : ""}
+          <div class="muted m-path"><code>${escapeHtml(it.rel)}</code></div>
+        </td>
+        <td><span class="pill" data-tone="neutral">${escapeHtml(MEDIA_ROLE_LABEL[it.role] || it.role)}</span></td>
+        <td>${it.duration ? `${it.duration.toFixed(1)}s` : "—"}</td>
+        <td>${it.size ? fmtBytes(it.size) : "—"}</td>
+        <td class="m-actions">
+          <a class="btn-icon btn-sm" href="${it.url}" target="_blank" title="Abrir no navegador"><span data-icon="play"></span></a>
+          <a class="btn-icon btn-sm" href="${it.url}" download title="Baixar"><span data-icon="download"></span></a>
+          <button class="btn-icon btn-sm" data-act="reveal" data-path="${escapeHtml(it.path)}" title="Abrir no Finder"><span data-icon="arrow-right"></span></button>
+          <button class="btn-icon btn-sm" data-act="copy" data-path="${escapeHtml(it.path)}" title="Copiar caminho"><span data-icon="copy"></span></button>
+        </td>
+      </tr>`).join("")}</tbody>
+    </table>`;
+    if (window.HFIcons) HFIcons.render(list);
+    list.querySelectorAll("button[data-act]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const act = btn.dataset.act;
+        const path = btn.dataset.path;
+        if (act === "copy") copyToClipboard(path);
+        else if (act === "reveal") revealInFinder(path);
+      });
+    });
+  } catch (e) {
+    list.innerHTML = `<div class="err" style="padding:12px">Falha: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+async function revealInFinder(path) {
+  if (!state.current) return;
+  try {
+    await api(`/api/projects/${state.current.id}/reveal`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ path: path || null }),
+    });
+    toast?.("Abrindo no Finder…", "ok");
+  } catch (e) {
+    log(`✗ reveal: ${e.message}`, "err");
+  }
+}
+
+function copyToClipboard(text) {
+  if (!text) return;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(
+      () => toast?.("Caminho copiado", "ok"),
+      () => fallbackCopy(text),
+    );
+  } else {
+    fallbackCopy(text);
+  }
+}
+function fallbackCopy(text) {
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand("copy"); toast?.("Caminho copiado", "ok"); } catch {}
+  document.body.removeChild(ta);
+}
+
 function log(msg, kind = "") {
   const el = $("#pipeline-log");
   if (!el) return;
@@ -210,6 +306,7 @@ async function loadProject(id) {
   $("#project-name").textContent = p.name;
   $("#topbar-project-name").textContent = p.name;
   refreshHeader();
+  refreshMediaList();
 
   const preview = $("#preview");
   if (p.source_filename) {
@@ -674,18 +771,49 @@ async function newProject() {
 
 async function uploadFile(file) {
   if (!state.current) return;
+  // Guard against silently overwriting the source — common pitfall for
+  // multicam workflows where the user thinks every drop adds a new clip.
+  if (state.current.source_filename) {
+    const choice = await brandedConfirm(
+      `Já existe um vídeo principal ("${state.current.source_filename}"). Subir "${file.name}" vai substituí-lo. ` +
+      `Se você quer adicionar uma segunda câmera, use a seção <strong>Multicam → Subir ângulo</strong>.`,
+      { title: "Substituir o vídeo de origem?", okText: "Substituir", cancelText: "Cancelar" }
+    );
+    if (!choice) {
+      $("#upload-status").textContent = "Cancelado — use Multicam pra ângulos extras.";
+      $("#upload-status").className = "status muted";
+      return;
+    }
+  }
   const fd = new FormData();
   fd.append("file", file);
+  const el = $("#pipeline-log");
+  const line = document.createElement("div");
+  line.innerHTML = `<span data-icon="upload-cloud"></span> Subindo ${file.name} (${fmtBytes(file.size)}) — 0%`;
+  el?.appendChild(line);
+  el && (el.scrollTop = el.scrollHeight);
+  if (window.HFIcons) HFIcons.render(line);
   $("#upload-status").textContent = `Enviando ${file.name}...`;
   $("#upload-status").className = "status warn";
   try {
-    await api(`/api/projects/${state.current.id}/upload`, { method: "POST", body: fd });
+    await apiUpload(`/api/projects/${state.current.id}/upload`, fd, {
+      onProgress: ({ loaded, total, pct }) => {
+        line.innerHTML = `<span data-icon="upload-cloud"></span> Subindo ${file.name} — ${(pct * 100).toFixed(0)}% (${fmtBytes(loaded)} / ${fmtBytes(total)})`;
+        if (window.HFIcons) HFIcons.render(line);
+      },
+    });
+    line.classList.add("ok");
+    line.innerHTML = `<span data-icon="check"></span> Upload concluído: ${file.name}`;
+    if (window.HFIcons) HFIcons.render(line);
+    $("#upload-status").textContent = `OK`;
+    $("#upload-status").className = "status ok";
     await loadProject(state.current.id);
-    log(`Upload concluído: ${file.name}`, "ok");
   } catch (e) {
+    line.classList.add("err");
+    line.innerHTML = `<span data-icon="alert-triangle"></span> Upload erro: ${e.message}`;
+    if (window.HFIcons) HFIcons.render(line);
     $("#upload-status").textContent = `Falha: ${e.message}`;
     $("#upload-status").className = "status error";
-    log(`Upload erro: ${e.message}`, "err");
   }
 }
 
@@ -3122,12 +3250,22 @@ function bind() {
   const cp = $("#color-profile");
   if (cp) cp.addEventListener("change", () => saveColorProfile(cp.value));
 
-  // angle uploader (don't trigger file picker when typing in the name field)
+  // angle uploader — name input is OUTSIDE the dropzone now so we don't
+  // re-trigger the file picker when the user types in the name field.
   const ai = $("#angle-input");
-  $("#angle-zone").addEventListener("click", (e) => {
-    if (e.target.id === "angle-name") return;
-    ai.click();
-  });
+  const az = $("#angle-zone");
+  if (az) {
+    az.addEventListener("click", () => ai.click());
+    az.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); ai.click(); }
+    });
+    az.addEventListener("dragover", (e) => { e.preventDefault(); az.classList.add("drag"); });
+    az.addEventListener("dragleave", () => az.classList.remove("drag"));
+    az.addEventListener("drop", (e) => {
+      e.preventDefault(); az.classList.remove("drag");
+      if (e.dataTransfer?.files?.[0]) uploadAngle(e.dataTransfer.files[0]);
+    });
+  }
   ai.addEventListener("change", () => ai.files[0] && uploadAngle(ai.files[0]));
 
   // music + fcpxml + premiere + soundbites + story + roughcut
@@ -3151,6 +3289,14 @@ function bind() {
   $("#speakers-level-btn").onclick = levelSpeakers;
   $("#chapters-btn").onclick = detectChapters;
   $("#multicam-sync-btn").onclick = multicamSync;
+
+  const cpb = $("#media-copy-path");
+  if (cpb) cpb.onclick = () => {
+    const p = $("#media-project-path")?.dataset?.path || $("#media-project-path")?.textContent;
+    if (p && p !== "—") copyToClipboard(p);
+  };
+  const rrb = $("#media-reveal-root");
+  if (rrb) rrb.onclick = () => revealInFinder(null);
   $("#podcast-pipeline-btn").onclick = runPodcastPipeline;
   $("#yt-desc-btn").onclick = (e) => { e.preventDefault(); downloadYoutubeDescription(); };
   $("#bite-thumbs-btn").onclick = generateBiteThumbs;

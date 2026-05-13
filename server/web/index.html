@@ -168,10 +168,11 @@
 
               <section class="card" data-cat="upload">
             <header class="section-head"><span class="eyebrow">Captura</span><h2>Vídeo de origem</h2></header>
+            <p class="card-help">Este é o <strong>ângulo principal</strong>. Pra adicionar mais câmeras (multicam), use a seção <strong>Multicam → Subir ângulo</strong> abaixo — não sobreponha o source aqui.</p>
             <div class="row">
               <label class="dropzone" id="dropzone">
                 <input id="file-input" type="file" accept="video/*" hidden />
-                <div class="dz-icon">⬆</div>
+                <div class="dz-icon"><span data-icon="upload-cloud" data-icon-size="22"></span></div>
                 <div class="dz-title">Arraste seu vídeo</div>
                 <div class="dz-sub">ou clique para selecionar · MP4 / MOV / AVI</div>
               </label>
@@ -185,6 +186,21 @@
               <button id="archive-btn" class="btn-ghost danger"><span data-icon="upload-cloud"></span> Arquivar (zip + remover)</button>
             </div>
             <div id="stale-warnings" class="stale-warnings"></div>
+          </section>
+
+          <section class="card" data-cat="upload" id="media-card">
+            <header class="section-head">
+              <span class="eyebrow">Mídia</span>
+              <h2>Arquivos do projeto</h2>
+            </header>
+            <p class="card-help">Tudo o que está em disco neste projeto — originais, intermediários e exports.</p>
+            <div class="media-path">
+              <span class="cp-label">Pasta no disco</span>
+              <code id="media-project-path">—</code>
+              <button id="media-copy-path" class="btn-ghost btn-sm" type="button"><span data-icon="copy"></span> Copiar</button>
+              <button id="media-reveal-root" class="btn-ghost btn-sm" type="button"><span data-icon="arrow-right"></span> Abrir no Finder</button>
+            </div>
+            <div id="media-list" class="media-list"></div>
           </section>
 
           <section class="card" data-cat="brand">
@@ -454,27 +470,32 @@
           </section>
 
           <section class="card" data-cat="multicam">
-            <header class="section-head"><span class="eyebrow">Multicam</span><h2>Ângulos extras (opcional)</h2></header>
-            <p class="card-help">Suba ângulos extras pra exportar como multicam pro Final Cut. O vídeo principal vira o ângulo 1.</p>
+            <header class="section-head"><span class="eyebrow">Multicam</span><h2>Câmeras adicionais</h2></header>
+            <p class="card-help">O <strong>vídeo de origem</strong> (Captura) já é a Câmera A. Suba aqui a B, C, D… O sistema sincroniza pelo áudio e escolhe qual câmera mostrar em cada turno do podcast.</p>
             <div class="row">
-              <label class="dropzone small" id="angle-zone">
+              <div class="dropzone small" id="angle-zone" role="button" tabindex="0">
                 <input id="angle-input" type="file" accept="video/*" hidden />
-                <div class="dz-icon">🎬</div>
-                <div class="dz-title">Subir ângulo</div>
-                <div class="dz-sub">MP4 / MOV — sincronize manualmente no FCP</div>
-                <input id="angle-name" type="text" placeholder="Nome (ex.: Wide, Close)" class="angle-name-input" />
-              </label>
+                <div class="dz-icon"><span data-icon="film" data-icon-size="22"></span></div>
+                <div class="dz-title">Subir câmera</div>
+                <div class="dz-sub">MP4 / MOV · sync automático pelo áudio</div>
+              </div>
+              <input id="angle-name" type="text" placeholder="Nome (ex.: Wide, Close)" class="angle-name-input" />
               <ul id="angle-list" class="angle-list"></ul>
             </div>
-            <div class="actions">
-              <button id="place-broll-btn" class="btn-primary"><span data-icon="target"></span> Posicionar B-roll automaticamente</button>
-              <button id="subject-tl-btn" class="btn-ghost">🧭 Linha de tempo do sujeito</button>
-              <button id="multicam-pick-btn" class="btn-ghost" data-prereq="multicam_pick"><span data-icon="film"></span> Escolher câmera por turno</button>
-              <button id="multicam-render-btn" class="btn-ghost" data-prereq="multicam_render"><span data-icon="film"></span> Renderizar multicam</button>
+            <div class="actions multicam-actions">
+              <strong class="actions-group-label">Pipeline multicam podcast</strong>
+              <button id="multicam-sync-btn" class="btn-ghost"><span data-icon="rotate-cw"></span> 1. Sincronizar áudio</button>
+              <button id="multicam-pick-btn" class="btn-primary" data-prereq="multicam_pick"><span data-icon="film"></span> 2. Escolher câmera por turno</button>
+              <button id="multicam-render-btn" class="btn-ghost" data-prereq="multicam_render"><span data-icon="play"></span> 3. Renderizar multicam</button>
               <a id="multicam-link" class="btn-ghost" href="#" download style="display:none"><span data-icon="download"></span> multicam.mp4</a>
+            </div>
+            <div class="actions multicam-actions">
+              <strong class="actions-group-label">B-roll (overlay opcional)</strong>
+              <button id="place-broll-btn" class="btn-ghost" data-prereq="story"><span data-icon="target"></span> Inserir B-roll nos soundbites</button>
+              <button id="subject-tl-btn" class="btn-ghost"><span data-icon="users"></span> Linha de tempo do sujeito</button>
               <span id="broll-place-status" class="status muted"></span>
             </div>
-            <p class="card-help">Roda depois de extrair soundbites e taggear ângulos. A IA escolhe qual ângulo cobre cada bite.</p>
+            <p class="card-help"><strong>Multicam podcast</strong>: corta entre as câmeras automaticamente seguindo quem está falando. Precisa de transcrição + speakers.<br /><strong>B-roll</strong>: insere os ângulos como cutaways em cima do soundbite escolhido. Requer soundbites + roteiro.</p>
           </section>
 
           <section class="card" data-cat="reels" id="reels-card">

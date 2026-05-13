@@ -1595,6 +1595,65 @@ a { color: inherit; text-decoration: none; }
 .ra-variant-tag, .ra-logo-tag {
   font-size: 10px;
 }
+/* Media (project files) panel */
+.media-path {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: 6px 0 14px;
+  padding: 10px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  font-size: 12px;
+}
+.media-path code {
+  font-family: var(--font-mono, ui-monospace, Menlo, monospace);
+  font-size: 11.5px;
+  color: var(--text);
+  word-break: break-all;
+  flex: 1; min-width: 220px;
+}
+.media-list { overflow-x: auto; }
+.media-table {
+  width: 100%; border-collapse: collapse;
+  font-size: 12.5px;
+}
+.media-table th, .media-table td {
+  padding: 8px 10px; text-align: left;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+.media-table th {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--text-mute); font-weight: 600;
+}
+.media-table .m-icon { width: 26px; color: var(--accent); }
+.media-table .m-path code {
+  font-family: var(--font-mono, ui-monospace, Menlo, monospace);
+  font-size: 10.5px;
+  color: var(--text-mute);
+}
+.media-table .m-actions {
+  white-space: nowrap; text-align: right;
+}
+.media-table .m-actions > * {
+  display: inline-flex; vertical-align: middle; margin-left: 4px;
+  text-decoration: none;
+}
+
+/* Multicam two-row action group */
+.multicam-actions {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 8px;
+}
+.actions-group-label {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-mute); font-weight: 600;
+  margin-right: 6px;
+}
+
+/* Dropzone drag highlight (now a div, not a label) */
+.dropzone.drag { border-color: var(--accent); background: var(--accent-soft); }
+
 .reels-templates-row {
   display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
   margin: 0 0 12px 0;
