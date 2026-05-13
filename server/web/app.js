@@ -2627,10 +2627,11 @@ const SECTION_CATS = {
   podcast:   ["podcast"],
   vlog:      ["vlog"],
   multicam:  ["multicam"],
+  reels:     ["reels"],
   brand:     ["brand"],
   music:     ["music"],
   export:    ["export"],
-  all:       ["overview", "upload", "edit", "soundbites", "podcast", "vlog", "multicam", "brand", "music", "export"],
+  all:       ["overview", "upload", "edit", "soundbites", "podcast", "vlog", "multicam", "reels", "brand", "music", "export"],
 };
 
 function activeSection() {
@@ -2688,6 +2689,7 @@ function setSection(section) {
   document.body.classList.remove("ws-drawer-open");
   if (section === "overview") refreshOverview();
   if (section === "export") refreshNleExport();
+  if (section === "reels") refreshReelsOnLoad();
 }
 
 function bindSections() {
@@ -3036,6 +3038,9 @@ function bind() {
   $("#waveform-btn").onclick = showWaveform;
   $("#archive-btn").onclick = archiveProject;
   $("#mix-btn").onclick = mixMusic;
+
+  // Reels
+  bindReels();
   const mf = $("#music-file");
   $("#music-zone").addEventListener("click", () => mf.click());
   mf.addEventListener("change", () => mf.files[0] && uploadMusic(mf.files[0]));
@@ -3052,3 +3057,157 @@ function bind() {
 
 bind();
 refreshList();
+
+// ---- Reels (animation overlays) -------------------------------------------
+
+const REELS_STATE = { animations: [], types: {}, duration: 0, editing_index: -1 };
+
+async function loadReels() {
+  if (!state.current) return;
+  try {
+    const data = await api(`/api/projects/${state.current.id}/reels/animations`);
+    REELS_STATE.animations = data.animations || [];
+    REELS_STATE.types = data.types || {};
+    REELS_STATE.duration = data.source_duration || 0;
+    populateReelsTypeSelect();
+    renderReelsList();
+  } catch (e) {
+    log(`✗ reels: ${e.message}`, "err");
+  }
+}
+
+function populateReelsTypeSelect() {
+  const sel = $("#ra-type");
+  if (!sel) return;
+  sel.innerHTML = Object.entries(REELS_STATE.types).map(([k, v]) =>
+    `<option value="${k}">${escapeHtml(v.label || k)}</option>`
+  ).join("");
+}
+
+function renderReelsList() {
+  const root = $("#reels-list");
+  if (!root) return;
+  const anims = REELS_STATE.animations;
+  if (anims.length === 0) {
+    root.innerHTML = `<div class="reels-empty">Sem animações ainda. Clique em <strong>🪄 Sugerir animações</strong> ou <strong>➕ Adicionar manual</strong>.</div>`;
+    return;
+  }
+  root.innerHTML = `<table class="reels-table">
+    <thead><tr><th>Início</th><th>Dur</th><th>Tipo</th><th>Texto</th><th>Origem</th><th></th></tr></thead>
+    <tbody>${anims.map((a, i) => `<tr data-idx="${i}">
+      <td>${a.start.toFixed(2)}s</td>
+      <td>${a.duration.toFixed(1)}s</td>
+      <td class="ra-type-cell">${escapeHtml((REELS_STATE.types[a.type]?.label) || a.type)}</td>
+      <td><strong>${escapeHtml(a.text || "")}</strong>${a.sub ? `<br><span class="muted">${escapeHtml(a.sub)}</span>` : ""}</td>
+      <td class="muted">${escapeHtml(a.source || a.reason || "")}</td>
+      <td class="ra-actions">
+        <button class="btn-ghost reels-edit" data-idx="${i}" title="Editar">✎</button>
+        <button class="btn-ghost reels-delete" data-idx="${i}" title="Remover">✕</button>
+      </td>
+    </tr>`).join("")}</tbody>
+  </table>`;
+  for (const btn of root.querySelectorAll(".reels-edit")) {
+    btn.addEventListener("click", () => openReelsForm(Number(btn.dataset.idx)));
+  }
+  for (const btn of root.querySelectorAll(".reels-delete")) {
+    btn.addEventListener("click", () => deleteReelAnim(Number(btn.dataset.idx)));
+  }
+}
+
+function openReelsForm(idx) {
+  REELS_STATE.editing_index = idx;
+  const form = $("#reels-add-form");
+  form.classList.remove("hidden");
+  const a = (idx >= 0) ? REELS_STATE.animations[idx] : { start: 0, duration: 1.5, type: "text_callout", text: "", sub: "", emoji: "" };
+  $("#ra-start").value = a.start ?? 0;
+  $("#ra-duration").value = a.duration ?? 1.5;
+  $("#ra-type").value = a.type || "text_callout";
+  $("#ra-text").value = a.text || "";
+  $("#ra-sub").value = a.sub || "";
+  $("#ra-emoji").value = a.emoji || "";
+}
+
+function closeReelsForm() {
+  REELS_STATE.editing_index = -1;
+  $("#reels-add-form").classList.add("hidden");
+}
+
+async function saveReelAnim() {
+  const idx = REELS_STATE.editing_index;
+  const anim = {
+    start: parseFloat($("#ra-start").value) || 0,
+    duration: parseFloat($("#ra-duration").value) || 1.5,
+    type: $("#ra-type").value,
+    text: $("#ra-text").value.trim(),
+    sub: $("#ra-sub").value.trim() || null,
+    emoji: $("#ra-emoji").value.trim() || null,
+    source: "manual",
+  };
+  if (idx >= 0) REELS_STATE.animations[idx] = anim;
+  else REELS_STATE.animations.push(anim);
+  await persistReels();
+  closeReelsForm();
+}
+
+async function deleteReelAnim(idx) {
+  REELS_STATE.animations.splice(idx, 1);
+  await persistReels();
+}
+
+async function persistReels() {
+  if (!state.current) return;
+  try {
+    const res = await api(`/api/projects/${state.current.id}/reels/animations`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ animations: REELS_STATE.animations }),
+    });
+    REELS_STATE.animations = res.animations;
+    renderReelsList();
+    log(`✓ reels: ${res.count} animações salvas`, "ok");
+  } catch (e) {
+    log(`✗ reels save: ${e.message}`, "err");
+  }
+}
+
+async function suggestReelAnims() {
+  if (!state.current) return;
+  const useLlm = $("#reels-use-llm").checked;
+  const replace = $("#reels-replace").checked;
+  const status = $("#reels-status");
+  status.textContent = useLlm ? "pedindo pro modelo…" : "rodando heurísticas…";
+  status.className = "status running";
+  try {
+    const res = await api(`/api/projects/${state.current.id}/reels/suggest`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ use_llm: useLlm, max_animations: 10, replace }),
+    });
+    REELS_STATE.animations = res.animations;
+    renderReelsList();
+    status.textContent = `✓ ${res.count} sugestões`;
+    status.className = "status done";
+    log(`✓ reels suggest: ${res.count} animações`, "ok");
+  } catch (e) {
+    status.textContent = `✗ ${e.message}`;
+    status.className = "status error";
+    log(`✗ reels suggest: ${e.message}`, "err");
+  }
+}
+
+function bindReels() {
+  const b1 = $("#reels-suggest-btn");
+  if (b1) b1.onclick = suggestReelAnims;
+  const b2 = $("#reels-add-btn");
+  if (b2) b2.onclick = () => openReelsForm(-1);
+  const b3 = $("#reels-save-btn");
+  if (b3) b3.onclick = saveReelAnim;
+  const b4 = $("#reels-cancel-btn");
+  if (b4) b4.onclick = closeReelsForm;
+}
+
+async function refreshReelsOnLoad() {
+  if (state.current && document.querySelector('.card[data-cat="reels"]')) {
+    await loadReels();
+  }
+}

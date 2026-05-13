@@ -1317,6 +1317,46 @@ a { color: inherit; text-decoration: none; }
 .color-profile-row .cp-hint {
   font-size: 11px; color: var(--muted); font-style: italic;
 }
+
+/* Reels editor */
+.reels-toolbar {
+  display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+  margin-bottom: 12px;
+}
+.reels-empty {
+  padding: 32px 16px; text-align: center; color: var(--muted);
+  border: 1.5px dashed var(--line-strong); border-radius: var(--radius);
+}
+.reels-table {
+  width: 100%; border-collapse: collapse; font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.reels-table th, .reels-table td {
+  padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--line);
+}
+.reels-table th {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--muted); font-weight: 600;
+}
+.reels-table .ra-type-cell { color: var(--accent); font-weight: 600; }
+.reels-table .ra-actions { text-align: right; white-space: nowrap; }
+.reels-table .ra-actions .btn-ghost { padding: 4px 8px; font-size: 12px; }
+.reels-add {
+  margin-top: 14px; padding: 14px; background: var(--bg-input);
+  border-radius: var(--radius-sm); border: 1px solid var(--line);
+}
+.reels-form-row {
+  display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;
+}
+.reels-form-row label {
+  display: flex; flex-direction: column; gap: 4px;
+  font-size: 11px; color: var(--text-dim); font-weight: 600;
+}
+.reels-form-row label.grow { flex: 1; min-width: 200px; }
+.reels-form-row input, .reels-form-row select {
+  padding: 6px 10px; background: var(--bg-card); border: 1px solid var(--line);
+  border-radius: 6px; color: var(--text); font-size: 13px;
+}
 .nle-warnings { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
 .nle-warn {
   font-size: 12px;

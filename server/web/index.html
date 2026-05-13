@@ -108,21 +108,22 @@
               <div class="ws-mode-group" role="tablist" aria-label="Modo de uso">
                 <button class="ws-mode" data-mode="podcast" title="Podcast com 1 câmera">Podcast</button>
                 <button class="ws-mode" data-mode="multicam" title="Podcast multicam">Multicam</button>
+                <button class="ws-mode" data-mode="reels" title="Reels com animações">Reels</button>
                 <button class="ws-mode" data-mode="vlog" title="Vlog (vários clipes)">Vlog</button>
                 <button class="ws-mode" data-mode="all" title="Mostra todas as ferramentas">Tudo</button>
               </div>
               <div class="ws-divider"></div>
-              <button class="ws-section" data-section="overview" data-modes="podcast multicam vlog all">
+              <button class="ws-section" data-section="overview" data-modes="podcast multicam reels vlog all">
                 <span class="ws-icon">🏠</span><span>Visão geral</span>
               </button>
               <div class="ws-divider"></div>
-              <button class="ws-section" data-section="upload" data-modes="podcast multicam vlog all">
+              <button class="ws-section" data-section="upload" data-modes="podcast multicam reels vlog all">
                 <span class="ws-icon">📥</span><span>Upload</span>
               </button>
-              <button class="ws-section" data-section="edit" data-modes="podcast multicam all">
+              <button class="ws-section" data-section="edit" data-modes="podcast multicam reels all">
                 <span class="ws-icon">✂</span><span>Editar</span>
               </button>
-              <button class="ws-section" data-section="soundbites" data-modes="podcast multicam all">
+              <button class="ws-section" data-section="soundbites" data-modes="podcast multicam reels all">
                 <span class="ws-icon">🎯</span><span>Soundbites</span>
               </button>
               <button class="ws-section" data-section="podcast" data-modes="podcast multicam all">
@@ -134,13 +135,16 @@
               <button class="ws-section" data-section="multicam" data-modes="multicam all">
                 <span class="ws-icon">🎬</span><span>Multicam</span>
               </button>
-              <button class="ws-section" data-section="brand" data-modes="podcast multicam vlog all">
+              <button class="ws-section" data-section="reels" data-modes="reels vlog all">
+                <span class="ws-icon">✨</span><span>Reels (animações)</span>
+              </button>
+              <button class="ws-section" data-section="brand" data-modes="podcast multicam reels vlog all">
                 <span class="ws-icon">🎨</span><span>Brand</span>
               </button>
               <button class="ws-section" data-section="music" data-modes="vlog all">
                 <span class="ws-icon">🎵</span><span>Música</span>
               </button>
-              <button class="ws-section" data-section="export" data-modes="podcast multicam vlog all">
+              <button class="ws-section" data-section="export" data-modes="podcast multicam reels vlog all">
                 <span class="ws-icon">📤</span><span>Exportar</span>
               </button>
               <div class="ws-divider"></div>
@@ -468,6 +472,35 @@
               <span id="broll-place-status" class="status muted"></span>
             </div>
             <p class="card-help">Roda depois de extrair soundbites e taggear ângulos. A IA escolhe qual ângulo cobre cada bite.</p>
+          </section>
+
+          <section class="card" data-cat="reels" id="reels-card">
+            <h3>✨ Reels · animações</h3>
+            <p class="card-help">Aparecem por cima do vídeo nos momentos que você (ou a IA) escolher. Cores da marca. Renderizadas via Hyperframes junto com o vídeo final.</p>
+            <div class="reels-toolbar">
+              <button id="reels-suggest-btn" class="btn-primary" data-prereq="reels_suggest">🪄 Sugerir animações</button>
+              <label class="cb"><input id="reels-use-llm" type="checkbox" checked /> usar IA pra refinar</label>
+              <label class="cb"><input id="reels-replace" type="checkbox" checked /> substituir as atuais</label>
+              <button id="reels-add-btn" class="btn-ghost">➕ Adicionar manual</button>
+              <span id="reels-status" class="status muted"></span>
+            </div>
+            <div id="reels-list" class="reels-list"></div>
+            <div id="reels-add-form" class="reels-add hidden">
+              <div class="reels-form-row">
+                <label>Início (s)<input id="ra-start" type="number" step="0.1" min="0" value="0" /></label>
+                <label>Duração (s)<input id="ra-duration" type="number" step="0.1" min="0.3" value="1.5" /></label>
+                <label>Tipo<select id="ra-type"></select></label>
+              </div>
+              <div class="reels-form-row">
+                <label class="grow">Texto<input id="ra-text" type="text" placeholder="ex: Watch this" /></label>
+                <label>Subtexto<input id="ra-sub" type="text" placeholder="opcional" /></label>
+                <label>Emoji<input id="ra-emoji" type="text" maxlength="3" placeholder="🔥" /></label>
+              </div>
+              <div class="reels-form-row">
+                <button id="reels-save-btn" class="btn-primary">Salvar</button>
+                <button id="reels-cancel-btn" class="btn-ghost">Cancelar</button>
+              </div>
+            </div>
           </section>
 
           <section class="card" data-cat="music">

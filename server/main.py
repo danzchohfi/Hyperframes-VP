@@ -69,6 +69,8 @@ from .services import subject_timeline as subj_tl_svc
 from .services import camera_picker as cam_picker_svc
 from .services import speaker_camera as speaker_cam_svc
 from .services import multicam_render as mc_render_svc
+from .services import reels_suggest as reels_suggest_svc
+from .services import reels_animations as reels_anim_svc
 from .services import vlog as vlog_svc
 from .services import vlog_assemble as vlog_assemble_svc
 from .services import vlog_pipeline as vlog_pipeline_svc
@@ -167,6 +169,7 @@ class RenderIn(BaseModel):
     include_captions: bool = True
     source: str = "graded"  # graded | roughcut | source
     include_chapter_cards: bool = False  # show chapter title cards from the story
+    include_animations: bool = True       # overlay reels animations from reels_animations.json
 
 
 class ExportIn(BaseModel):
@@ -668,6 +671,12 @@ async def do_render(pid: str, body: RenderIn) -> dict[str, Any]:
                     speaker_turns = captions_svc.retime_segments(speaker_turns, keep_for_turns)
             except Exception:
                 speaker_turns = None
+        animations_for_render: list[dict] | None = None
+        if getattr(body, "include_animations", True) and (pdir / "reels_animations.json").exists():
+            try:
+                animations_for_render = storage.read_json(pid, "reels_animations.json").get("animations") or None
+            except Exception:
+                animations_for_render = None
         comp_dir = composer.build_composition(
             project_dir=pdir,
             video_path=edited,
@@ -677,6 +686,7 @@ async def do_render(pid: str, body: RenderIn) -> dict[str, Any]:
             aspect=body.aspect,
             chapters=chapters_for_render,
             speaker_turns=speaker_turns,
+            animations=animations_for_render,
         )
     except Exception as e:
         _stage(state, "render", "error", f"compose: {e}")
@@ -1034,6 +1044,90 @@ async def export_fcpxml_preview(pid: str) -> dict[str, Any]:
         "total_duration": total,
         "warnings": warnings,
     }
+
+
+# ---- reels animations --------------------------------------------------------
+
+class ReelsSuggestIn(BaseModel):
+    use_llm: bool = True
+    max_animations: int = 10
+    replace: bool = True   # overwrite existing reels_animations.json
+
+
+class ReelsAnimationsIn(BaseModel):
+    animations: list[dict[str, Any]]
+
+
+@app.get("/api/projects/{pid}/reels/animations")
+async def get_reels_animations(pid: str) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    path = pdir / "reels_animations.json"
+    data: dict[str, Any] = {"animations": []}
+    if path.exists():
+        try:
+            data = storage.read_json(pid, "reels_animations.json")
+        except Exception:
+            data = {"animations": []}
+    return {
+        "animations": data.get("animations") or [],
+        "types": reels_anim_svc.ANIMATION_TYPES,
+        "source_duration": state.source_duration or 0.0,
+    }
+
+
+@app.put("/api/projects/{pid}/reels/animations")
+async def put_reels_animations(pid: str, body: ReelsAnimationsIn) -> dict[str, Any]:
+    state = _load(pid)
+    dur = state.source_duration or 0.0
+    cleaned = [reels_anim_svc.normalize_animation(a, dur) for a in body.animations]
+    cleaned.sort(key=lambda a: a["start"])
+    storage.write_json(pid, "reels_animations.json", {"animations": cleaned})
+    return {"animations": cleaned, "count": len(cleaned)}
+
+
+@app.post("/api/projects/{pid}/reels/suggest")
+async def suggest_reels_animations(pid: str, body: ReelsSuggestIn) -> dict[str, Any]:
+    state = _load(pid)
+    if not state.has_transcript:
+        raise HTTPException(400, "transcribe first — suggestions need a transcript")
+    pdir = storage.project_dir(pid)
+    transcript = storage.read_json(pid, "transcript.json")
+    story = storage.read_json(pid, "story.json") if state.has_story else None
+    brand = (
+        BrandBook.model_validate(storage.read_json(pid, "brand.json"))
+        if state.has_brand else BrandBook()
+    )
+    duration = state.source_duration or 0.0
+
+    _stage(state, "reels_suggest", "running", "asking model" if body.use_llm else "heuristics")
+    try:
+        if body.use_llm:
+            suggestions = await reels_suggest_svc.suggest_with_llm(
+                transcript=transcript, story=story, brand=brand,
+                duration=duration, max_animations=body.max_animations,
+            )
+        else:
+            suggestions = reels_suggest_svc.suggest_heuristic(
+                transcript=transcript, story=story, brand=brand,
+                duration=duration, max_animations=body.max_animations,
+            )
+    except Exception as e:
+        _stage(state, "reels_suggest", "error", str(e))
+        raise HTTPException(502, f"suggestion failed: {e}")
+
+    if not body.replace and (pdir / "reels_animations.json").exists():
+        try:
+            existing = storage.read_json(pid, "reels_animations.json").get("animations") or []
+            suggestions = existing + suggestions
+        except Exception:
+            pass
+
+    cleaned = [reels_anim_svc.normalize_animation(a, duration) for a in suggestions]
+    cleaned.sort(key=lambda a: a["start"])
+    storage.write_json(pid, "reels_animations.json", {"animations": cleaned})
+    _stage(state, "reels_suggest", "done", f"{len(cleaned)} animações")
+    return {"animations": cleaned, "count": len(cleaned)}
 
 
 # ---- music suggestion --------------------------------------------------------

@@ -84,6 +84,7 @@ def build_composition(
     aspect: str = "9:16",
     chapters: list[dict] | None = None,  # if set → "Eddie cut" mode
     speaker_turns: list[dict] | None = None,  # [{speaker, start, end}, ...]
+    animations: list[dict] | None = None,  # reels animations to overlay
 ) -> Path:
     """Materialize a Hyperframes project at project_dir/composition. Returns path."""
     comp_dir = project_dir / "composition"
@@ -324,6 +325,18 @@ def build_composition(
         </div>
       </div>"""
 
+    # Reels animations — overlays that fire at user-chosen / AI-chosen moments.
+    animations_css = ""
+    animations_html = ""
+    animations_js = ""
+    if animations:
+        from . import reels_animations as ra
+        normalized = [ra.normalize_animation(a, main_dur) for a in animations]
+        payload = ra.build_animations_payload(brand, normalized, width, intro_offset=intro_dur)
+        animations_css = payload["css"]
+        animations_html = payload["html"]
+        animations_js = payload["js"]
+
     main_start = intro_dur
 
     # Chapter overlays ("Eddie cut" mode). Each chapter shows a flash card with
@@ -512,6 +525,7 @@ def build_composition(
         color: {palette.foreground};
         letter-spacing: -0.02em;
       }}
+      {animations_css}
     </style>
   </head>
   <body>
@@ -532,6 +546,7 @@ def build_composition(
       {lower_thirds_html}
       {cta_html}
       {logo_html}
+      {animations_html}
       {outro_html}
     </div>
 
@@ -580,6 +595,7 @@ def build_composition(
         tl.to(card, {{ opacity: 0, duration: 0.4, ease: "power2.in" }}, start + dur - 0.4);
       }}
 
+      {animations_js}
       window.__timelines["main"] = tl;
 
       // Word-level caption highlighting driven by hf-seek time.
