@@ -3071,10 +3071,32 @@ async function loadReels() {
     REELS_STATE.duration = data.source_duration || 0;
     populateReelsTypeSelect();
     renderReelsList();
-    await loadReelTemplates();
+    await Promise.all([loadReelTemplates(), loadSfxLibrary()]);
   } catch (e) {
     log(`✗ reels: ${e.message}`, "err");
   }
+}
+
+async function loadSfxLibrary() {
+  try {
+    const data = await api(`/api/sfx`);
+    REELS_STATE.sfx_presets = data.presets || [];
+    REELS_STATE.sfx_defaults_by_type = data.defaults_by_type || {};
+    populateReelsSfxSelect();
+  } catch (e) {
+    REELS_STATE.sfx_presets = [];
+  }
+}
+
+function populateReelsSfxSelect() {
+  const sel = $("#ra-sfx");
+  if (!sel) return;
+  const opts = [`<option value="none">— sem som —</option>`,
+                `<option value="_default">padrão pro tipo</option>`];
+  for (const p of REELS_STATE.sfx_presets || []) {
+    opts.push(`<option value="${escapeHtml(p.name)}">${escapeHtml(p.label || p.name)}</option>`);
+  }
+  sel.innerHTML = opts.join("");
 }
 
 async function loadReelTemplates() {
@@ -3194,9 +3216,12 @@ function populateReelsVariantSelect(selected) {
   if (selected && variants.includes(selected)) sel.value = selected;
   // Hide variant select if there's only one (cosmetic).
   sel.closest("label").style.display = variants.length > 1 ? "" : "none";
-  // Logo row only relevant for hook/cta.
+  // Logo + TTS rows only relevant for hook/cta.
+  const hookish = (t === "hook_card" || t === "cta_end");
   const logoRow = $("#ra-logo-row");
-  if (logoRow) logoRow.style.display = (t === "hook_card" || t === "cta_end") ? "" : "none";
+  const ttsRow = $("#ra-tts-row");
+  if (logoRow) logoRow.style.display = hookish ? "" : "none";
+  if (ttsRow) ttsRow.style.display = hookish ? "" : "none";
 }
 
 function renderReelsList() {
@@ -3213,7 +3238,7 @@ function renderReelsList() {
       <td>${a.start.toFixed(2)}s</td>
       <td>${a.duration.toFixed(1)}s</td>
       <td class="ra-type-cell">${escapeHtml((REELS_STATE.types[a.type]?.label) || a.type)}${a.variant && a.variant !== "default" ? `<br><span class="muted ra-variant-tag">${escapeHtml(a.variant)}</span>` : ""}</td>
-      <td><strong>${escapeHtml(a.text || "")}</strong>${a.sub ? `<br><span class="muted">${escapeHtml(a.sub)}</span>` : ""}${(a.type === "hook_card" || a.type === "cta_end") && a.show_logo ? ` <span class="ra-logo-tag" title="usa logo da marca">🏷</span>` : ""}</td>
+      <td><strong>${escapeHtml(a.text || "")}</strong>${a.sub ? `<br><span class="muted">${escapeHtml(a.sub)}</span>` : ""}${(a.type === "hook_card" || a.type === "cta_end") && a.show_logo ? ` <span class="ra-logo-tag" title="usa logo da marca">🏷</span>` : ""}${a.sfx && a.sfx !== "none" ? ` <span class="ra-sfx-tag" title="SFX: ${escapeHtml(a.sfx === "_default" ? "padrão" : a.sfx)}">🔊</span>` : ""}${a.tts ? ` <span class="ra-tts-tag" title="TTS: ${escapeHtml(a.tts)}">🗣</span>` : ""}</td>
       <td class="muted">${escapeHtml(a.source || a.reason || "")}</td>
       <td class="ra-actions">
         <button class="btn-ghost reels-edit" data-idx="${i}" title="Editar">✎</button>
@@ -3233,7 +3258,7 @@ function openReelsForm(idx) {
   REELS_STATE.editing_index = idx;
   const form = $("#reels-add-form");
   form.classList.remove("hidden");
-  const a = (idx >= 0) ? REELS_STATE.animations[idx] : { start: 0, duration: 1.5, type: "text_callout", text: "", sub: "", emoji: "", variant: "", show_logo: true };
+  const a = (idx >= 0) ? REELS_STATE.animations[idx] : { start: 0, duration: 1.5, type: "text_callout", text: "", sub: "", emoji: "", variant: "", show_logo: true, sfx: "_default", sfx_volume: 0.7, tts: "", tts_voice: "alloy" };
   $("#ra-start").value = a.start ?? 0;
   $("#ra-duration").value = a.duration ?? 1.5;
   $("#ra-type").value = a.type || "text_callout";
@@ -3243,6 +3268,11 @@ function openReelsForm(idx) {
   $("#ra-emoji").value = a.emoji || "";
   const sl = $("#ra-show-logo");
   if (sl) sl.checked = a.show_logo !== false;
+  const sfxSel = $("#ra-sfx");
+  if (sfxSel) sfxSel.value = a.sfx == null ? "none" : (a.sfx === "_default" ? "_default" : a.sfx);
+  $("#ra-sfx-volume").value = a.sfx_volume ?? 0.7;
+  $("#ra-tts").value = a.tts || "";
+  $("#ra-tts-voice").value = a.tts_voice || "alloy";
 }
 
 function closeReelsForm() {
@@ -3252,6 +3282,7 @@ function closeReelsForm() {
 
 async function saveReelAnim() {
   const idx = REELS_STATE.editing_index;
+  const sfx = $("#ra-sfx")?.value || "_default";
   const anim = {
     start: parseFloat($("#ra-start").value) || 0,
     duration: parseFloat($("#ra-duration").value) || 1.5,
@@ -3261,6 +3292,10 @@ async function saveReelAnim() {
     sub: $("#ra-sub").value.trim() || null,
     emoji: $("#ra-emoji").value.trim() || null,
     show_logo: $("#ra-show-logo")?.checked ?? true,
+    sfx: sfx === "none" ? null : sfx,
+    sfx_volume: parseFloat($("#ra-sfx-volume")?.value) || 0.7,
+    tts: $("#ra-tts")?.value.trim() || null,
+    tts_voice: $("#ra-tts-voice")?.value || "alloy",
     source: "manual",
   };
   if (idx >= 0) REELS_STATE.animations[idx] = anim;
@@ -3414,6 +3449,40 @@ function bindReels() {
   if (t3) t3.onclick = saveReelsAsTemplate;
   const t4 = $("#reels-template-delete-btn");
   if (t4) t4.onclick = deleteReelTemplate;
+
+  const s1 = $("#ra-sfx-preview-btn");
+  if (s1) s1.onclick = () => {
+    const name = $("#ra-sfx").value;
+    if (!name || name === "none") return;
+    const actual = name === "_default"
+      ? (REELS_STATE.sfx_defaults_by_type?.[$("#ra-type").value] || "ding")
+      : name;
+    const a = new Audio(`/api/sfx/${encodeURIComponent(actual)}.mp3?t=${Date.now()}`);
+    a.volume = Math.min(1, parseFloat($("#ra-sfx-volume").value) || 0.7);
+    a.play().catch(() => {});
+  };
+  const s2 = $("#ra-tts-preview-btn");
+  if (s2) s2.onclick = async () => {
+    const text = $("#ra-tts").value.trim();
+    if (!text || !state.current) return;
+    const btn = s2;
+    btn.disabled = true;
+    btn.textContent = "⏳";
+    try {
+      const res = await api(`/api/projects/${state.current.id}/reels/tts-preview`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text, voice: $("#ra-tts-voice").value }),
+      });
+      const a = new Audio(`${res.url}?t=${Date.now()}`);
+      a.play().catch(() => {});
+    } catch (e) {
+      log(`✗ tts: ${e.message}`, "err");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "🔊";
+    }
+  };
 }
 
 async function refreshReelsOnLoad() {

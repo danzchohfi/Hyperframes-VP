@@ -329,6 +329,7 @@ def build_composition(
     animations_css = ""
     animations_html = ""
     animations_js = ""
+    animations_audio_html = ""
     if animations:
         from . import reels_animations as ra
         normalized = [ra.normalize_animation(a, main_dur) for a in animations]
@@ -357,6 +358,65 @@ def build_composition(
         animations_css = payload["css"]
         animations_html = payload["html"]
         animations_js = payload["js"]
+        # SFX + TTS as Hyperframes <audio> clips. Copy each unique SFX
+        # preset once into composition/sfx/, copy any project-level TTS
+        # MP3s alongside. Tracks 30+ are reserved for these so they don't
+        # collide with body audio (track 0) or overlay tracks (20+).
+        sfx_audio_parts: list[str] = []
+        sfx_dest_dir = comp_dir / "sfx"
+        from . import sfx_lib  # local import to avoid hard dep when no anims
+        copied_sfx: dict[str, str] = {}  # preset → relative path
+        for i, anim in enumerate(normalized):
+            sfx_name = ra.resolve_default_sfx(anim)
+            if sfx_name and sfx_name in sfx_lib.SFX_RECIPES:
+                p = sfx_lib.get_path_if_built(sfx_name)
+                if p:
+                    if sfx_name not in copied_sfx:
+                        sfx_dest_dir.mkdir(exist_ok=True)
+                        dst = sfx_dest_dir / p.name
+                        if not dst.exists():
+                            shutil.copy2(p, dst)
+                        copied_sfx[sfx_name] = f"sfx/{p.name}"
+                    rel = copied_sfx[sfx_name]
+                    vol = float(anim.get("sfx_volume") or 0.7)
+                    sfx_start = round(float(anim["start"]) + intro_dur, 3)
+                    sfx_audio_parts.append(
+                        f'<audio class="clip" '
+                        f'data-start="{sfx_start}" '
+                        f'data-duration="1.5" '
+                        f'data-track-index="{30 + i}" '
+                        f'data-volume="{vol:.2f}" '
+                        f'src="{rel}" preload="auto"></audio>'
+                    )
+            # TTS narration: project_dir/.tts/{hash}.mp3 — copy to composition.
+            tts_text = anim.get("tts")
+            if tts_text:
+                try:
+                    from . import tts as tts_svc
+                    tts_path = tts_svc.cache_path(
+                        project_dir, tts_text,
+                        anim.get("tts_voice") or "alloy",
+                        float(anim.get("tts_speed") or 1.0),
+                    )
+                    if tts_path.exists():
+                        tts_dest_dir = comp_dir / "tts"
+                        tts_dest_dir.mkdir(exist_ok=True)
+                        dst = tts_dest_dir / tts_path.name
+                        if not dst.exists():
+                            shutil.copy2(tts_path, dst)
+                        vol = float(anim.get("tts_volume") or 1.0)
+                        tts_start = round(float(anim["start"]) + intro_dur, 3)
+                        sfx_audio_parts.append(
+                            f'<audio class="clip" '
+                            f'data-start="{tts_start}" '
+                            f'data-duration="{float(anim["duration"]):.2f}" '
+                            f'data-track-index="{40 + i}" '
+                            f'data-volume="{vol:.2f}" '
+                            f'src="tts/{tts_path.name}" preload="auto"></audio>'
+                        )
+                except Exception:
+                    pass
+        animations_audio_html = "\n      ".join(sfx_audio_parts)
 
     main_start = intro_dur
 
@@ -568,6 +628,7 @@ def build_composition(
       {cta_html}
       {logo_html}
       {animations_html}
+      {animations_audio_html}
       {outro_html}
     </div>
 

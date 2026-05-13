@@ -23,6 +23,8 @@ from .brand import BrandBook
 from .ffmpeg import probe, run
 from . import reels_animations as ra
 from . import reels_rasterizer as rast
+from . import sfx_lib
+from . import tts as tts_svc
 
 
 log = logging.getLogger(__name__)
@@ -126,11 +128,48 @@ async def render_quick_preview(
             "rasterized": 0, "reused": 0, "width": target_w, "height": target_h,
         }
 
+    # Does the source have an audio stream? amix only works when at least
+    # one input is real audio; we use this to decide the audio mix shape.
+    has_source_audio = any(s.get("codec_type") == "audio" for s in streams)
+
+    # Pre-build audio inputs for animations: SFX presets + TTS narration.
+    # Both are optional. SFX files come from the global library (synthesized
+    # once and reused); TTS files are per-text (per-project cache).
+    sfx_cache: dict[str, Path] = await sfx_lib.get_paths_for_animations(
+        [{**ra.normalize_animation(a, duration),
+          "sfx": ra.resolve_default_sfx(ra.normalize_animation(a, duration))}
+         for a in animations]
+    )
+    tts_cache: dict[str, Path] = {}
+    try:
+        normalized_for_tts = [ra.normalize_animation(a, duration) for a in animations]
+        tts_cache = await tts_svc.synthesize_for_animations(normalized_for_tts, project_dir)
+    except Exception:
+        log.exception("tts batch synth failed — continuing without narration")
+
+    # Per-animation audio descriptor: (input_path, start_seconds, volume).
+    # We keep these in order so filter labels stay stable.
+    audio_events: list[tuple[Path, float, float]] = []
+    for i, raw in enumerate(animations):
+        anim = ra.normalize_animation(raw, duration)
+        # SFX
+        sfx_name = ra.resolve_default_sfx(anim)
+        if sfx_name and sfx_name in sfx_cache:
+            audio_events.append((sfx_cache[sfx_name], float(anim["start"]),
+                                 float(anim.get("sfx_volume") or 0.7)))
+        # TTS narration
+        tts_path = tts_cache.get(f"anim_{i}")
+        if tts_path:
+            audio_events.append((tts_path, float(anim["start"]),
+                                 float(anim.get("tts_volume") or 1.0)))
+
     # Build the filter_complex: source becomes [v0]; each PNG is faded
     # in/out and overlaid on the running base.
     cmd: list[str] = ["ffmpeg", "-y", "-i", str(source)]
     for png in png_paths:
         cmd += ["-i", str(png)]
+    for audio_path, _start, _vol in audio_events:
+        cmd += ["-i", str(audio_path)]
 
     parts: list[str] = []
     parts.append(f"[0:v]scale={target_w}:{target_h},format=yuva420p[v0]")
@@ -138,7 +177,7 @@ async def render_quick_preview(
     base_label = "v0"
     for i, raw in enumerate(animations):
         anim = ra.normalize_animation(raw, duration)
-        idx = i + 1  # ffmpeg input index
+        idx = i + 1  # ffmpeg input index for the PNG
         start = float(anim["start"])
         dur = float(anim["duration"])
         end = start + dur
@@ -158,34 +197,53 @@ async def render_quick_preview(
         )
         base_label = next_label
 
+    # Audio mix: delay each event to its start time, scale by volume,
+    # then amix everything together with the source audio.
+    audio_start_idx = 1 + len(png_paths)  # ffmpeg input index where audio inputs begin
+    audio_labels: list[str] = []
+    for i, (_p, start_s, vol) in enumerate(audio_events):
+        idx = audio_start_idx + i
+        delay_ms = int(round(start_s * 1000))
+        parts.append(
+            f"[{idx}:a]adelay={delay_ms}|{delay_ms},volume={vol:.2f}[evt{i}]"
+        )
+        audio_labels.append(f"[evt{i}]")
+
+    # Final audio: source audio (when present) + every event.
+    if audio_labels and has_source_audio:
+        parts.append(
+            f"[0:a]{''.join(audio_labels)}amix=inputs={1 + len(audio_labels)}:normalize=0:dropout_transition=0[aout]"
+        )
+        audio_map = ["-map", "[aout]"]
+    elif audio_labels:
+        # Source has no audio — just mix the events together (or single).
+        if len(audio_labels) == 1:
+            parts.append(f"{audio_labels[0]}acopy[aout]")
+        else:
+            parts.append(
+                f"{''.join(audio_labels)}amix=inputs={len(audio_labels)}:normalize=0:dropout_transition=0[aout]"
+            )
+        audio_map = ["-map", "[aout]"]
+    else:
+        audio_map = ["-map", "0:a?"]
+
     # Mark each PNG input as a looping single-frame source so overlay's
-    # timeline runs for the duration of the video. Done via -loop 1 and
-    # -t <duration> per input; the filter graph handles enable= cropping.
-    # We add these flags by re-stitching the cmd: insert before each "-i".
-    rebuilt: list[str] = []
-    it = iter(cmd)
-    rebuilt.append(next(it))  # ffmpeg
-    rebuilt.append(next(it))  # -y
-    rebuilt.append(next(it))  # -i
-    rebuilt.append(next(it))  # source path
-    while True:
-        try:
-            flag = next(it)
-        except StopIteration:
-            break
-        # `flag` should be "-i"
-        path = next(it)
-        rebuilt += ["-loop", "1", "-t", f"{duration:.3f}", "-i", path]
+    # timeline runs for the duration of the video.
+    rebuilt: list[str] = ["ffmpeg", "-y", "-i", str(source)]
+    for png in png_paths:
+        rebuilt += ["-loop", "1", "-t", f"{duration:.3f}", "-i", str(png)]
+    for audio_path, _start, _vol in audio_events:
+        rebuilt += ["-i", str(audio_path)]
     cmd = rebuilt
 
     filter_complex = ";".join(parts)
     cmd += [
         "-filter_complex", filter_complex,
         "-map", f"[{base_label}]",
-        "-map", "0:a?",
+        *audio_map,
         "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
         "-pix_fmt", "yuv420p",
-        "-c:a", "aac", "-b:a", "96k",
+        "-c:a", "aac", "-b:a", "128k",
         "-r", str(fps),
         "-movflags", "+faststart",
         "-shortest",

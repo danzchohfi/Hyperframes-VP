@@ -107,7 +107,48 @@ def normalize_animation(anim: dict, source_duration: float | None = None) -> dic
     # don't have to set it explicitly. The composer/preview drops it when
     # there's no brand logo, so it's safe to leave on.
     a["show_logo"] = bool(a.get("show_logo", True)) if t in ("hook_card", "cta_end") else False
+    # Sound: when the user (or the type's default) provides an SFX preset
+    # name, render passes will mix it at the animation's start time.
+    # `sfx` of None or "" silences this animation; "default" picks the
+    # type's recommended preset.
+    sfx = a.get("sfx")
+    if sfx == "default":
+        # Resolved lazily inside renderers so we don't import sfx_lib here
+        # (composer ships without it for renders that don't use sound).
+        a["sfx"] = "_default"
+    elif sfx in (None, "", "none", "off"):
+        a["sfx"] = None
+    else:
+        a["sfx"] = str(sfx).strip() or None
+    try:
+        vol = float(a.get("sfx_volume") if a.get("sfx_volume") is not None else 0.7)
+    except (TypeError, ValueError):
+        vol = 0.7
+    a["sfx_volume"] = max(0.0, min(1.5, vol))
+    # TTS narration. Only hook_card / cta_end carry it (the others get
+    # cluttered with voice). Empty string means "no narration".
+    if t in ("hook_card", "cta_end"):
+        a["tts"] = (a.get("tts") or "").strip() or None
+        a["tts_voice"] = (a.get("tts_voice") or "alloy").strip() or "alloy"
+        try:
+            a["tts_volume"] = max(0.0, min(1.5, float(a.get("tts_volume") if a.get("tts_volume") is not None else 1.0)))
+        except (TypeError, ValueError):
+            a["tts_volume"] = 1.0
+    else:
+        a["tts"] = None
+        a["tts_voice"] = None
+        a["tts_volume"] = 0.0
     return a
+
+
+def resolve_default_sfx(anim: dict) -> str | None:
+    """Translate sfx='_default' (sentinel from normalize_animation) into a
+    real preset name based on the animation type. Renderers call this
+    just before building their audio mix."""
+    if anim.get("sfx") != "_default":
+        return anim.get("sfx")
+    from . import sfx_lib  # local import to avoid cycles
+    return sfx_lib.DEFAULT_SFX_FOR_TYPE.get(anim["type"])
 
 
 # --- shared CSS (anchors / palette tokens) ---------------------------------

@@ -73,6 +73,8 @@ from .services import reels_suggest as reels_suggest_svc
 from .services import reels_animations as reels_anim_svc
 from .services import reel_templates as reel_tpl_svc
 from .services import reels_preview as reels_preview_svc
+from .services import sfx_lib as sfx_lib_svc
+from .services import tts as tts_svc
 from .services import vlog as vlog_svc
 from .services import vlog_assemble as vlog_assemble_svc
 from .services import vlog_pipeline as vlog_pipeline_svc
@@ -679,6 +681,20 @@ async def do_render(pid: str, body: RenderIn) -> dict[str, Any]:
                 animations_for_render = storage.read_json(pid, "reels_animations.json").get("animations") or None
             except Exception:
                 animations_for_render = None
+        # Ensure SFX presets are synthesized + any TTS narration is cached
+        # before composer.build_composition reaches for the files.
+        if animations_for_render:
+            try:
+                await sfx_lib_svc.prebuild_all()
+            except Exception:
+                _stage(state, "render", "running", "sfx prebuild skipped (ffmpeg issue)")
+            try:
+                from .services import reels_animations as _ra
+                normalized_anims = [_ra.normalize_animation(a, state.source_duration or 0.0)
+                                    for a in animations_for_render]
+                await tts_svc.synthesize_for_animations(normalized_anims, pdir)
+            except Exception:
+                _stage(state, "render", "running", "tts synth partial")
         comp_dir = composer.build_composition(
             project_dir=pdir,
             video_path=edited,
@@ -1260,6 +1276,56 @@ async def suggest_reels_animations(pid: str, body: ReelsSuggestIn) -> dict[str, 
     storage.write_json(pid, "reels_animations.json", {"animations": cleaned})
     _stage(state, "reels_suggest", "done", f"{len(cleaned)} animações")
     return {"animations": cleaned, "count": len(cleaned)}
+
+
+# ---- SFX library -------------------------------------------------------------
+
+@app.get("/api/sfx")
+async def list_sfx() -> dict[str, Any]:
+    """Return the list of available SFX presets + their default mappings.
+    The UI uses this to populate the per-animation SFX dropdown."""
+    return {
+        "presets": sfx_lib_svc.list_presets(),
+        "defaults_by_type": sfx_lib_svc.DEFAULT_SFX_FOR_TYPE,
+    }
+
+
+@app.get("/api/sfx/{name}.mp3")
+async def get_sfx_file(name: str) -> FileResponse:
+    """Stream a single SFX preset for the UI's 🔊 preview button."""
+    if name not in sfx_lib_svc.SFX_RECIPES:
+        raise HTTPException(404, f"unknown SFX preset: {name}")
+    p = await sfx_lib_svc.get_or_create_sfx(name)
+    return FileResponse(p, media_type="audio/mpeg", filename=f"{name}.mp3")
+
+
+class TtsPreviewIn(BaseModel):
+    text: str
+    voice: str = "alloy"
+
+
+@app.post("/api/projects/{pid}/reels/tts-preview")
+async def tts_preview(pid: str, body: TtsPreviewIn) -> dict[str, Any]:
+    """Synthesize a one-off TTS clip and return its URL — used by the UI's
+    🔊 button next to the TTS field, so the user hears the narration
+    before saving the animation."""
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    text = (body.text or "").strip()
+    if not text:
+        raise HTTPException(400, "texto vazio")
+    if body.voice not in tts_svc.VOICES:
+        raise HTTPException(400, f"voice inválida — use: {', '.join(tts_svc.VOICES)}")
+    try:
+        out = await tts_svc.synthesize(text, project_dir=pdir, voice=body.voice)
+    except Exception as e:
+        raise HTTPException(502, f"tts: {e}")
+    rel = out.relative_to(pdir).as_posix()
+    return {
+        "url": f"/api/projects/{pid}/files/{rel}",
+        "voice": body.voice,
+        "bytes": out.stat().st_size,
+    }
 
 
 # ---- reels quick preview (PIL + ffmpeg, ~10s) --------------------------------
