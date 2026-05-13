@@ -3247,13 +3247,29 @@ function refreshOverview() {
 
   applyPrereqs();
 
-  // Next-step hint
+  // Next-step hint — when it points at the 1-click pipeline, render an
+  // upsell that's hard to miss so the layman knows exactly where to go.
   const next = computeNextStep(p);
   const nextEl = $("#ph-next-step");
   if (nextEl) {
     if (next) {
       nextEl.style.display = "";
-      nextEl.innerHTML = `<span class="ns-arrow">→</span> <span class="ns-msg">${escapeHtml(next.msg)}</span> <span class="ns-link">Abrir</span>`;
+      const pointsAt1Click = /1\-clique|1-click/i.test(next.msg);
+      if (pointsAt1Click) {
+        const eta = podcastEtaHint(p);
+        nextEl.classList.add("ns-cta");
+        nextEl.innerHTML = `
+          <div class="ns-cta-icon"><span data-icon="zap" data-icon-size="20"></span></div>
+          <div class="ns-cta-body">
+            <div class="ns-cta-title">Edição automática disponível</div>
+            <div class="ns-cta-sub">A pipeline 1-clique transcreve, corta, sincroniza câmeras, escolhe ângulos e gera o FCPXML. ${eta}.</div>
+          </div>
+          <span class="ns-cta-go">Abrir Multicam <span data-icon="arrow-right" data-icon-size="14"></span></span>`;
+        if (window.HFIcons) HFIcons.render(nextEl);
+      } else {
+        nextEl.classList.remove("ns-cta");
+        nextEl.innerHTML = `<span class="ns-arrow">→</span> <span class="ns-msg">${escapeHtml(next.msg)}</span> <span class="ns-link">Abrir</span>`;
+      }
       nextEl.onclick = () => setSection(next.section);
     } else {
       nextEl.style.display = "none";
