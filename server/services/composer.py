@@ -225,15 +225,20 @@ def build_composition(
     # can draw an animated underline (scaleX 0→1) during the word, and the
     # word text itself sits inside `.cw-text` so we can tween color/scale
     # via the .hot CSS class without fighting GSAP's transform.
+    # Words ending in `!` / `?` get `.cw--emph` so the timeline can give
+    # them a bigger pop — emphasis is a tonal cue an editor would call out.
     caption_html_parts: list[str] = []
     for i, line in enumerate(caption_lines):
-        word_spans = " ".join(
-            f'<span class="cw" data-w-start="{w["start"]}" data-w-end="{w["end"]}">'
-            f'<span class="cw-bg"></span>'
-            f'<span class="cw-text">{html.escape(w["word"])}</span>'
-            f'</span>'
-            for w in line["words"]
-        )
+        def _word_span(w):
+            word = w["word"]
+            emph = " cw--emph" if word.rstrip().endswith(("!", "?")) else ""
+            return (
+                f'<span class="cw{emph}" data-w-start="{w["start"]}" data-w-end="{w["end"]}">'
+                f'<span class="cw-bg"></span>'
+                f'<span class="cw-text">{html.escape(word)}</span>'
+                f'</span>'
+            )
+        word_spans = " ".join(_word_span(w) for w in line["words"])
         sp = line.get("speaker")
         sp_class = f' data-speaker="{html.escape(sp)}"' if sp else ""
         label_html = ""
@@ -595,6 +600,15 @@ def build_composition(
         color: {caption_highlight};
         text-shadow: 0 0 24px {caption_highlight}cc, 0 4px 28px rgba(0,0,0,0.92);
         transform: scale({'1.20' if brand.caption_style == 'tiktok' else '1.10'});
+      }}
+      /* Emphasis words (ending in ! or ?) pop a touch harder and the
+         underline saturates more. Subtle but reads as "voice raised". */
+      .caption .cw--emph.hot .cw-text {{
+        transform: scale({'1.32' if brand.caption_style == 'tiktok' else '1.20'});
+      }}
+      .caption .cw--emph .cw-bg {{
+        opacity: 1.0;
+        filter: brightness(1.15);
       }}
       .cs-label {{
         display: inline-block;
