@@ -55,6 +55,11 @@ HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-8765}"
 
 echo "→ http://${HOST}:${PORT}"
+# Long keep-alive so 400 MB+ uploads + minutes-long ffmpeg jobs don't get
+# killed mid-flight. Exclude the projects dir from reload watching so
+# saving state during a job doesn't restart uvicorn.
 exec .venv/bin/uvicorn server.main:app \
   --host "$HOST" --port "$PORT" \
-  --reload --reload-dir server
+  --reload --reload-dir server \
+  --reload-exclude 'server/projects/*' \
+  --timeout-keep-alive 600

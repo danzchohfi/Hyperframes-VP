@@ -770,37 +770,59 @@ async def add_angle(pid: str, name: str = Form("Angle"), file: UploadFile = File
     raw = angles_dir / f"angle{idx}_raw{ext}"
     norm = angles_dir / f"angle{idx}.mp4"
 
+    _stage(state, "angle", "running", f"recebendo {file.filename}")
     async with aiofiles.open(raw, "wb") as out:
         while chunk := await file.read(1024 * 1024):
             await out.write(chunk)
 
-    try:
-        await ff.normalize(raw, norm)
-        dur = await ff.duration(norm)
-    except ff.FFmpegError as e:
-        raise HTTPException(400, f"ffmpeg failed: {e}")
-
-    raw.unlink(missing_ok=True)
-    angle_record = {
+    # Pre-record the angle so the UI shows it immediately. Normalization +
+    # quality/face analysis runs in the background so a 400 MB upload
+    # doesn't hold the HTTP connection open for minutes.
+    angle_record: dict[str, Any] = {
         "index": idx - 1,
         "name": name or f"Angle {idx}",
         "filename": norm.name,
-        "duration": dur,
+        "duration": 0.0,
+        "status": "processing",
     }
-    # auto-assess quality on upload (fast, ~50ms)
-    try:
-        angle_record["quality_check"] = quality_svc.assess(norm)
-    except Exception:
-        pass
-    # auto-run face analysis (cheap; ~100-300ms per clip)
-    try:
-        angle_record["face_analysis"] = face_svc.analyze(norm, max_frames=24)
-    except Exception:
-        pass
     state.angles.append(angle_record)
     storage.save(state)
-    qlabel = (angle_record.get("quality_check") or {}).get("quality", "?")
-    _stage(state, "angle", "done", f"{angle_record['name']} ({dur:.2f}s · {qlabel})")
+    _stage(state, "angle", "running", f"normalizando {angle_record['name']}", progress=0.05)
+
+    async def _finalize() -> None:
+        try:
+            await ff.normalize(raw, norm)
+            dur = await ff.duration(norm)
+        except Exception as e:
+            cur = _load(pid)
+            for a in cur.angles:
+                if a.get("filename") == norm.name:
+                    a["status"] = "error"
+                    a["error"] = str(e)
+            storage.save(cur)
+            _stage(cur, "angle", "error", f"{angle_record['name']}: {e}")
+            return
+        raw.unlink(missing_ok=True)
+        cur = _load(pid)
+        for a in cur.angles:
+            if a.get("filename") == norm.name:
+                a["duration"] = dur
+                a["status"] = "ok"
+                try:
+                    a["quality_check"] = quality_svc.assess(norm)
+                except Exception:
+                    pass
+                try:
+                    a["face_analysis"] = face_svc.analyze(norm, max_frames=24)
+                except Exception:
+                    pass
+                qlabel = (a.get("quality_check") or {}).get("quality", "?")
+                storage.save(cur)
+                _stage(cur, "angle", "done", f"{a['name']} ({dur:.2f}s · {qlabel})")
+                return
+        storage.save(cur)
+
+    asyncio.create_task(_finalize())
     return angle_record
 
 

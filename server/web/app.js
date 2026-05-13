@@ -55,6 +55,45 @@ async function api(path, opts = {}) {
   return ct.includes("application/json") ? res.json() : res.text();
 }
 
+// XHR upload with progress events (fetch can't report upload progress yet
+// without ReadableStream wrapping). Use for any file > a few MB.
+function apiUpload(path, fd, { onProgress, timeoutMs = 30 * 60 * 1000 } = {}) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", path);
+    xhr.responseType = "text";
+    xhr.timeout = timeoutMs;
+    if (xhr.upload && onProgress) {
+      xhr.upload.addEventListener("progress", (e) => {
+        if (e.lengthComputable) onProgress({
+          loaded: e.loaded, total: e.total,
+          pct: e.total ? (e.loaded / e.total) : 0,
+        });
+      });
+    }
+    xhr.onload = () => {
+      const ok = xhr.status >= 200 && xhr.status < 300;
+      const ct = xhr.getResponseHeader("content-type") || "";
+      const body = ct.includes("application/json")
+        ? (() => { try { return JSON.parse(xhr.responseText); } catch { return xhr.responseText; } })()
+        : xhr.responseText;
+      if (ok) resolve(body);
+      else reject(new Error(`${xhr.status} ${typeof body === "string" ? body : JSON.stringify(body)}`));
+    };
+    xhr.onerror   = () => reject(new Error("network error — verifica conexão / servidor"));
+    xhr.ontimeout = () => reject(new Error("timeout no upload — arquivo muito grande ou rede lenta"));
+    xhr.onabort   = () => reject(new Error("upload cancelado"));
+    xhr.send(fd);
+  });
+}
+
+function fmtBytes(n) {
+  if (!n) return "0 B";
+  const u = ["B", "KB", "MB", "GB"];
+  let i = 0; while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return `${n.toFixed(n >= 100 ? 0 : 1)} ${u[i]}`;
+}
+
 function log(msg, kind = "") {
   const el = $("#pipeline-log");
   if (!el) return;
@@ -2233,14 +2272,56 @@ async function uploadAngle(file) {
   const fd = new FormData();
   fd.append("file", file);
   fd.append("name", $("#angle-name").value || `Ângulo ${(state.current.angles?.length || 0) + 1}`);
-  log(`<span data-icon=&quot;play&quot;></span> Subindo ângulo: ${file.name}`);
+
+  // Sticky log line we update in place with upload progress
+  const el = $("#pipeline-log");
+  const line = document.createElement("div");
+  line.innerHTML = `<span data-icon="upload-cloud"></span> Subindo ângulo: ${file.name} (${fmtBytes(file.size)}) — 0%`;
+  el?.appendChild(line);
+  el && (el.scrollTop = el.scrollHeight);
+
   try {
-    const r = await api(`/api/projects/${state.current.id}/angles`, { method: "POST", body: fd });
-    log(`<span data-icon=&quot;check&quot;></span> Ângulo "${r.name}" pronto (${r.duration.toFixed(1)}s)`, "ok");
+    const r = await apiUpload(`/api/projects/${state.current.id}/angles`, fd, {
+      onProgress: ({ loaded, total, pct }) => {
+        line.innerHTML = `<span data-icon="upload-cloud"></span> Subindo ${file.name} — ${(pct * 100).toFixed(0)}% (${fmtBytes(loaded)} / ${fmtBytes(total)})`;
+        if (window.HFIcons) HFIcons.render(line);
+      },
+    });
+    line.classList.add("ok");
+    line.innerHTML = `<span data-icon="check"></span> "${r.name}" recebido — normalizando em background…`;
+    if (window.HFIcons) HFIcons.render(line);
     $("#angle-name").value = "";
-    await loadProject(state.current.id);
+    // Poll project state so the angle reflects "ok" when the background
+    // ffmpeg finalize finishes. SSE events would be nicer but this is reliable.
+    let attempts = 0;
+    const poll = async () => {
+      attempts++;
+      try {
+        const p = await api(`/api/projects/${state.current.id}`);
+        const target = (p.angles || []).find(a => a.filename === r.filename);
+        if (target?.status === "ok") {
+          state.current = p;
+          line.innerHTML = `<span data-icon="check"></span> "${target.name}" pronto (${(target.duration || 0).toFixed(1)}s)`;
+          if (window.HFIcons) HFIcons.render(line);
+          await loadProject(state.current.id);
+          return;
+        }
+        if (target?.status === "error") {
+          line.classList.add("err");
+          line.innerHTML = `<span data-icon="alert-triangle"></span> "${target.name}" falhou: ${target.error || "ffmpeg"}`;
+          if (window.HFIcons) HFIcons.render(line);
+          return;
+        }
+        if (attempts < 240) setTimeout(poll, 2000);  // up to 8 min
+      } catch {
+        if (attempts < 240) setTimeout(poll, 4000);
+      }
+    };
+    poll();
   } catch (e) {
-    log(`✗ Ângulo: ${e.message}`, "err");
+    line.classList.add("err");
+    line.innerHTML = `<span data-icon="alert-triangle"></span> Ângulo: ${e.message}`;
+    if (window.HFIcons) HFIcons.render(line);
   }
 }
 
