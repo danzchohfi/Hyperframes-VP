@@ -731,7 +731,7 @@ async function refreshExportPreview(p) {
       downloadLink.href = url;
       downloadLink.style.opacity = 1;
       downloadLink.style.pointerEvents = "auto";
-      if (label) downloadLink.textContent = `<span data-icon=&quot;download&quot;></span> ${label}`;
+      if (label) setBtnHTML(downloadLink, `<span data-icon=&quot;download&quot;></span> ${label}`);
     }
   } else {
     video.removeAttribute("src");
@@ -1154,7 +1154,7 @@ async function exportPremiere() {
     const link = $("#premiere-link");
     link.href = res.url;
     link.style.display = "inline-block";
-    link.textContent = `<span data-icon=&quot;download&quot;></span> Baixar ${res.export}`;
+    setBtnHTML(link, `<span data-icon=&quot;download&quot;></span> Baixar ${res.export}`);
   } catch (e) {
     log(`✗ Premiere XML: ${e.message}`, "err");
   }
@@ -1220,7 +1220,7 @@ async function exportCaptions(fmt) {
     const link = $("#caps-link");
     link.href = res.url;
     link.style.display = "inline-block";
-    link.textContent = `<span data-icon=&quot;download&quot;></span> ${res.export}`;
+    setBtnHTML(link, `<span data-icon=&quot;download&quot;></span> ${res.export}`);
   } catch (e) {
     log(`✗ ${fmt}: ${e.message}`, "err");
   }
@@ -1242,7 +1242,7 @@ async function burnCaptions() {
     const a = $("#burn-link");
     a.href = r.url;
     a.style.display = "inline-block";
-    a.textContent = `<span data-icon=&quot;download&quot;></span> ${r.export}`;
+    setBtnHTML(a, `<span data-icon=&quot;download&quot;></span> ${r.export}`);
     await refreshHistory();
   } catch (e) {
     log(`✗ burn: ${e.message}`, "err");
@@ -1656,7 +1656,7 @@ function renderStaleWarnings(p) {
     if (stale[key]) {
       const div = document.createElement("div");
       div.className = "warn";
-      div.textContent = `<span data-icon=&quot;alert-triangle&quot;></span> ${msg}`;
+      setBtnHTML(div, `<span data-icon=&quot;alert-triangle&quot;></span> ${msg}`);
       root.appendChild(div);
     }
   }
@@ -1726,7 +1726,7 @@ async function exportAudio() {
     const a = $("#audio-link");
     a.href = r.url;
     a.style.display = "inline-block";
-    a.textContent = `<span data-icon=&quot;download&quot;></span> ${r.export}`;
+    setBtnHTML(a, `<span data-icon=&quot;download&quot;></span> ${r.export}`);
   } catch (e) {
     log(`✗ audio: ${e.message}`, "err");
   }
@@ -1752,7 +1752,7 @@ async function exportBundle() {
     const a = $("#bundle-link");
     a.href = r.url;
     a.style.display = "inline-block";
-    a.textContent = `<span data-icon=&quot;download&quot;></span> ${r.export}`;
+    setBtnHTML(a, `<span data-icon=&quot;download&quot;></span> ${r.export}`);
   } catch (e) {
     log(`✗ bundle: ${e.message}`, "err");
   }
@@ -2077,7 +2077,7 @@ function renderNarratives(narratives) {
         });
         log(`<span data-icon=&quot;check&quot;></span> vlog · ${r.bytes} bytes`, "ok");
         const a = card.querySelector(".n-link");
-        a.href = r.url; a.style.display = "inline-block"; a.textContent = `<span data-icon=&quot;download&quot;></span> ${r.export}`;
+        a.href = r.url; a.style.display = "inline-block"; setBtnHTML(a, `<span data-icon=&quot;download&quot;></span> ${r.export}`);
         await refreshHistory();
       } catch (e) {
         log(`✗ assemble: ${e.message}`, "err");
@@ -2126,7 +2126,7 @@ async function multicamRender() {
     const r = await api(`/api/projects/${state.current.id}/multicam-render`, { method: "POST" });
     log(`<span data-icon=&quot;check&quot;></span> multicam ${(r.bytes / 1024).toFixed(0)} KB`, "ok");
     const a = $("#multicam-link");
-    a.href = r.url; a.style.display = "inline-block"; a.textContent = `<span data-icon=&quot;download&quot;></span> ${r.export}`;
+    a.href = r.url; a.style.display = "inline-block"; setBtnHTML(a, `<span data-icon=&quot;download&quot;></span> ${r.export}`);
     await refreshHistory();
   } catch (e) {
     log(`✗ multicam render: ${e.message}`, "err");
@@ -2292,7 +2292,7 @@ async function mixMusic() {
     const a = $("#mix-link");
     a.href = r.url;
     a.style.display = "inline-block";
-    a.textContent = `<span data-icon=&quot;download&quot;></span> ${r.export}`;
+    setBtnHTML(a, `<span data-icon=&quot;download&quot;></span> ${r.export}`);
     await refreshHistory();
   } catch (e) {
     log(`✗ mix: ${e.message}`, "err");
@@ -2690,7 +2690,7 @@ async function exportFcpxml() {
     const link = $("#fcpxml-link");
     link.href = res.url;
     link.style.display = "inline-block";
-    link.textContent = `<span data-icon=&quot;download&quot;></span> Baixar ${res.export}`;
+    setBtnHTML(link, `<span data-icon=&quot;download&quot;></span> Baixar ${res.export}`);
     refreshNleExport();
   } catch (e) {
     log(`✗ FCPXML: ${e.message}`, "err");
@@ -3811,7 +3811,7 @@ async function suggestReelAnims() {
     });
     REELS_STATE.animations = res.animations;
     renderReelsList();
-    status.textContent = `<span data-icon=&quot;check&quot;></span> ${res.count} sugestões`;
+    setBtnHTML(status, `<span data-icon=&quot;check&quot;></span> ${res.count} sugestões`);
     status.className = "status done";
     log(`<span data-icon=&quot;check&quot;></span> reels suggest: ${res.count} animações`, "ok");
   } catch (e) {
@@ -3868,8 +3868,7 @@ async function quickPreviewReel() {
     video.src = `${res.url}?t=${Date.now()}`;
     video.load();
     video.play().catch(() => {});
-    $("#reels-preview-stats").textContent =
-      `<span data-icon=&quot;check&quot;></span> ${(res.took_ms / 1000).toFixed(1)}s · ${res.rasterized} novas, ${res.reused} reusadas · ${res.width}×${res.height}`;
+    setBtnHTML($("#reels-preview-stats"), `<span data-icon=&quot;check&quot;></span> ${(res.took_ms / 1000).toFixed(1)}s · ${res.rasterized} novas, ${res.reused} reusadas · ${res.width}×${res.height}`);
     log(`<span data-icon=&quot;check&quot;></span> quick preview: ${res.took_ms}ms`, "ok");
   } catch (e) {
     $("#reels-preview-stats").textContent = `✗ ${e.message}`;
