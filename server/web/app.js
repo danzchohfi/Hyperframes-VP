@@ -2679,11 +2679,12 @@ async function exportFcpxml() {
         use_cuts: $("#fcpxml-cuts").checked,
         use_roughcut: $("#fcpxml-roughcut")?.checked || false,
         include_broll: $("#fcpxml-broll")?.checked || false,
-        include_word_markers: $("#fcpxml-markers").checked,
+        include_word_markers: $("#fcpxml-markers")?.checked || false,
         use_camera_plan: $("#fcpxml-plan")?.checked !== false,
         include_chapters: $("#fcpxml-chapters")?.checked !== false,
         include_soundbites: $("#fcpxml-bites")?.checked !== false,
         include_speakers: $("#fcpxml-speakers")?.checked !== false,
+        include_questions: $("#fcpxml-questions")?.checked !== false,
       }),
     });
     log(`<span data-icon=&quot;check&quot;></span> FCPXML ${res.kind} · ${res.bytes} bytes`, "ok");
@@ -2816,6 +2817,7 @@ async function refreshNleExport() {
       `<span class="nle-pill ${has("silence_cuts")}">${a.silence_cuts ? "✓" : "·"} silêncios</span>`,
       `<span class="nle-pill ${has("chapters")}">${a.chapters ? "✓" : "·"} chapters</span>`,
       `<span class="nle-pill ${has("soundbites")}">${a.soundbites ? "✓" : "·"} soundbites</span>`,
+      `<span class="nle-pill ${has("questions")}">${a.questions ? "✓" : "·"} perguntas${a.questions_count ? ` (${a.questions_count})` : ""}</span>`,
       `<span class="nle-pill ${has("speakers")}">${a.speakers ? "✓" : "·"} speakers</span>`,
     ].join("");
     warnings.innerHTML = (data.warnings || []).map(w =>

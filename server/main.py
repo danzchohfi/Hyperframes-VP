@@ -184,7 +184,10 @@ class ExportIn(BaseModel):
 class FcpxmlIn(BaseModel):
     multicam: bool = False
     primary_angle: int = 0
-    include_word_markers: bool = True
+    # Off by default — one marker per spoken word floods the FCP marker
+    # list and hides the chapter/soundbite/question pins the user
+    # actually wants to navigate by.
+    include_word_markers: bool = False
     use_cuts: bool = True
     use_roughcut: bool = False
     include_broll: bool = False
@@ -192,6 +195,7 @@ class FcpxmlIn(BaseModel):
     include_chapters: bool = True
     include_soundbites: bool = True
     include_speakers: bool = True
+    include_questions: bool = True     # heuristic — segments ending in "?"
 
 
 class AngleIn(BaseModel):
@@ -284,6 +288,63 @@ def _stage(
     storage.save(state)
     emit_stage(state.id, name, status, msg, progress=progress)
     emit_state_changed(state.id)
+
+
+def _extract_questions(transcript: dict | None) -> list[dict[str, Any]]:
+    """Pick out interrogative segments from a Whisper transcript.
+
+    Heuristic-only (no LLM): any segment whose stripped text ends in '?'
+    OR whose words include common Portuguese/English question starters
+    ("por que", "porque", "como", "what", "why", "where"…) anchored at the
+    start of the sentence. Returns [{start, end, text}] sorted by start.
+    """
+    if not transcript:
+        return []
+    segments = transcript.get("segments") or []
+    if not segments:
+        return []
+
+    Q_STARTERS = {
+        # PT
+        "por que", "porque", "pra que", "como", "quando", "onde", "quem",
+        "o que", "o quê", "qual", "quais", "será que",
+        # EN
+        "what", "why", "where", "when", "who", "whom", "whose", "which",
+        "how", "do you", "did you", "are you", "is it", "can you",
+    }
+
+    out: list[dict[str, Any]] = []
+    for seg in segments:
+        try:
+            s = float(seg.get("start") or 0.0)
+            e = float(seg.get("end") or s)
+        except (TypeError, ValueError):
+            continue
+        text = (seg.get("text") or "").strip()
+        if not text:
+            continue
+        # Drop trailing whitespace/punctuation we don't care about
+        norm = text.rstrip().rstrip(".!,;:")
+        is_question = norm.endswith("?")
+        if not is_question:
+            lo = text.lower().lstrip(" ¿\"'`-—–")
+            for starter in Q_STARTERS:
+                if lo.startswith(starter + " ") or lo.startswith(starter + ","):
+                    is_question = True
+                    break
+        if not is_question:
+            continue
+        out.append({"start": s, "end": e, "text": text})
+
+    # Dedupe near-duplicates (whisper sometimes splits a question across
+    # consecutive segments). Keep the earliest.
+    out.sort(key=lambda x: x["start"])
+    pruned: list[dict[str, Any]] = []
+    for q in out:
+        if pruned and abs(pruned[-1]["start"] - q["start"]) < 0.4:
+            continue
+        pruned.append(q)
+    return pruned
 
 
 def _load(pid: str) -> storage.ProjectState:
@@ -942,6 +1003,15 @@ async def export_fcpxml(pid: str, body: FcpxmlIn) -> dict[str, Any]:
                     speakers = sp.get("turns") or sp.get("segments")
                 else:
                     speakers = sp
+            # Heuristic question extractor: any transcript segment whose
+            # text ends in "?" — covers Portuguese + English questions
+            # without a model call. Gives the editor a clear pin every
+            # time the host poses a question.
+            questions = (
+                _extract_questions(transcript)
+                if (body.include_questions and transcript)
+                else None
+            )
 
             xml = await fcpxml.build_multicam_fcpxml(
                 project_name=state.name,
@@ -954,6 +1024,8 @@ async def export_fcpxml(pid: str, body: FcpxmlIn) -> dict[str, Any]:
                 chapters=chapters,
                 soundbites=soundbites,
                 speakers=speakers,
+                questions=questions,
+                include_word_markers=bool(body.include_word_markers),
                 source_color_profile=state.source_color_profile,
             )
             kind = "multicam+plan" if camera_cuts else "multicam"
@@ -1015,6 +1087,18 @@ async def export_fcpxml_preview(pid: str) -> dict[str, Any]:
         "broll_placement": (pdir / "broll_placement.json").exists(),
         "render": state.has_render,
     }
+
+    # Question count is computed live (no separate file) so it appears
+    # even on projects transcribed before the question feature shipped.
+    questions_count = 0
+    if state.has_transcript:
+        try:
+            tx = storage.read_json(pid, "transcript.json")
+            questions_count = len(_extract_questions(tx))
+        except Exception:
+            questions_count = 0
+    available["questions"] = questions_count > 0
+    available["questions_count"] = questions_count
 
     angles_meta: list[dict[str, Any]] = [
         {"name": state.name + " (A)", "primary": True, "audio_offset": 0.0}

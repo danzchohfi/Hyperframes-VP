@@ -421,6 +421,8 @@ async def build_multicam_fcpxml(
     chapters: list[dict] | None = None,        # [{start, title}]
     soundbites: list[dict] | None = None,      # [{start, end, topic?, quote?}]
     speakers: list[dict] | None = None,        # [{start, end, speaker}]
+    questions: list[dict] | None = None,       # [{start, end, text}]
+    include_word_markers: bool = False,        # default off — they flood the timeline
     source_color_profile: str = "rec709",
 ) -> str:
     """Build an FCPXML with a multicam media grouping all angles.
@@ -558,8 +560,10 @@ async def build_multicam_fcpxml(
     )
     spine = ET.SubElement(sequence, "spine")
 
-    # Markers (chapters / soundbites / speakers / words) are anchored to the
-    # mc-clip whose [s,e) contains the marker's start. Build a quick index.
+    # Markers are anchored to the mc-clip whose [s,e) contains the marker's
+    # start. We collect them up-front, label them clearly, and dedupe by
+    # rounded timestamp so the editor doesn't see five overlapping pins at
+    # the same second (chapter ∩ soundbite ∩ question ∩ speaker change).
     words = (transcript or {}).get("words") or []
 
     def _truncate(text: str, n: int = 60) -> str:
@@ -569,30 +573,12 @@ async def build_multicam_fcpxml(
     def _marker_for(start_s: float, value: str, dur_s: float = 1 / 30.0) -> dict:
         return {"start": _t(start_s, tb, fd_num), "duration": _t(max(dur_s, 1 / 30.0), tb, fd_num), "value": value}
 
-    # Pre-collect all markers into (start, marker_dict) so we can place them
-    # on the correct clip. Each marker is rendered relative to the source
-    # timeline (start = original seconds), which FCPX requires for mc-clip
-    # markers — they reference the underlying media time.
+    # `extra_markers` is a list of (timestamp_seconds, marker_attrs_dict).
+    # Priority order matters: later inserts at the same second WIN, so we
+    # add lowest-signal first (speakers) and highest-signal last (chapters).
     extra_markers: list[tuple[float, dict]] = []
-    if chapters:
-        for ch in chapters:
-            try:
-                t = float(ch.get("start") or ch.get("time") or 0.0)
-            except (TypeError, ValueError):
-                continue
-            title = _truncate(str(ch.get("title") or ch.get("name") or "Chapter"))
-            extra_markers.append((t, _marker_for(t, f"Ch · {title}")))
-    if soundbites:
-        for sb in soundbites:
-            try:
-                t = float(sb.get("start") or 0.0)
-                dur = max(float(sb.get("end") or t) - t, 1 / 30.0)
-            except (TypeError, ValueError):
-                continue
-            topic = _truncate(str(sb.get("topic") or sb.get("title") or "Bite"), 24)
-            quote = _truncate(str(sb.get("quote") or sb.get("text") or ""), 40)
-            label = f"🎯 {topic}" + (f": {quote}" if quote else "")
-            extra_markers.append((t, _marker_for(t, label, dur)))
+
+    # 1. Speaker changes — every distinct turn boundary. Lowest priority.
     if speakers:
         last_speaker = None
         for sp in speakers:
@@ -605,6 +591,57 @@ async def build_multicam_fcpxml(
                 continue
             last_speaker = name
             extra_markers.append((t, _marker_for(t, f"🎙 {name}")))
+
+    # 2. Questions — surface every interrogative segment so the editor can
+    # jump straight to the Q&A beats.
+    if questions:
+        for q in questions:
+            try:
+                t = float(q.get("start") or 0.0)
+                end = float(q.get("end") or t)
+            except (TypeError, ValueError):
+                continue
+            text = _truncate(str(q.get("text") or q.get("quote") or "?"), 70)
+            dur = max(end - t, 1 / 30.0)
+            extra_markers.append((t, _marker_for(t, f"❓ Pergunta: {text}", dur)))
+
+    # 3. Soundbites — the AI-picked highlight quotes. Higher priority than
+    # generic speaker change.
+    if soundbites:
+        for sb in soundbites:
+            try:
+                t = float(sb.get("start") or 0.0)
+                dur = max(float(sb.get("end") or t) - t, 1 / 30.0)
+            except (TypeError, ValueError):
+                continue
+            topic = _truncate(str(sb.get("topic") or sb.get("title") or "Soundbite"), 28)
+            quote = _truncate(str(sb.get("quote") or sb.get("text") or ""), 56)
+            label = f"⭐ {topic}" + (f": {quote}" if quote else "")
+            extra_markers.append((t, _marker_for(t, label, dur)))
+
+    # 4. Chapters — story-level structural beats. Highest priority.
+    if chapters:
+        for i, ch in enumerate(chapters, start=1):
+            try:
+                t = float(ch.get("start") or ch.get("time") or 0.0)
+            except (TypeError, ValueError):
+                continue
+            title = _truncate(str(ch.get("title") or ch.get("name") or f"Capítulo {i}"))
+            extra_markers.append((t, _marker_for(t, f"📌 Cap. {i:02d} · {title}")))
+
+    # Dedupe: when two markers are at the same frame (within ~0.5s), keep
+    # the higher-priority one (later in list). The user gets a clean
+    # marker line in FCP instead of overlapping pins.
+    if extra_markers:
+        extra_markers.sort(key=lambda x: x[0])
+        deduped: list[tuple[float, dict]] = []
+        for entry in extra_markers:
+            t = entry[0]
+            if deduped and abs(deduped[-1][0] - t) < 0.5:
+                deduped[-1] = entry   # last-write-wins (higher priority)
+            else:
+                deduped.append(entry)
+        extra_markers = deduped
 
     offset = 0.0
     for i, (s, e, ai) in enumerate(segments):
@@ -626,20 +663,24 @@ async def build_multicam_fcpxml(
             "mc-source",
             {"angleID": angle_id, "srcEnable": "all"},
         )
-        # Word markers from transcript (only when explicitly enabled upstream).
-        for w in words:
-            ws = float(w.get("start") or 0.0)
-            we = float(w.get("end") or ws)
-            if ws >= s and ws < e:
-                ET.SubElement(
-                    mc,
-                    "marker",
-                    {
-                        "start": _t(ws, tb, fd_num),
-                        "duration": _t(max(we - ws, 1 / 30.0), tb, fd_num),
-                        "value": str(w.get("word", "")).strip(),
-                    },
-                )
+        # Word markers from transcript — only when explicitly requested.
+        # Defaults to off because one marker per spoken word floods the
+        # FCP marker list and drowns out the chapters/soundbites/questions
+        # we actually want the editor to see.
+        if include_word_markers:
+            for w in words:
+                ws = float(w.get("start") or 0.0)
+                we = float(w.get("end") or ws)
+                if ws >= s and ws < e:
+                    ET.SubElement(
+                        mc,
+                        "marker",
+                        {
+                            "start": _t(ws, tb, fd_num),
+                            "duration": _t(max(we - ws, 1 / 30.0), tb, fd_num),
+                            "value": str(w.get("word", "")).strip(),
+                        },
+                    )
         # Chapter/soundbite/speaker markers.
         for mt, mattrs in extra_markers:
             if mt >= s and mt < e:
