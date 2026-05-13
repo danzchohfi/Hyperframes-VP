@@ -80,7 +80,37 @@ async function refreshList() {
     btn.onclick = () => loadProject(p.id);
     root.appendChild(btn);
   }
+  renderEmptyRecents(list);
   refreshStats();
+}
+
+function renderEmptyRecents(list) {
+  const root = $("#empty-recents");
+  if (!root) return;
+  if (!list || list.length === 0) {
+    root.innerHTML = "";
+    return;
+  }
+  const recent = list.slice(0, 6);
+  root.innerHTML = `
+    <div class="empty-recents-head">
+      <span class="eyebrow">Projetos recentes</span>
+      <span class="muted">${list.length} no total</span>
+    </div>
+    <div class="empty-recents-grid">
+      ${recent.map(p => `
+        <button class="recent-card" data-pid="${p.id}">
+          <div class="recent-card-name">${escapeHtml(p.name)}</div>
+          <div class="recent-card-meta">
+            <span class="pill" data-tone="${p.has_render ? "success" : "neutral"}">${p.has_render ? "render" : "draft"}</span>
+            <span class="muted">${new Date(p.updated_at).toLocaleDateString()}</span>
+          </div>
+        </button>
+      `).join("")}
+    </div>`;
+  for (const btn of root.querySelectorAll(".recent-card")) {
+    btn.addEventListener("click", () => loadProject(btn.dataset.pid));
+  }
 }
 
 async function refreshStats() {
@@ -134,6 +164,8 @@ async function loadProject(id) {
   $("#empty").classList.add("hidden");
   $("#project-view").classList.remove("hidden");
   $("#project-name").textContent = p.name;
+  $("#topbar-project-name").textContent = p.name;
+  refreshHeader();
 
   const preview = $("#preview");
   if (p.source_filename) {
@@ -274,10 +306,10 @@ function thumb_safe(u) { return u.replace(/"/g, "%22"); }
 
 async function generateBiteThumbs() {
   if (!state.current) return;
-  log("▶ bite thumbs");
+  log("<span data-icon=&quot;play&quot;></span> bite thumbs");
   try {
     const r = await api(`/api/projects/${state.current.id}/bite-thumbnails`, { method: "POST" });
-    log(`✓ ${r.thumbs.length} thumbs`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> ${r.thumbs.length} thumbs`, "ok");
     // re-render soundbites with thumbs
     const a = await api(`/api/projects/${state.current.id}/soundbites`);
     renderSoundbites(a, r.thumbs);
@@ -321,7 +353,7 @@ function renderAngles(p) {
     const tags = a.tags?.tags || [];
     const qc = a.quality_check || {};
     const qcBadge = qc.quality && qc.quality !== "ok"
-      ? ` <span class="tag warn">⚠ ${qc.quality}</span>` : (qc.quality === "ok" ? ' <span class="tag ok">✓ ok</span>' : '');
+      ? ` <span class="tag warn"><span data-icon=&quot;alert-triangle&quot;></span> ${qc.quality}</span>` : (qc.quality === "ok" ? ' <span class="tag ok"><span data-icon=&quot;check&quot;></span> ok</span>' : '');
     const fa = a.face_analysis || {};
     const shotBadge = fa.shot_type
       ? ` <span class="tag">${escapeHtml(fa.shot_type.replace('_', ' '))}</span>`
@@ -334,7 +366,7 @@ function renderAngles(p) {
       <span class="a-meta">${(a.duration || 0).toFixed(1)}s · ${a.filename}${a.tags?.summary ? ' · ' + escapeHtml(a.tags.summary) : ''}${offset}</span>
       ${tags.length ? `<span class="a-tags">${tags.slice(0, 5).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join("")}</span>` : ""}
       <span class="a-actions">
-        <button class="btn-ghost a-tag" data-idx="${a.index}">${a.tags ? "🔄 Re-taggear" : "🏷 Tag IA"}</button>
+        <button class="btn-ghost a-tag" data-idx="${a.index}">${a.tags ? "🔄 Re-taggear" : "<span data-icon=&quot;tag&quot;></span> Tag IA"}</button>
         <button class="a-del" data-idx="${a.index}">×</button>
       </span>
     `;
@@ -346,15 +378,15 @@ function renderAngles(p) {
     li.querySelector(".a-tag").onclick = async (e) => {
       const btn = e.currentTarget;
       btn.disabled = true;
-      btn.textContent = "🤖 Analisando...";
+      btn.textContent = "<span data-icon=&quot;wand-2&quot;></span> Analisando...";
       try {
         const updated = await api(`/api/projects/${p.id}/angles/${a.index}/tag`, { method: "POST" });
-        log(`✓ Ângulo "${updated.name}" → ${updated.tags.summary}`, "ok");
+        log(`<span data-icon=&quot;check&quot;></span> Ângulo "${updated.name}" → ${updated.tags.summary}`, "ok");
         await loadProject(p.id);
       } catch (err) {
         log(`✗ tag: ${err.message}`, "err");
         btn.disabled = false;
-        btn.textContent = "🏷 Tag IA";
+        btn.textContent = "<span data-icon=&quot;tag&quot;></span> Tag IA";
       }
     };
     list.appendChild(li);
@@ -436,7 +468,7 @@ async function refreshExportPreview(p) {
       downloadLink.href = url;
       downloadLink.style.opacity = 1;
       downloadLink.style.pointerEvents = "auto";
-      if (label) downloadLink.textContent = `⬇ ${label}`;
+      if (label) downloadLink.textContent = `<span data-icon=&quot;download&quot;></span> ${label}`;
     }
   } else {
     video.removeAttribute("src");
@@ -486,13 +518,13 @@ function attachEventStream(pid) {
           bar.style.width = "0%";
         }
       }
-      if (data.status === "done") toast(`✓ ${data.stage}: ${data.message || ""}`, "ok");
+      if (data.status === "done") toast(`<span data-icon=&quot;check&quot;></span> ${data.stage}: ${data.message || ""}`, "ok");
       if (data.status === "error") toast(`✗ ${data.stage}: ${data.message || ""}`, "error");
       if (data.status === "running") {
         if (data.stage === "render") {
           $("#cancel-render-btn").style.display = "inline-block";
         }
-        if (typeof data.progress !== "number") toast(`▶ ${data.stage}…`);
+        if (typeof data.progress !== "number") toast(`<span data-icon=&quot;play&quot;></span> ${data.stage}…`);
       }
     } else if (data.type === "log") {
       log(data.message, data.level === "error" ? "err" : data.level === "ok" ? "ok" : "");
@@ -648,7 +680,7 @@ async function runStage(name) {
   if (!state.current) return;
   const stage = document.querySelector(`.stage[data-stage="${name}"]`);
   stage?.classList.add("running");
-  log(`▶ ${name}`);
+  log(`<span data-icon=&quot;play&quot;></span> ${name}`);
   try {
     let body = {};
     let path = `/api/projects/${state.current.id}/${{
@@ -690,7 +722,7 @@ async function runStage(name) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
-    log(`✓ ${name}: ${JSON.stringify(res).slice(0, 200)}`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> ${name}: ${JSON.stringify(res).slice(0, 200)}`, "ok");
     await loadProject(state.current.id);
   } catch (e) {
     stage?.classList.remove("running");
@@ -703,17 +735,17 @@ async function extractSoundbites() {
   if (!state.current) return;
   const btn = $("#soundbites-btn");
   btn.disabled = true;
-  btn.textContent = "🎯 Analisando...";
-  log("▶ soundbites");
+  btn.textContent = "<span data-icon=&quot;target&quot;></span> Analisando...";
+  log("<span data-icon=&quot;play&quot;></span> soundbites");
   try {
     const a = await api(`/api/projects/${state.current.id}/soundbites`, { method: "POST" });
-    log(`✓ ${a.soundbites.length} soundbites · ${a.topics.length} tópicos`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> ${a.soundbites.length} soundbites · ${a.topics.length} tópicos`, "ok");
     await loadProject(state.current.id);
   } catch (e) {
     log(`✗ soundbites: ${e.message}`, "err");
   } finally {
     btn.disabled = false;
-    btn.textContent = "🎯 Extrair soundbites";
+    btn.textContent = "<span data-icon=&quot;target&quot;></span> Extrair soundbites";
   }
 }
 
@@ -721,21 +753,21 @@ async function buildStory() {
   if (!state.current) return;
   const btn = $("#story-btn");
   btn.disabled = true;
-  btn.textContent = "📜 Pensando...";
-  log("▶ story");
+  btn.textContent = "<span data-icon=&quot;file-text&quot;></span> Pensando...";
+  log("<span data-icon=&quot;play&quot;></span> story");
   try {
     const s = await api(`/api/projects/${state.current.id}/story`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ structure: $("#story-structure").value }),
     });
-    log(`✓ Roteiro: ${s.title} (${s.chapters.length} capítulos)`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> Roteiro: ${s.title} (${s.chapters.length} capítulos)`, "ok");
     await loadProject(state.current.id);
   } catch (e) {
     log(`✗ story: ${e.message}`, "err");
   } finally {
     btn.disabled = false;
-    btn.textContent = "📜 Propor roteiro";
+    btn.textContent = "<span data-icon=&quot;file-text&quot;></span> Propor roteiro";
   }
 }
 
@@ -746,7 +778,7 @@ async function buildRoughCut() {
   btn.disabled = true;
   status.textContent = "encoding...";
   status.className = "status warn";
-  log("▶ roughcut");
+  log("<span data-icon=&quot;play&quot;></span> roughcut");
 
   // Decide source of bites:
   //  1. If any checkbox is manually checked → use those (use_story=false).
@@ -800,7 +832,7 @@ async function buildRoughCut() {
     });
     status.textContent = `${r.duration.toFixed(1)}s · ${r.segments} segmentos · ${r.chapters} capítulos`;
     status.className = "status ok";
-    log(`✓ rough cut · ${r.duration.toFixed(1)}s`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> rough cut · ${r.duration.toFixed(1)}s`, "ok");
     await loadProject(state.current.id);
   } catch (e) {
     status.textContent = e.message;
@@ -813,7 +845,7 @@ async function buildRoughCut() {
 
 async function exportPremiere() {
   if (!state.current) return;
-  log("▶ Premiere XML");
+  log("<span data-icon=&quot;play&quot;></span> Premiere XML");
   try {
     const res = await api(`/api/projects/${state.current.id}/export/premiere`, {
       method: "POST",
@@ -824,11 +856,11 @@ async function exportPremiere() {
         include_broll: $("#premiere-broll").checked,
       }),
     });
-    log(`✓ Premiere XML · ${res.bytes}b`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> Premiere XML · ${res.bytes}b`, "ok");
     const link = $("#premiere-link");
     link.href = res.url;
     link.style.display = "inline-block";
-    link.textContent = `⬇ Baixar ${res.export}`;
+    link.textContent = `<span data-icon=&quot;download&quot;></span> Baixar ${res.export}`;
   } catch (e) {
     log(`✗ Premiere XML: ${e.message}`, "err");
   }
@@ -845,7 +877,7 @@ async function placeBroll() {
     const r = await api(`/api/projects/${state.current.id}/place-broll`, { method: "POST" });
     status.textContent = `${r.placements.length} inserts colocados`;
     status.className = "status ok";
-    log(`✓ B-roll placement · ${r.placements.length} inserts`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> B-roll placement · ${r.placements.length} inserts`, "ok");
   } catch (e) {
     status.textContent = e.message;
     status.className = "status error";
@@ -859,8 +891,8 @@ async function smartReframe() {
   if (!state.current) return;
   const btn = $("#smart-reframe-btn");
   btn.disabled = true;
-  btn.textContent = "✨ Detectando subject...";
-  log("▶ smart reframe");
+  btn.textContent = "<span data-icon=&quot;sparkles&quot;></span> Detectando subject...";
+  log("<span data-icon=&quot;play&quot;></span> smart reframe");
   try {
     const r = await api(`/api/projects/${state.current.id}/smart-reframe`, {
       method: "POST",
@@ -870,31 +902,31 @@ async function smartReframe() {
         use_roughcut: state.current.has_roughcut,
       }),
     });
-    log(`✓ smart-crop anchor=${r.anchor_x.toFixed(2)} · ${r.url}`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> smart-crop anchor=${r.anchor_x.toFixed(2)} · ${r.url}`, "ok");
     $("#download-link").href = r.url;
     $("#result").src = r.url;
   } catch (e) {
     log(`✗ smart-reframe: ${e.message}`, "err");
   } finally {
     btn.disabled = false;
-    btn.textContent = "✨ Smart crop (IA)";
+    btn.textContent = "<span data-icon=&quot;sparkles&quot;></span> Smart crop (IA)";
   }
 }
 
 async function exportCaptions(fmt) {
   if (!state.current) return;
-  log(`▶ ${fmt}`);
+  log(`<span data-icon=&quot;play&quot;></span> ${fmt}`);
   try {
     const useRoughcut = $("#caps-roughcut").checked;
     const speakers = $("#caps-speakers")?.checked || false;
     const style = $("#ass-style")?.value || "minimal";
     const url = `/api/projects/${state.current.id}/export/captions?fmt=${fmt}&use_roughcut=${useRoughcut}&style=${style}&speaker_labels=${speakers}`;
     const res = await api(url, { method: "POST" });
-    log(`✓ ${fmt} · ${res.cues} cues`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> ${fmt} · ${res.cues} cues`, "ok");
     const link = $("#caps-link");
     link.href = res.url;
     link.style.display = "inline-block";
-    link.textContent = `⬇ ${res.export}`;
+    link.textContent = `<span data-icon=&quot;download&quot;></span> ${res.export}`;
   } catch (e) {
     log(`✗ ${fmt}: ${e.message}`, "err");
   }
@@ -902,7 +934,7 @@ async function exportCaptions(fmt) {
 
 async function burnCaptions() {
   if (!state.current) return;
-  log("▶ burn captions");
+  log("<span data-icon=&quot;play&quot;></span> burn captions");
   try {
     const r = await api(`/api/projects/${state.current.id}/export/burn-captions`, {
       method: "POST",
@@ -912,11 +944,11 @@ async function burnCaptions() {
         style: $("#burn-style").value,
       }),
     });
-    log(`✓ burned · ${(r.bytes / 1024).toFixed(0)} KB`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> burned · ${(r.bytes / 1024).toFixed(0)} KB`, "ok");
     const a = $("#burn-link");
     a.href = r.url;
     a.style.display = "inline-block";
-    a.textContent = `⬇ ${r.export}`;
+    a.textContent = `<span data-icon=&quot;download&quot;></span> ${r.export}`;
     await refreshHistory();
   } catch (e) {
     log(`✗ burn: ${e.message}`, "err");
@@ -940,7 +972,7 @@ async function refreshSnapshots() {
         if (!(await brandedConfirm(`Restaurar a snapshot "${s.label}"?`, {title: "Restaurar snapshot", okText: "Restaurar"}))) return;
         try {
           await api(`/api/projects/${state.current.id}/snapshots/${s.id}/restore`, { method: "POST" });
-          log(`✓ snapshot restaurado`, "ok");
+          log(`<span data-icon=&quot;check&quot;></span> snapshot restaurado`, "ok");
           await loadProject(state.current.id);
         } catch (e) {
           log(`✗ restore: ${e.message}`, "err");
@@ -960,7 +992,7 @@ async function takeSnapshot() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ label }),
     });
-    log(`✓ snapshot: ${label}`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> snapshot: ${label}`, "ok");
     $("#snap-label").value = "";
     await refreshSnapshots();
   } catch (e) {
@@ -993,7 +1025,7 @@ async function saveBrandPreset() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ name, brand }),
     });
-    log(`✓ Preset salvo: ${name}`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> Preset salvo: ${name}`, "ok");
     await refreshBrandPresets();
   } catch (e) {
     log(`✗ preset: ${e.message}`, "err");
@@ -1120,7 +1152,7 @@ async function txKeep() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ keep: ranges, pad: 0.05 }),
     });
-    log(`✓ cuts manuais · kept ${plan.kept_duration.toFixed(2)}s`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> cuts manuais · kept ${plan.kept_duration.toFixed(2)}s`, "ok");
     toast(`Cortes salvos (${plan.kept_duration.toFixed(1)}s)`, "ok");
     await loadProject(state.current.id);
   } catch (e) {
@@ -1156,14 +1188,14 @@ function attachVideoSync() {
 async function buildHighlights() {
   if (!state.current) return;
   const target = parseFloat($("#hl-target").value || "30");
-  log(`▶ highlights ${target}s`);
+  log(`<span data-icon=&quot;play&quot;></span> highlights ${target}s`);
   try {
     const r = await api(`/api/projects/${state.current.id}/highlights`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ target_seconds: target, apply_lut: true }),
     });
-    log(`✓ highlights · ${r.duration.toFixed(1)}s · ${r.segments} bites`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> highlights · ${r.duration.toFixed(1)}s · ${r.segments} bites`, "ok");
     const a = $("#hl-link");
     a.href = r.url;
     a.style.display = "inline-block";
@@ -1185,7 +1217,7 @@ async function generateSocialCopy() {
       body: JSON.stringify({ language: lang }),
     });
     renderSocialCopy(c);
-    log("✓ social copy", "ok");
+    log("<span data-icon=&quot;check&quot;></span> social copy", "ok");
   } catch (e) {
     log(`✗ social: ${e.message}`, "err");
   } finally {
@@ -1246,7 +1278,7 @@ async function applyTemplate() {
     if ($("#render-aspect")) $("#render-aspect").value = r.aspect;
     if ($("#render-source")) $("#render-source").value = r.render_source;
     if ($("#render-chapters")) $("#render-chapters").checked = r.include_chapter_cards;
-    log(`✓ template aplicado: ${r.label}`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> template aplicado: ${r.label}`, "ok");
     toast(`Template: ${r.label}`, "ok");
   } catch (e) {
     log(`✗ template: ${e.message}`, "err");
@@ -1301,11 +1333,11 @@ function renderProgressBar(p) {
     btn.style.display = "inline-block";
     const map = {
       upload:     { label: "↑ Subir vídeo",       fn: () => $("#file-input")?.click() },
-      transcribe: { label: "▶ Transcrever agora", fn: () => runStage("transcribe") },
-      cuts:       { label: "▶ Detectar silêncios + muletas", fn: () => runStage("silence") },
-      soundbites: { label: "🎯 Extrair soundbites", fn: () => extractSoundbites() },
-      story:      { label: "📜 Propor roteiro",   fn: () => buildStory() },
-      render:     { label: "🎬 Renderizar",       fn: () => runStage("render") },
+      transcribe: { label: "<span data-icon=&quot;play&quot;></span> Transcrever agora", fn: () => runStage("transcribe") },
+      cuts:       { label: "<span data-icon=&quot;play&quot;></span> Detectar silêncios + muletas", fn: () => runStage("silence") },
+      soundbites: { label: "<span data-icon=&quot;target&quot;></span> Extrair soundbites", fn: () => extractSoundbites() },
+      story:      { label: "<span data-icon=&quot;file-text&quot;></span> Propor roteiro",   fn: () => buildStory() },
+      render:     { label: "<span data-icon=&quot;film&quot;></span> Renderizar",       fn: () => runStage("render") },
       narratives: { label: "🧭 Sugerir narrativas", fn: () => vlogProposeNarratives() },
     };
     const m = map[next.id];
@@ -1330,7 +1362,7 @@ function renderStaleWarnings(p) {
     if (stale[key]) {
       const div = document.createElement("div");
       div.className = "warn";
-      div.textContent = `⚠ ${msg}`;
+      div.textContent = `<span data-icon=&quot;alert-triangle&quot;></span> ${msg}`;
       root.appendChild(div);
     }
   }
@@ -1386,7 +1418,7 @@ function renderCutsTimeline(p) {
 
 async function exportAudio() {
   if (!state.current) return;
-  log("▶ audio export");
+  log("<span data-icon=&quot;play&quot;></span> audio export");
   try {
     const r = await api(`/api/projects/${state.current.id}/export/audio`, {
       method: "POST",
@@ -1396,11 +1428,11 @@ async function exportAudio() {
         source: $("#audio-source").value,
       }),
     });
-    log(`✓ audio · ${(r.bytes / 1024).toFixed(0)} KB`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> audio · ${(r.bytes / 1024).toFixed(0)} KB`, "ok");
     const a = $("#audio-link");
     a.href = r.url;
     a.style.display = "inline-block";
-    a.textContent = `⬇ ${r.export}`;
+    a.textContent = `<span data-icon=&quot;download&quot;></span> ${r.export}`;
   } catch (e) {
     log(`✗ audio: ${e.message}`, "err");
   }
@@ -1410,7 +1442,7 @@ async function cancelRender() {
   if (!state.current) return;
   try {
     const r = await api(`/api/projects/${state.current.id}/render/cancel`, { method: "POST" });
-    log(r.cancelled ? "✓ render cancelado" : "ℹ nenhum render rodando", r.cancelled ? "ok" : "");
+    log(r.cancelled ? "<span data-icon=&quot;check&quot;></span> render cancelado" : "ℹ nenhum render rodando", r.cancelled ? "ok" : "");
     $("#cancel-render-btn").style.display = "none";
   } catch (e) {
     log(`✗ cancel: ${e.message}`, "err");
@@ -1419,14 +1451,14 @@ async function cancelRender() {
 
 async function exportBundle() {
   if (!state.current) return;
-  log("▶ bundle");
+  log("<span data-icon=&quot;play&quot;></span> bundle");
   try {
     const r = await api(`/api/projects/${state.current.id}/export/bundle`, { method: "POST" });
-    log(`✓ bundle · ${r.files} files · ${(r.bytes / 1024).toFixed(0)} KB`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> bundle · ${r.files} files · ${(r.bytes / 1024).toFixed(0)} KB`, "ok");
     const a = $("#bundle-link");
     a.href = r.url;
     a.style.display = "inline-block";
-    a.textContent = `⬇ ${r.export}`;
+    a.textContent = `<span data-icon=&quot;download&quot;></span> ${r.export}`;
   } catch (e) {
     log(`✗ bundle: ${e.message}`, "err");
   }
@@ -1438,7 +1470,7 @@ async function duplicateProject() {
         {title: "Duplicar projeto", okText: "Duplicar"}))) return;
   try {
     const p = await api(`/api/projects/${state.current.id}/duplicate`, { method: "POST" });
-    log(`✓ duplicado: ${p.name}`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> duplicado: ${p.name}`, "ok");
     await refreshList();
     await loadProject(p.id);
   } catch (e) {
@@ -1458,7 +1490,7 @@ async function detectSpeakers() {
     const speakers = Object.entries(stats.by_speaker || {})
       .map(([sp, s]) => `${sp}: ${(s.share * 100).toFixed(0)}%`)
       .join("  ·  ");
-    log(`✓ ${r.backend} · ${r.turns.length} turnos · ${speakers}`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> ${r.backend} · ${r.turns.length} turnos · ${speakers}`, "ok");
     toast(`${r.stats?.speaker_count || 0} speakers detectados (${r.backend})`, "ok");
   } catch (e) {
     log(`✗ speakers: ${e.message}`, "err");
@@ -1467,7 +1499,7 @@ async function detectSpeakers() {
 
 async function levelSpeakers() {
   if (!state.current) return;
-  log("▶ leveling speakers");
+  log("<span data-icon=&quot;play&quot;></span> leveling speakers");
   try {
     const r = await api(`/api/projects/${state.current.id}/speaker-levels`, {
       method: "POST",
@@ -1475,7 +1507,7 @@ async function levelSpeakers() {
       body: JSON.stringify({ target_dbfs: -18.0, source: "graded" }),
     });
     const gains = Object.entries(r.gains).map(([sp, g]) => `${sp}:${g > 0 ? "+" : ""}${g}dB`).join("  ");
-    log(`✓ gains: ${gains}`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> gains: ${gains}`, "ok");
     toast(`Nivelado: ${gains}`, "ok");
     await refreshHistory();
   } catch (e) {
@@ -1485,10 +1517,10 @@ async function levelSpeakers() {
 
 async function detectChapters() {
   if (!state.current) return;
-  log("▶ chapters");
+  log("<span data-icon=&quot;play&quot;></span> chapters");
   try {
     const r = await api(`/api/projects/${state.current.id}/chapters`, { method: "POST" });
-    log(`✓ ${r.chapters.length} capítulos`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> ${r.chapters.length} capítulos`, "ok");
     toast(`${r.chapters.length} capítulos detectados`, "ok");
     console.log("YouTube chapters:\n" + r.youtube_markdown);
   } catch (e) {
@@ -1506,7 +1538,7 @@ async function runPodcastPipeline() {
   progress.classList.remove("hidden");
   fill.style.width = "0%";
   label.textContent = "iniciando…";
-  log("▶ podcast pipeline");
+  log("<span data-icon=&quot;play&quot;></span> podcast pipeline");
   try {
     const lang = $("#podcast-lang").value || null;
     const r = await api(`/api/projects/${state.current.id}/podcast-pipeline`, {
@@ -1529,7 +1561,7 @@ async function generateShorts() {
   if (!state.current) return;
   const btn = $("#shorts-btn");
   btn.disabled = true;
-  log("▶ shorts batch");
+  log("<span data-icon=&quot;play&quot;></span> shorts batch");
   try {
     const r = await api(`/api/projects/${state.current.id}/shorts/batch`, {
       method: "POST",
@@ -1574,7 +1606,7 @@ async function downloadYoutubeDescription() {
   if (!state.current) return;
   try {
     const r = await api(`/api/projects/${state.current.id}/export/youtube-description`, { method: "POST" });
-    log("✓ YouTube description gerada", "ok");
+    log("<span data-icon=&quot;check&quot;></span> YouTube description gerada", "ok");
     window.open(r.url, "_blank");
   } catch (e) {
     log(`✗ youtube: ${e.message}`, "err");
@@ -1589,10 +1621,10 @@ async function uploadClips(files) {
     const fd = new FormData();
     fd.append("file", f);
     fd.append("name", f.name);
-    log(`▶ uploading clip ${f.name}`);
+    log(`<span data-icon=&quot;play&quot;></span> uploading clip ${f.name}`);
     try {
       const r = await api(`/api/projects/${state.current.id}/clips`, { method: "POST", body: fd });
-      log(`✓ clip ${r.name} (${r.duration.toFixed(1)}s)`, "ok");
+      log(`<span data-icon=&quot;check&quot;></span> clip ${r.name} (${r.duration.toFixed(1)}s)`, "ok");
     } catch (e) {
       log(`✗ clip upload: ${e.message}`, "err");
     }
@@ -1617,7 +1649,7 @@ async function loadClips() {
       ).join(" ");
       li.innerHTML = `
         ${thumb}
-        <span class="a-name">${escapeHtml(c.name)}${c.has_transcript ? ' <span class="tag ok">✓ txt</span>' : ' <span class="tag warn">— sem txt</span>'} ${peopleBadges}</span>
+        <span class="a-name">${escapeHtml(c.name)}${c.has_transcript ? ' <span class="tag ok"><span data-icon=&quot;check&quot;></span> txt</span>' : ' <span class="tag warn">— sem txt</span>'} ${peopleBadges}</span>
         <span class="a-meta">${c.duration.toFixed(1)}s${c.transcript_text ? ' · ' + escapeHtml(c.transcript_text.slice(0, 60)) : ''}</span>
         <span class="a-actions">
           <button class="btn-ghost c-txn" data-cid="${c.id}">Transcrever</button>
@@ -1642,7 +1674,7 @@ async function loadClips() {
 
 async function vlogTranscribeAll() {
   if (!state.current) return;
-  log("▶ transcribe all clips");
+  log("<span data-icon=&quot;play&quot;></span> transcribe all clips");
   try {
     const r = await api(`/api/projects/${state.current.id}/clips/transcribe-all`, {
       method: "POST",
@@ -1661,11 +1693,11 @@ async function vlogProposeNarratives() {
   const btn = $("#vlog-narratives-btn");
   btn.disabled = true;
   btn.textContent = "🧭 pensando...";
-  log("▶ vlog narratives");
+  log("<span data-icon=&quot;play&quot;></span> vlog narratives");
   try {
     const r = await api(`/api/projects/${state.current.id}/vlog/narratives`, { method: "POST" });
     renderNarratives(r.narratives || []);
-    log(`✓ ${r.narratives?.length || 0} narrativas propostas`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> ${r.narratives?.length || 0} narrativas propostas`, "ok");
   } catch (e) {
     log(`✗ narratives: ${e.message}`, "err");
   } finally {
@@ -1721,37 +1753,37 @@ function renderNarratives(narratives) {
       <div class="actions">
         <select class="inline-select n-aspect"><option value="9:16">9:16</option><option value="16:9">16:9</option><option value="1:1">1:1</option></select>
         <button class="btn-ghost n-storyboard" data-id="${n.id}">📰 Storyboard</button>
-        <button class="btn-ghost n-broll" data-id="${n.id}">🎯 B-roll</button>
-        <button class="btn-primary n-assemble" data-id="${n.id}">🎬 Montar este vlog</button>
-        <a class="btn-ghost n-link" href="#" download style="display:none">⬇ vlog.mp4</a>
+        <button class="btn-ghost n-broll" data-id="${n.id}"><span data-icon=&quot;target&quot;></span> B-roll</button>
+        <button class="btn-primary n-assemble" data-id="${n.id}"><span data-icon=&quot;film&quot;></span> Montar este vlog</button>
+        <a class="btn-ghost n-link" href="#" download style="display:none"><span data-icon=&quot;download&quot;></span> vlog.mp4</a>
       </div>
     `;
     card.querySelector(".n-storyboard").onclick = async () => {
       try {
         const r = await api(`/api/projects/${state.current.id}/vlog/narratives/${n.id}/storyboard`, { method: "POST" });
-        log(`✓ storyboard ${n.id}: ${r.panels.length} painéis`, "ok");
+        log(`<span data-icon=&quot;check&quot;></span> storyboard ${n.id}: ${r.panels.length} painéis`, "ok");
         toast(`Storyboard com ${r.panels.length} painéis`, "ok");
       } catch (e) { log(`✗ storyboard: ${e.message}`, "err"); }
     };
     card.querySelector(".n-broll").onclick = async () => {
       try {
         const r = await api(`/api/projects/${state.current.id}/vlog/place-broll?narrative_id=${n.id}`, { method: "POST" });
-        log(`✓ B-roll ${n.id}: ${r.placements.length} inserts`, "ok");
+        log(`<span data-icon=&quot;check&quot;></span> B-roll ${n.id}: ${r.placements.length} inserts`, "ok");
         toast(`${r.placements.length} B-roll inserts planejados`, "ok");
       } catch (e) { log(`✗ B-roll: ${e.message}`, "err"); }
     };
     card.querySelector(".n-assemble").onclick = async () => {
       const aspect = card.querySelector(".n-aspect").value;
-      log(`▶ assemble narrative ${n.id}`);
+      log(`<span data-icon=&quot;play&quot;></span> assemble narrative ${n.id}`);
       try {
         const r = await api(`/api/projects/${state.current.id}/vlog/assemble`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ narrative_id: n.id, aspect, loudnorm: true }),
         });
-        log(`✓ vlog · ${r.bytes} bytes`, "ok");
+        log(`<span data-icon=&quot;check&quot;></span> vlog · ${r.bytes} bytes`, "ok");
         const a = card.querySelector(".n-link");
-        a.href = r.url; a.style.display = "inline-block"; a.textContent = `⬇ ${r.export}`;
+        a.href = r.url; a.style.display = "inline-block"; a.textContent = `<span data-icon=&quot;download&quot;></span> ${r.export}`;
         await refreshHistory();
       } catch (e) {
         log(`✗ assemble: ${e.message}`, "err");
@@ -1763,14 +1795,14 @@ function renderNarratives(narratives) {
 
 async function multicamPick() {
   if (!state.current) return;
-  log("▶ multicam pick");
+  log("<span data-icon=&quot;play&quot;></span> multicam pick");
   try {
     const r = await api(`/api/projects/${state.current.id}/multicam-pick`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ intervals: "turns", min_dur: 1.4 }),
     });
-    log(`✓ ${r.cuts.length} cam cuts (intervalos: ${r.intervals})`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> ${r.cuts.length} cam cuts (intervalos: ${r.intervals})`, "ok");
     toast(`Câmera escolhida pra ${r.cuts.length} segmentos`, "ok");
   } catch (e) {
     log(`✗ multicam-pick: ${e.message}`, "err");
@@ -1779,12 +1811,12 @@ async function multicamPick() {
 
 async function multicamRender() {
   if (!state.current) return;
-  log("▶ multicam render");
+  log("<span data-icon=&quot;play&quot;></span> multicam render");
   try {
     const r = await api(`/api/projects/${state.current.id}/multicam-render`, { method: "POST" });
-    log(`✓ multicam ${(r.bytes / 1024).toFixed(0)} KB`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> multicam ${(r.bytes / 1024).toFixed(0)} KB`, "ok");
     const a = $("#multicam-link");
-    a.href = r.url; a.style.display = "inline-block"; a.textContent = `⬇ ${r.export}`;
+    a.href = r.url; a.style.display = "inline-block"; a.textContent = `<span data-icon=&quot;download&quot;></span> ${r.export}`;
     await refreshHistory();
   } catch (e) {
     log(`✗ multicam render: ${e.message}`, "err");
@@ -1798,7 +1830,7 @@ async function vlogAutoPipeline() {
   btn.disabled = true;
   status.textContent = "iniciando…";
   status.className = "status warn";
-  log("▶ vlog 1-click");
+  log("<span data-icon=&quot;play&quot;></span> vlog 1-click");
   try {
     const r = await api(`/api/projects/${state.current.id}/vlog/auto-pipeline`, {
       method: "POST",
@@ -1822,10 +1854,10 @@ async function vlogAutoPipeline() {
 
 async function vlogMusicSuggest() {
   if (!state.current) return;
-  log("▶ vlog music suggest");
+  log("<span data-icon=&quot;play&quot;></span> vlog music suggest");
   try {
     const s = await api(`/api/projects/${state.current.id}/vlog/music-suggest?language=pt`, { method: "POST" });
-    log(`✓ ${s.description}`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> ${s.description}`, "ok");
     renderMusicSuggestion(s);
   } catch (e) {
     log(`✗ vlog music: ${e.message}`, "err");
@@ -1834,7 +1866,7 @@ async function vlogMusicSuggest() {
 
 async function detectFaceIdentities() {
   if (!state.current) return;
-  log("▶ face identities");
+  log("<span data-icon=&quot;play&quot;></span> face identities");
   try {
     const r = await api(`/api/projects/${state.current.id}/face-identities`, { method: "POST" });
     renderPeople(r.clusters || [], r.presence || {});
@@ -1882,10 +1914,10 @@ function renderPeople(clusters, presence) {
 
 async function generatePeopleThumbs() {
   if (!state.current) return;
-  log("▶ people thumbs");
+  log("<span data-icon=&quot;play&quot;></span> people thumbs");
   try {
     const r = await api(`/api/projects/${state.current.id}/face-identities/thumbnails`, { method: "POST" });
-    log(`✓ ${r.thumbs.length} thumbs gerados`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> ${r.thumbs.length} thumbs gerados`, "ok");
     // refresh people list
     const ids = await api(`/api/projects/${state.current.id}/files/face_identities.json`);
     renderPeople(ids.clusters || [], ids.presence || {});
@@ -1896,10 +1928,10 @@ async function generatePeopleThumbs() {
 
 async function buildSourceSubjectTimeline() {
   if (!state.current) return;
-  log("▶ subject timeline (source)");
+  log("<span data-icon=&quot;play&quot;></span> subject timeline (source)");
   try {
     const r = await api(`/api/projects/${state.current.id}/subject-timeline?target=source&step_seconds=0.5`, { method: "POST" });
-    log(`✓ ${r.events?.length || 0} samples · ${r.changes?.length || 0} mudanças`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> ${r.events?.length || 0} samples · ${r.changes?.length || 0} mudanças`, "ok");
     toast(`${r.changes?.length || 0} mudanças de sujeito detectadas`, "ok");
   } catch (e) {
     log(`✗ subject timeline: ${e.message}`, "err");
@@ -1908,11 +1940,11 @@ async function buildSourceSubjectTimeline() {
 
 async function multicamSync() {
   if (!state.current) return;
-  log("▶ multicam sync");
+  log("<span data-icon=&quot;play&quot;></span> multicam sync");
   try {
     const r = await api(`/api/projects/${state.current.id}/multicam-sync`, { method: "POST" });
     const desc = r.offsets.slice(1).map(o => `${o.name}: ${o.offset > 0 ? "+" : ""}${o.offset.toFixed(2)}s (${(o.score * 100).toFixed(0)}%)`).join(", ");
-    log(`✓ ${r.offsets.length - 1} angles → ${desc}`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> ${r.offsets.length - 1} angles → ${desc}`, "ok");
     toast(`Sync: ${desc || "no offsets"}`, "ok");
     await loadProject(state.current.id);
   } catch (e) {
@@ -1924,10 +1956,10 @@ async function uploadMusic(file) {
   if (!state.current) return;
   const fd = new FormData();
   fd.append("file", file);
-  log(`▶ uploading music ${file.name}`);
+  log(`<span data-icon=&quot;play&quot;></span> uploading music ${file.name}`);
   try {
     const r = await api(`/api/projects/${state.current.id}/music/upload`, { method: "POST", body: fd });
-    log(`✓ music uploaded (${(r.bytes / 1024).toFixed(0)} KB)`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> music uploaded (${(r.bytes / 1024).toFixed(0)} KB)`, "ok");
     toast(`Música pronta: ${r.filename}`, "ok");
   } catch (e) {
     log(`✗ music upload: ${e.message}`, "err");
@@ -1936,7 +1968,7 @@ async function uploadMusic(file) {
 
 async function mixMusic() {
   if (!state.current) return;
-  log("▶ mixing music + voice");
+  log("<span data-icon=&quot;play&quot;></span> mixing music + voice");
   try {
     const r = await api(`/api/projects/${state.current.id}/music/mix`, {
       method: "POST",
@@ -1946,11 +1978,11 @@ async function mixMusic() {
         music_db: parseFloat($("#music-db").value || "-8"),
       }),
     });
-    log(`✓ mix · ${(r.bytes / 1024).toFixed(0)} KB`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> mix · ${(r.bytes / 1024).toFixed(0)} KB`, "ok");
     const a = $("#mix-link");
     a.href = r.url;
     a.style.display = "inline-block";
-    a.textContent = `⬇ ${r.export}`;
+    a.textContent = `<span data-icon=&quot;download&quot;></span> ${r.export}`;
     await refreshHistory();
   } catch (e) {
     log(`✗ mix: ${e.message}`, "err");
@@ -2017,7 +2049,7 @@ async function archiveProject() {
   ))) return;
   try {
     const r = await api(`/api/projects/${state.current.id}/archive`, { method: "POST" });
-    log(`✓ archived: ${r.archived}`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> archived: ${r.archived}`, "ok");
     toast(`Arquivado: ${r.archived}`, "ok");
     state.current = null;
     $("#project-view").classList.add("hidden");
@@ -2030,14 +2062,14 @@ async function archiveProject() {
 
 async function makeHook() {
   if (!state.current) return;
-  log("▶ hook");
+  log("<span data-icon=&quot;play&quot;></span> hook");
   try {
     const r = await api(`/api/projects/${state.current.id}/hook`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ target_seconds: 4 }),
     });
-    log(`✓ hook ${r.duration.toFixed(1)}s @ ${r.start.toFixed(1)}s`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> hook ${r.duration.toFixed(1)}s @ ${r.start.toFixed(1)}s`, "ok");
     toast(`Hook pronto · ${r.duration.toFixed(1)}s`, "ok");
     await refreshHistory();
   } catch (e) {
@@ -2047,15 +2079,15 @@ async function makeHook() {
 
 async function peakThumb() {
   if (!state.current) return;
-  log("▶ peak thumbnail");
+  log("<span data-icon=&quot;play&quot;></span> peak thumbnail");
   try {
     const r = await api(`/api/projects/${state.current.id}/peak-thumbnail`, { method: "POST" });
     const grid = $("#thumbs-grid");
     const div = document.createElement("div");
     div.className = "thumb";
-    div.innerHTML = `<img src="${r.url}?t=${Date.now()}" alt="peak"/><div class="label">⭐ Peak @ ${r.at.toFixed(1)}s</div>`;
+    div.innerHTML = `<img src="${r.url}?t=${Date.now()}" alt="peak"/><div class="label"><span data-icon=&quot;sparkles&quot;></span> Peak @ ${r.at.toFixed(1)}s</div>`;
     grid.prepend(div);
-    log(`✓ peak thumb @ ${r.at.toFixed(1)}s`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> peak thumb @ ${r.at.toFixed(1)}s`, "ok");
   } catch (e) {
     log(`✗ peak: ${e.message}`, "err");
   }
@@ -2063,14 +2095,14 @@ async function peakThumb() {
 
 async function emojifyCaptions() {
   if (!state.current) return;
-  log("▶ emojify");
+  log("<span data-icon=&quot;play&quot;></span> emojify");
   try {
     const r = await api(`/api/projects/${state.current.id}/captions/emojify`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ use_llm: true }),
     });
-    log(`✓ ${r.updated} linhas decoradas`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> ${r.updated} linhas decoradas`, "ok");
     toast(`${r.updated} legendas com emoji`, "ok");
   } catch (e) {
     log(`✗ emojify: ${e.message}`, "err");
@@ -2103,7 +2135,7 @@ async function refreshHistory() {
 
 async function chapterThumbs() {
   if (!state.current) return;
-  log("▶ chapter thumbs");
+  log("<span data-icon=&quot;play&quot;></span> chapter thumbs");
   try {
     const r = await api(`/api/projects/${state.current.id}/chapter-thumbs`, { method: "POST" });
     const grid = $("#thumbs-grid");
@@ -2114,7 +2146,7 @@ async function chapterThumbs() {
       div.innerHTML = `<img src="${t.url}" alt="${escapeHtml(t.name)}" loading="lazy"/><div class="label">${escapeHtml(t.name)}</div>`;
       grid.appendChild(div);
     }
-    log(`✓ thumbs · ${r.thumbs.length}`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> thumbs · ${r.thumbs.length}`, "ok");
   } catch (e) {
     log(`✗ thumbs: ${e.message}`, "err");
   }
@@ -2127,7 +2159,7 @@ async function applyBrandPreset() {
   try {
     const b = await api(`/api/projects/${state.current.id}/brand/from-preset/${id}`, { method: "POST" });
     fillBrandForm(b);
-    log(`✓ Preset aplicado`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> Preset aplicado`, "ok");
   } catch (e) {
     log(`✗ apply preset: ${e.message}`, "err");
   }
@@ -2201,10 +2233,10 @@ async function uploadAngle(file) {
   const fd = new FormData();
   fd.append("file", file);
   fd.append("name", $("#angle-name").value || `Ângulo ${(state.current.angles?.length || 0) + 1}`);
-  log(`▶ Subindo ângulo: ${file.name}`);
+  log(`<span data-icon=&quot;play&quot;></span> Subindo ângulo: ${file.name}`);
   try {
     const r = await api(`/api/projects/${state.current.id}/angles`, { method: "POST", body: fd });
-    log(`✓ Ângulo "${r.name}" pronto (${r.duration.toFixed(1)}s)`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> Ângulo "${r.name}" pronto (${r.duration.toFixed(1)}s)`, "ok");
     $("#angle-name").value = "";
     await loadProject(state.current.id);
   } catch (e) {
@@ -2216,17 +2248,17 @@ async function suggestMusic() {
   if (!state.current) return;
   const btn = $("#music-suggest-btn");
   btn.disabled = true;
-  btn.textContent = "✨ Pensando...";
-  log("▶ music suggest");
+  btn.textContent = "<span data-icon=&quot;sparkles&quot;></span> Pensando...";
+  log("<span data-icon=&quot;play&quot;></span> music suggest");
   try {
     const s = await api(`/api/projects/${state.current.id}/music/suggest`, { method: "POST" });
-    log(`✓ Sugestão: ${s.description}`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> Sugestão: ${s.description}`, "ok");
     renderMusicSuggestion(s);
   } catch (e) {
     log(`✗ music suggest: ${e.message}`, "err");
   } finally {
     btn.disabled = false;
-    btn.textContent = "✨ Sugerir música";
+    btn.textContent = "<span data-icon=&quot;sparkles&quot;></span> Sugerir música";
   }
 }
 
@@ -2234,7 +2266,7 @@ async function searchMusic() {
   if (!state.current) return;
   const list = $("#music-tracks");
   list.innerHTML = "";
-  log("▶ music search");
+  log("<span data-icon=&quot;play&quot;></span> music search");
   try {
     const r = await api(`/api/projects/${state.current.id}/music/search`, {
       method: "POST",
@@ -2273,7 +2305,7 @@ async function searchMusic() {
       };
       list.appendChild(li);
     }
-    log(`✓ ${r.tracks.length} faixas encontradas via ${r.provider}`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> ${r.tracks.length} faixas encontradas via ${r.provider}`, "ok");
   } catch (e) {
     log(`✗ music search: ${e.message}`, "err");
   }
@@ -2281,7 +2313,7 @@ async function searchMusic() {
 
 async function exportFcpxml() {
   if (!state.current) return;
-  log("▶ FCPXML export");
+  log("<span data-icon=&quot;play&quot;></span> FCPXML export");
   try {
     const res = await api(`/api/projects/${state.current.id}/export/fcpxml`, {
       method: "POST",
@@ -2298,11 +2330,11 @@ async function exportFcpxml() {
         include_speakers: $("#fcpxml-speakers")?.checked !== false,
       }),
     });
-    log(`✓ FCPXML ${res.kind} · ${res.bytes} bytes`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> FCPXML ${res.kind} · ${res.bytes} bytes`, "ok");
     const link = $("#fcpxml-link");
     link.href = res.url;
     link.style.display = "inline-block";
-    link.textContent = `⬇ Baixar ${res.export}`;
+    link.textContent = `<span data-icon=&quot;download&quot;></span> Baixar ${res.export}`;
     refreshNleExport();
   } catch (e) {
     log(`✗ FCPXML: ${e.message}`, "err");
@@ -2387,7 +2419,7 @@ async function saveColorProfile(profile) {
     });
     state.current.source_color_profile = profile;
     state.current.color_profile_locked = true;
-    log(`✓ perfil de cor: ${COLOR_PROFILE_LABELS[profile] || profile}`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> perfil de cor: ${COLOR_PROFILE_LABELS[profile] || profile}`, "ok");
     refreshNleExport();
     syncColorProfileSelect(state.current);
   } catch (e) {
@@ -2418,8 +2450,8 @@ async function refreshNleExport() {
     const color = data.color || { profile: "rec709", is_log: false, label: "Rec. 709" };
     const has = (k) => a[k] ? "ok" : "muted";
     const colorPill = color.is_log
-      ? `<span class="nle-pill log" title="${escapeHtml(color.fcp_lut || '')}">🎨 LOG · ${escapeHtml(color.label)}</span>`
-      : `<span class="nle-pill muted">🎨 Rec. 709</span>`;
+      ? `<span class="nle-pill log" title="${escapeHtml(color.fcp_lut || '')}"><span data-icon=&quot;palette&quot;></span> LOG · ${escapeHtml(color.label)}</span>`
+      : `<span class="nle-pill muted"><span data-icon=&quot;palette&quot;></span> Rec. 709</span>`;
     pills.innerHTML = [
       colorPill,
       `<span class="nle-pill ${has("multicam")}">${a.multicam ? "✓" : "·"} multicam (${(a.angles || []).length} ângulos)</span>`,
@@ -2431,7 +2463,7 @@ async function refreshNleExport() {
       `<span class="nle-pill ${has("speakers")}">${a.speakers ? "✓" : "·"} speakers</span>`,
     ].join("");
     warnings.innerHTML = (data.warnings || []).map(w =>
-      `<div class="nle-warn">⚠ ${escapeHtml(w)}</div>`
+      `<div class="nle-warn"><span data-icon=&quot;alert-triangle&quot;></span> ${escapeHtml(w)}</div>`
     ).join("");
 
     // Smart defaults: pre-check things that are available, hide irrelevant.
@@ -2685,11 +2717,44 @@ function setSection(section) {
   const label = document.querySelector(`.ws-section[data-section="${section}"] span:last-child`);
   const drawerLabel = $("#ws-drawer-label");
   if (drawerLabel && label) drawerLabel.textContent = label.textContent;
+  const topbarSec = $("#topbar-section");
+  if (topbarSec && label) topbarSec.textContent = label.textContent;
   // Close mobile drawer on selection.
   document.body.classList.remove("ws-drawer-open");
   if (section === "overview") refreshOverview();
   if (section === "export") refreshNleExport();
   if (section === "reels") refreshReelsOnLoad();
+}
+
+function refreshHeader() {
+  const p = state.current;
+  if (!p) return;
+  const status = $("#topbar-status");
+  if (status) {
+    if (p.render_active) {
+      status.style.display = "";
+      status.dataset.tone = "warn";
+      status.textContent = "Renderizando";
+    } else if (p.has_render) {
+      status.style.display = "";
+      status.dataset.tone = "success";
+      status.textContent = "Pronto";
+    } else {
+      status.style.display = "none";
+    }
+  }
+  // Mirror next-step into topbar
+  const tbNext = $("#topbar-next-step");
+  if (tbNext && typeof computeNextStep === "function") {
+    const ns = computeNextStep(p);
+    if (ns) {
+      tbNext.style.display = "";
+      tbNext.innerHTML = `${ns.msg} <span data-icon="arrow-right" data-icon-size="14"></span>`;
+      tbNext.onclick = () => setSection(ns.section);
+    } else {
+      tbNext.style.display = "none";
+    }
+  }
 }
 
 function bindSections() {
@@ -2926,23 +2991,20 @@ function bind() {
   // Keep the legacy filter wiring alive in case data exists, but hidden:
   try { bindWorkflow(); } catch {}
   $("#cmdk-open")?.addEventListener("click", () => openCmdK());
+  $("#topbar-cmdk")?.addEventListener("click", () => openCmdK());
   // Theme toggle (dark ↔ light, persisted in localStorage)
   const themeBtn = $("#theme-toggle");
   if (themeBtn) {
     const setIcon = () => {
       const isLight = document.documentElement.getAttribute("data-theme") === "light";
-      themeBtn.textContent = isLight ? "☾" : "☀";
+      themeBtn.innerHTML = `<span data-icon="${isLight ? "sun" : "moon"}"></span>`;
     };
     setIcon();
     themeBtn.onclick = () => {
       const isLight = document.documentElement.getAttribute("data-theme") === "light";
-      if (isLight) {
-        document.documentElement.removeAttribute("data-theme");
-        localStorage.setItem("hfvp.theme", "dark");
-      } else {
-        document.documentElement.setAttribute("data-theme", "light");
-        localStorage.setItem("hfvp.theme", "light");
-      }
+      const next = isLight ? "dark" : "light";
+      document.documentElement.setAttribute("data-theme", next);
+      localStorage.setItem("hfvp.theme", next);
       setIcon();
     };
   }
@@ -3146,7 +3208,7 @@ async function applyReelTemplate() {
     });
     REELS_STATE.animations = res.animations;
     renderReelsList();
-    log(`✓ template aplicado: ${res.count} animações`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> template aplicado: ${res.count} animações`, "ok");
     const iframe = $("#reels-preview-iframe");
     if (iframe && !$("#reels-preview-pane").classList.contains("hidden")) {
       reloadReelsPreview();
@@ -3171,7 +3233,7 @@ async function saveReelsAsTemplate() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ name, description }),
     });
-    log(`✓ template '${name}' salvo`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> template '${name}' salvo`, "ok");
     await loadReelTemplates();
   } catch (e) {
     log(`✗ salvar template: ${e.message}`, "err");
@@ -3187,7 +3249,7 @@ async function deleteReelTemplate() {
   if (!confirm(`Apagar template '${tpl.name}'?`)) return;
   try {
     await api(`/api/reel-templates/${tid}`, { method: "DELETE" });
-    log(`✓ template '${tpl.name}' apagado`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> template '${tpl.name}' apagado`, "ok");
     await loadReelTemplates();
   } catch (e) {
     log(`✗ delete template: ${e.message}`, "err");
@@ -3229,7 +3291,7 @@ function renderReelsList() {
   if (!root) return;
   const anims = REELS_STATE.animations;
   if (anims.length === 0) {
-    root.innerHTML = `<div class="reels-empty">Sem animações ainda. Clique em <strong>🪄 Sugerir animações</strong> ou <strong>➕ Adicionar manual</strong>.</div>`;
+    root.innerHTML = `<div class="reels-empty">Sem animações ainda. Clique em <strong><span data-icon=&quot;wand-2&quot;></span> Sugerir animações</strong> ou <strong><span data-icon=&quot;plus&quot;></span> Adicionar manual</strong>.</div>`;
     return;
   }
   root.innerHTML = `<table class="reels-table">
@@ -3324,7 +3386,7 @@ async function persistReels() {
     });
     REELS_STATE.animations = res.animations;
     renderReelsList();
-    log(`✓ reels: ${res.count} animações salvas`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> reels: ${res.count} animações salvas`, "ok");
   } catch (e) {
     log(`✗ reels save: ${e.message}`, "err");
   }
@@ -3345,9 +3407,9 @@ async function suggestReelAnims() {
     });
     REELS_STATE.animations = res.animations;
     renderReelsList();
-    status.textContent = `✓ ${res.count} sugestões`;
+    status.textContent = `<span data-icon=&quot;check&quot;></span> ${res.count} sugestões`;
     status.className = "status done";
-    log(`✓ reels suggest: ${res.count} animações`, "ok");
+    log(`<span data-icon=&quot;check&quot;></span> reels suggest: ${res.count} animações`, "ok");
   } catch (e) {
     status.textContent = `✗ ${e.message}`;
     status.className = "status error";
@@ -3403,8 +3465,8 @@ async function quickPreviewReel() {
     video.load();
     video.play().catch(() => {});
     $("#reels-preview-stats").textContent =
-      `✓ ${(res.took_ms / 1000).toFixed(1)}s · ${res.rasterized} novas, ${res.reused} reusadas · ${res.width}×${res.height}`;
-    log(`✓ quick preview: ${res.took_ms}ms`, "ok");
+      `<span data-icon=&quot;check&quot;></span> ${(res.took_ms / 1000).toFixed(1)}s · ${res.rasterized} novas, ${res.reused} reusadas · ${res.width}×${res.height}`;
+    log(`<span data-icon=&quot;check&quot;></span> quick preview: ${res.took_ms}ms`, "ok");
   } catch (e) {
     $("#reels-preview-stats").textContent = `✗ ${e.message}`;
     log(`✗ quick preview: ${e.message}`, "err");

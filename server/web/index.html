@@ -7,11 +7,11 @@
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23a78bfa'/%3E%3Cstop offset='1' stop-color='%2334d399'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='8' fill='url(%23g)'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-weight='800' font-size='15' fill='%23070810'%3EHF%3C/text%3E%3C/svg%3E" />
     <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23a78bfa'/%3E%3Cstop offset='1' stop-color='%2334d399'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='8' fill='url(%23g)'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='Inter,sans-serif' font-weight='800' font-size='15' fill='%23070810'%3EHF%3C/text%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/styles.css" />
+    <script src="/vendor/icons.js" defer></script>
     <script>
-      // Apply persisted theme before paint to avoid FOUC
       (function() {
-        var t = localStorage.getItem("hfvp.theme");
-        if (t === "light") document.documentElement.setAttribute("data-theme", "light");
+        var t = localStorage.getItem("hfvp.theme") || "dark";
+        document.documentElement.setAttribute("data-theme", t === "light" ? "light" : "dark");
       })();
     </script>
   </head>
@@ -21,14 +21,13 @@
         <header class="brand">
           <div class="brand-logo">HF</div>
           <div>
-            <div class="brand-name">HyperFrames VP</div>
-            <div class="brand-sub">Whisper + Claude + Hyperframes</div>
+            <div class="brand-name">HyperFrames</div>
+            <div class="brand-sub">Video pipeline</div>
           </div>
-          <button id="theme-toggle" class="theme-toggle" title="Alternar tema" aria-label="Alternar tema">◐</button>
         </header>
-        <button id="new-project" class="btn-primary">+ Novo projeto</button>
-        <button id="cmdk-open" class="btn-ghost" style="justify-content:space-between"><span>Comandos</span><kbd>⌘ K</kbd></button>
-        <input id="search-q" type="search" placeholder="🔎 Buscar soundbites" class="search-input" />
+        <button id="new-project" class="btn-primary"><span data-icon="plus"></span>Novo projeto</button>
+        <button id="cmdk-open" class="btn-ghost" style="justify-content:space-between"><span class="cmdk-label"><span data-icon="command"></span> Comandos</span><kbd>⌘ K</kbd></button>
+        <input id="search-q" type="search" placeholder="Buscar soundbites" class="search-input" />
         <div id="search-results" class="search-results"></div>
         <div id="project-list" class="project-list"></div>
         <div id="stats-bar" class="stats-bar"></div>
@@ -36,65 +35,69 @@
 
       <main class="main">
         <div id="empty" class="empty">
-          <div class="empty-pill">● Whisper + Claude + ffmpeg + Hyperframes</div>
-          <h1>Edite vídeo<br/>com prompts e IA.</h1>
-          <p>Podcasts, vlogs e multicâmera. Suba a mídia, escolha um modo, e o pipeline transcreve, encontra soundbites, identifica pessoas, escolhe câmera, monta o cut, aplica seu brand book e exporta tudo de uma vez.</p>
+          <h1>Editor de vídeo<br/>livre, com IA quando ajuda.</h1>
+          <p>Sobe mídia, abre o que precisar, exporta no formato que quiser. Sem trilha forçada, sem onboarding. Quando quiser sugestões inteligentes (cortes, soundbites, animações), a IA tá lá no canto.</p>
           <div class="empty-actions">
-            <button id="empty-new" class="btn-primary">+ Criar projeto</button>
-            <button id="empty-cmdk" class="btn-ghost">Comandos <kbd>⌘ K</kbd></button>
+            <button id="empty-new" class="btn-primary"><span data-icon="plus"></span>Criar projeto</button>
+            <button id="empty-cmdk" class="btn-ghost"><span data-icon="command"></span> Comandos <kbd>⌘ K</kbd></button>
           </div>
-          <div class="empty-modes">
-            <div class="mode-card">
-              <div class="mode-icon">🎙</div>
-              <div class="mode-title">Podcast</div>
-              <div class="mode-desc">Transcribe → diarize → chapters → corta silêncios + muletas → nivela falas → render brandado.</div>
-            </div>
-            <div class="mode-card">
-              <div class="mode-icon">📹</div>
-              <div class="mode-title">Vlog</div>
-              <div class="mode-desc">Vários clipes → IA descobre 3-5 narrativas → escolhe a melhor e renderiza o vlog automaticamente.</div>
-            </div>
-            <div class="mode-card">
-              <div class="mode-icon">🎬</div>
-              <div class="mode-title">Multicâmera</div>
-              <div class="mode-desc">Sync de áudio → identifica quem está em cada câmera → escolhe câmera que mostra o speaker atual.</div>
-            </div>
-          </div>
+          <div id="empty-recents" class="empty-recents"></div>
         </div>
 
         <div id="project-view" class="project-view hidden">
-          <header class="ph">
+          <header class="topbar">
+            <div class="crumbs">
+              <strong id="topbar-project-name">—</strong>
+              <span class="sep" data-icon="chevron-right"></span>
+              <span id="topbar-section">Visão geral</span>
+            </div>
+            <div class="spacer"></div>
+            <div class="topbar-actions">
+              <span id="topbar-status" class="pill" data-tone="neutral" style="display:none"></span>
+              <button id="topbar-next-step" class="btn btn-soft btn-sm" style="display:none"></button>
+              <button id="topbar-cmdk" class="kbd-chip" title="Abrir comandos">
+                <span data-icon="search" data-icon-size="12"></span>
+                <span>Comandos</span>
+                <kbd>⌘K</kbd>
+              </button>
+              <button id="theme-toggle" class="btn btn-ghost btn-icon" title="Alternar tema" aria-label="Alternar tema">
+                <span data-icon="moon"></span>
+              </button>
+              <button id="delete-project" class="btn btn-ghost btn-icon danger" title="Excluir projeto">
+                <span data-icon="trash-2"></span>
+              </button>
+            </div>
+          </header>
+          <header class="ph hidden">
             <div>
-              <div class="ph-eyebrow">Projeto</div>
               <h2 id="project-name">—</h2>
               <div id="ph-progress" class="ph-progress"></div>
             </div>
             <div class="ph-actions">
               <button id="ph-next-step" class="btn-primary" style="display:none"></button>
-              <button id="delete-project" class="btn-ghost danger">Excluir</button>
             </div>
           </header>
 
           <nav class="workflow-bar" aria-label="Filtrar ferramentas" style="display:none">
             <div class="wb-presets" role="tablist">
-              <button class="wb-preset" data-preset="caption">⚡ Só legendas</button>
-              <button class="wb-preset" data-preset="podcast">🎙 Podcast</button>
-              <button class="wb-preset" data-preset="vlog">📹 Vlog</button>
-              <button class="wb-preset" data-preset="multicam">🎬 Multicam</button>
-              <button class="wb-preset" data-preset="eddie">🎯 Eddie cut</button>
-              <button class="wb-preset active" data-preset="all">⚙ Tudo</button>
+              <button class="wb-preset" data-preset="caption"><span data-icon="zap"></span> Só legendas</button>
+              <button class="wb-preset" data-preset="podcast"><span data-icon="mic"></span> Podcast</button>
+              <button class="wb-preset" data-preset="vlog"><span data-icon="video"></span> Vlog</button>
+              <button class="wb-preset" data-preset="multicam"><span data-icon="film"></span> Multicam</button>
+              <button class="wb-preset" data-preset="eddie"><span data-icon="target"></span> Eddie cut</button>
+              <button class="wb-preset active" data-preset="all"><span data-icon="settings"></span> Tudo</button>
             </div>
             <div class="wb-divider"></div>
             <div class="wb-cats" role="group" aria-label="Categorias visíveis">
-              <button class="wb-cat" data-cat="upload">📥 Upload</button>
-              <button class="wb-cat" data-cat="edit">✂ Editar</button>
-              <button class="wb-cat" data-cat="soundbites">🎯 Soundbites</button>
-              <button class="wb-cat" data-cat="podcast">🎙 Podcast</button>
-              <button class="wb-cat" data-cat="vlog">📹 Vlog</button>
-              <button class="wb-cat" data-cat="multicam">🎬 Multicam</button>
-              <button class="wb-cat" data-cat="brand">🎨 Brand</button>
-              <button class="wb-cat" data-cat="music">🎵 Música</button>
-              <button class="wb-cat" data-cat="export">📤 Exportar</button>
+              <button class="wb-cat" data-cat="upload"><span data-icon="upload-cloud"></span> Upload</button>
+              <button class="wb-cat" data-cat="edit"><span data-icon="scissors"></span> Editar</button>
+              <button class="wb-cat" data-cat="soundbites"><span data-icon="target"></span> Soundbites</button>
+              <button class="wb-cat" data-cat="podcast"><span data-icon="mic"></span> Podcast</button>
+              <button class="wb-cat" data-cat="vlog"><span data-icon="video"></span> Vlog</button>
+              <button class="wb-cat" data-cat="multicam"><span data-icon="film"></span> Multicam</button>
+              <button class="wb-cat" data-cat="brand"><span data-icon="palette"></span> Brand</button>
+              <button class="wb-cat" data-cat="music"><span data-icon="music"></span> Música</button>
+              <button class="wb-cat" data-cat="export"><span data-icon="send"></span> Exportar</button>
             </div>
           </nav>
 
@@ -114,42 +117,42 @@
               </div>
               <div class="ws-divider"></div>
               <button class="ws-section" data-section="overview" data-modes="podcast multicam reels vlog all">
-                <span class="ws-icon">🏠</span><span>Visão geral</span>
+                <span class="ws-icon" data-icon="home"></span><span>Visão geral</span>
               </button>
               <div class="ws-divider"></div>
               <button class="ws-section" data-section="upload" data-modes="podcast multicam reels vlog all">
-                <span class="ws-icon">📥</span><span>Upload</span>
+                <span class="ws-icon" data-icon="upload-cloud"></span><span>Upload</span>
               </button>
               <button class="ws-section" data-section="edit" data-modes="podcast multicam reels all">
-                <span class="ws-icon">✂</span><span>Editar</span>
+                <span class="ws-icon" data-icon="scissors"></span><span>Editar</span>
               </button>
               <button class="ws-section" data-section="soundbites" data-modes="podcast multicam reels all">
-                <span class="ws-icon">🎯</span><span>Soundbites</span>
+                <span class="ws-icon" data-icon="target"></span><span>Soundbites</span>
               </button>
               <button class="ws-section" data-section="podcast" data-modes="podcast multicam all">
-                <span class="ws-icon">🎙</span><span>Podcast</span>
+                <span class="ws-icon" data-icon="mic"></span><span>Podcast</span>
               </button>
               <button class="ws-section" data-section="vlog" data-modes="vlog all">
-                <span class="ws-icon">📹</span><span>Vlog</span>
+                <span class="ws-icon" data-icon="video"></span><span>Vlog</span>
               </button>
               <button class="ws-section" data-section="multicam" data-modes="multicam all">
-                <span class="ws-icon">🎬</span><span>Multicam</span>
+                <span class="ws-icon" data-icon="film"></span><span>Multicam</span>
               </button>
               <button class="ws-section" data-section="reels" data-modes="reels vlog all">
-                <span class="ws-icon">✨</span><span>Reels (animações)</span>
+                <span class="ws-icon" data-icon="sparkles"></span><span>Reels</span>
               </button>
               <button class="ws-section" data-section="brand" data-modes="podcast multicam reels vlog all">
-                <span class="ws-icon">🎨</span><span>Brand</span>
+                <span class="ws-icon" data-icon="palette"></span><span>Brand</span>
               </button>
               <button class="ws-section" data-section="music" data-modes="vlog all">
-                <span class="ws-icon">🎵</span><span>Música</span>
+                <span class="ws-icon" data-icon="music"></span><span>Música</span>
               </button>
               <button class="ws-section" data-section="export" data-modes="podcast multicam reels vlog all">
-                <span class="ws-icon">📤</span><span>Exportar</span>
+                <span class="ws-icon" data-icon="send"></span><span>Exportar</span>
               </button>
               <div class="ws-divider"></div>
               <button class="ws-section" data-section="all" data-modes="all">
-                <span class="ws-icon">⚙</span><span>Tudo</span>
+                <span class="ws-icon" data-icon="layout"></span><span>Tudo</span>
               </button>
             </aside>
 
@@ -164,7 +167,7 @@
               </section>
 
               <section class="card" data-cat="upload">
-            <h3>1 · Vídeo de origem</h3>
+            <header class="section-head"><span class="eyebrow">Captura</span><h2>Vídeo de origem</h2></header>
             <div class="row">
               <label class="dropzone" id="dropzone">
                 <input id="file-input" type="file" accept="video/*" hidden />
@@ -179,13 +182,13 @@
             <svg id="waveform" class="waveform" viewBox="0 0 1000 60" preserveAspectRatio="none" hidden></svg>
             <div class="actions" style="margin-top:8px">
               <button id="waveform-btn" class="btn-ghost">📈 Mostrar waveform</button>
-              <button id="archive-btn" class="btn-ghost danger">📥 Arquivar (zip + remover)</button>
+              <button id="archive-btn" class="btn-ghost danger"><span data-icon="upload-cloud"></span> Arquivar (zip + remover)</button>
             </div>
             <div id="stale-warnings" class="stale-warnings"></div>
           </section>
 
           <section class="card" data-cat="brand">
-            <h3>2 · Brand book</h3>
+            <header class="section-head"><span class="eyebrow">Identidade</span><h2>Brand book</h2></header>
             <div class="grid-2">
               <label>Nome
                 <input id="brand-name" type="text" placeholder="Marca" />
@@ -233,8 +236,8 @@
             </div>
             <div class="actions">
               <button id="save-brand" class="btn-primary">Salvar brand</button>
-              <button id="save-preset-btn" class="btn-ghost">⭐ Salvar como preset</button>
-              <button id="apply-preset-btn" class="btn-ghost">📥 Aplicar preset</button>
+              <button id="save-preset-btn" class="btn-ghost"><span data-icon="sparkles"></span> Salvar como preset</button>
+              <button id="apply-preset-btn" class="btn-ghost"><span data-icon="upload-cloud"></span> Aplicar preset</button>
               <span id="brand-status" class="status muted"></span>
             </div>
           </section>
@@ -244,13 +247,13 @@
             <p class="card-help">Salve "fotos" do estado (cuts, soundbites, story…) pra comparar depois.</p>
             <div class="actions">
               <input id="snap-label" type="text" placeholder="rótulo (opcional)" class="snap-input" />
-              <button id="snap-take-btn" class="btn-primary">📸 Tirar snapshot</button>
+              <button id="snap-take-btn" class="btn-primary"><span data-icon="camera"></span> Tirar snapshot</button>
             </div>
             <ul id="snap-list" class="snap-list"></ul>
           </section>
 
           <section class="card" data-cat="edit">
-            <h3>3 · Cor &amp; LUT</h3>
+            <header class="section-head"><span class="eyebrow">Cor</span><h2>Perfil &amp; LUT</h2></header>
             <div class="color-profile-row">
               <label class="cp-label">Perfil de cor da fonte</label>
               <select id="color-profile" class="inline-select">
@@ -276,7 +279,7 @@
           </section>
 
           <section class="card" data-cat="edit">
-            <h3>4 · Pipeline</h3>
+            <header class="section-head"><span class="eyebrow">Edição</span><h2>Pipeline</h2></header>
             <div class="stages">
               <div class="stage" data-stage="transcribe">
                 <div class="stage-check">○</div>
@@ -347,7 +350,7 @@
           </section>
 
           <section class="card" id="vlog-card" data-cat="vlog">
-            <h3>1b · Vlog mode (vários clipes)</h3>
+            <header class="section-head"><span class="eyebrow">Vlog</span><h2>Modo multi-clipe</h2></header>
             <p class="card-help">Em vez de 1 vídeo único, você sobe N clipes curtos. O sistema transcreve, descobre narrativas possíveis e monta um vlog do estilo que você escolher.</p>
             <div class="actions">
               <label class="dropzone small" id="clip-zone" style="flex:1">
@@ -358,12 +361,12 @@
               </label>
               <button id="vlog-transcribe-all" class="btn-ghost">📝 Transcrever todos</button>
               <button id="vlog-narratives-btn" class="btn-ghost">🧭 Sugerir narrativas</button>
-              <button id="vlog-auto-btn" class="btn-primary">⚡ Vlog 1-click (transcribe + narrativas + montagem)</button>
+              <button id="vlog-auto-btn" class="btn-primary"><span data-icon="zap"></span> Vlog 1-click (transcribe + narrativas + montagem)</button>
             </div>
             <div class="actions">
-              <button id="vlog-music-btn" class="btn-ghost">🎵 Sugerir música pro vlog</button>
+              <button id="vlog-music-btn" class="btn-ghost"><span data-icon="music"></span> Sugerir música pro vlog</button>
               <button id="face-ids-btn" class="btn-ghost">👥 Identificar pessoas</button>
-              <button id="people-thumbs-btn" class="btn-ghost">🖼 Thumbs por pessoa</button>
+              <button id="people-thumbs-btn" class="btn-ghost"><span data-icon="image"></span> Thumbs por pessoa</button>
               <span id="vlog-status" class="status muted"></span>
             </div>
             <ul id="clips-list" class="angle-list"></ul>
@@ -372,7 +375,7 @@
           </section>
 
           <section class="card" id="podcast-card" data-cat="podcast">
-            <h3>4a · Podcast — pipeline 1-click</h3>
+            <header class="section-head"><span class="eyebrow">Podcast</span><h2>Pipeline 1-click</h2></header>
             <p class="card-help">Roda transcrição → diarização → capítulos → cortes de silêncio → muletas → LUT → loudnorm → nivelamento por speaker → social copy num único job.</p>
             <div class="actions">
               <select id="podcast-lang" class="inline-select">
@@ -381,7 +384,7 @@
                 <option value="en">en</option>
                 <option value="es">es</option>
               </select>
-              <button id="podcast-pipeline-btn" class="btn-primary">⚡ Editar podcast (auto)</button>
+              <button id="podcast-pipeline-btn" class="btn-primary"><span data-icon="zap"></span> Editar podcast (auto)</button>
               <span id="podcast-status" class="status muted"></span>
               <a id="yt-desc-btn" class="btn-ghost" href="#">📺 YouTube description</a>
             </div>
@@ -392,22 +395,22 @@
           </section>
 
           <section class="card" id="transcript-card" data-cat="edit">
-            <h3>4b · Transcrição interativa</h3>
+            <header class="section-head"><span class="eyebrow">Transcrição</span><h2>Editor interativo</h2></header>
             <p class="card-help">Clique numa palavra pra pular o vídeo. Selecione um range e clique <strong>Keep</strong> pra construir cortes manualmente (sobrescreve <code>cuts.json</code>).</p>
             <div class="actions" style="margin-bottom:8px">
               <button id="tx-clear-btn" class="btn-ghost">Limpar seleção</button>
-              <button id="tx-keep-btn" class="btn-primary">✓ Manter seleção como cuts</button>
+              <button id="tx-keep-btn" class="btn-primary"><span data-icon="check"></span> Manter seleção como cuts</button>
               <span id="tx-status" class="status muted"></span>
             </div>
             <div id="transcript-words" class="tx-words"></div>
           </section>
 
           <section class="card" data-cat="soundbites">
-            <h3>5 · Soundbites + roteiro (Eddie-style)</h3>
+            <header class="section-head"><span class="eyebrow">Soundbites</span><h2>Quotes + roteiro</h2></header>
             <p class="card-help">A IA escolhe os melhores trechos da transcrição, agrupa por tópico e propõe uma estrutura de roteiro. Depois você gera o rough cut só com os trechos selecionados.</p>
             <div class="actions">
-              <button id="soundbites-btn" class="btn-primary">🎯 Extrair soundbites</button>
-              <button id="bite-thumbs-btn" class="btn-ghost">🖼 Thumbs por bite</button>
+              <button id="soundbites-btn" class="btn-primary"><span data-icon="target"></span> Extrair soundbites</button>
+              <button id="bite-thumbs-btn" class="btn-ghost"><span data-icon="image"></span> Thumbs por bite</button>
               <select id="story-structure" class="inline-select">
                 <option value="four_act">4 atos (intro/conflito/resolução/conclusão)</option>
                 <option value="hero_journey">Jornada do herói</option>
@@ -415,26 +418,26 @@
                 <option value="testimonial">Testemunho (antes/virada/depois/recomendação)</option>
                 <option value="before_after">Antes/depois</option>
               </select>
-              <button id="story-btn" class="btn-ghost" data-prereq="story">📜 Propor roteiro</button>
+              <button id="story-btn" class="btn-ghost" data-prereq="story"><span data-icon="file-text"></span> Propor roteiro</button>
             </div>
             <div id="story-summary" class="story-summary hidden"></div>
             <div id="topics-list" class="topics-list"></div>
             <div class="actions" style="margin-top:14px">
               <input id="hl-target" type="number" value="30" step="5" min="10" max="120" class="snap-input" style="max-width:90px" />
-              <button id="hl-btn" class="btn-primary" data-prereq="highlights">⚡ Gerar highlights reel</button>
-              <a id="hl-link" class="btn-ghost" href="#" download style="display:none">⬇ highlights.mp4</a>
+              <button id="hl-btn" class="btn-primary" data-prereq="highlights"><span data-icon="zap"></span> Gerar highlights reel</button>
+              <a id="hl-link" class="btn-ghost" href="#" download style="display:none"><span data-icon="download"></span> highlights.mp4</a>
               <input id="shorts-count" type="number" value="5" min="1" max="20" class="snap-input" style="max-width:60px" />
               <select id="shorts-aspect" class="inline-select">
                 <option value="9:16">9:16</option>
                 <option value="1:1">1:1</option>
                 <option value="16:9">16:9</option>
               </select>
-              <button id="shorts-btn" class="btn-primary" data-prereq="shorts">✂ Gerar N shorts</button>
+              <button id="shorts-btn" class="btn-primary" data-prereq="shorts"><span data-icon="scissors"></span> Gerar N shorts</button>
             </div>
           </section>
 
           <section class="card" data-cat="brand">
-            <h3>5b · Templates + Social copy</h3>
+            <header class="section-head"><span class="eyebrow">Distribuição</span><h2>Templates + social copy</h2></header>
             <p class="card-help">Templates aplicam BrandBook + estilo de legenda em um clique. Social copy gera caption + hashtags + hook a partir da transcrição.</p>
             <div class="actions">
               <select id="template-pick" class="inline-select"><option value="">— template —</option></select>
@@ -451,7 +454,7 @@
           </section>
 
           <section class="card" data-cat="multicam">
-            <h3>6 · Multicam (opcional)</h3>
+            <header class="section-head"><span class="eyebrow">Multicam</span><h2>Ângulos extras (opcional)</h2></header>
             <p class="card-help">Suba ângulos extras pra exportar como multicam pro Final Cut. O vídeo principal vira o ângulo 1.</p>
             <div class="row">
               <label class="dropzone small" id="angle-zone">
@@ -464,34 +467,34 @@
               <ul id="angle-list" class="angle-list"></ul>
             </div>
             <div class="actions">
-              <button id="place-broll-btn" class="btn-primary">🎯 Posicionar B-roll automaticamente</button>
+              <button id="place-broll-btn" class="btn-primary"><span data-icon="target"></span> Posicionar B-roll automaticamente</button>
               <button id="subject-tl-btn" class="btn-ghost">🧭 Linha de tempo do sujeito</button>
-              <button id="multicam-pick-btn" class="btn-ghost" data-prereq="multicam_pick">🎬 Escolher câmera por turno</button>
-              <button id="multicam-render-btn" class="btn-ghost" data-prereq="multicam_render">🎞 Renderizar multicam</button>
-              <a id="multicam-link" class="btn-ghost" href="#" download style="display:none">⬇ multicam.mp4</a>
+              <button id="multicam-pick-btn" class="btn-ghost" data-prereq="multicam_pick"><span data-icon="film"></span> Escolher câmera por turno</button>
+              <button id="multicam-render-btn" class="btn-ghost" data-prereq="multicam_render"><span data-icon="film"></span> Renderizar multicam</button>
+              <a id="multicam-link" class="btn-ghost" href="#" download style="display:none"><span data-icon="download"></span> multicam.mp4</a>
               <span id="broll-place-status" class="status muted"></span>
             </div>
             <p class="card-help">Roda depois de extrair soundbites e taggear ângulos. A IA escolhe qual ângulo cobre cada bite.</p>
           </section>
 
           <section class="card" data-cat="reels" id="reels-card">
-            <h3>✨ Reels · animações</h3>
+            <header class="section-head"><span class="eyebrow">Reels</span><h2>Animações</h2></header>
             <p class="card-help">Aparecem por cima do vídeo nos momentos que você (ou a IA) escolher. Cores da marca. Renderizadas via Hyperframes junto com o vídeo final.</p>
             <div class="reels-toolbar">
-              <button id="reels-suggest-btn" class="btn-primary" data-prereq="reels_suggest">🪄 Sugerir animações</button>
+              <button id="reels-suggest-btn" class="btn-primary" data-prereq="reels_suggest"><span data-icon="wand-2"></span> Sugerir animações</button>
               <label class="cb"><input id="reels-use-llm" type="checkbox" checked /> usar IA pra refinar</label>
               <label class="cb"><input id="reels-replace" type="checkbox" checked /> substituir as atuais</label>
-              <button id="reels-add-btn" class="btn-ghost">➕ Adicionar manual</button>
-              <button id="reels-preview-btn" class="btn-ghost">👁 Preview HTML (instantâneo)</button>
-              <button id="reels-quick-preview-btn" class="btn-ghost">⚡ Preview MP4 (~10s)</button>
+              <button id="reels-add-btn" class="btn-ghost"><span data-icon="plus"></span> Adicionar manual</button>
+              <button id="reels-preview-btn" class="btn-ghost"><span data-icon="eye"></span> Preview HTML (instantâneo)</button>
+              <button id="reels-quick-preview-btn" class="btn-ghost"><span data-icon="zap"></span> Preview MP4 (~10s)</button>
               <span id="reels-status" class="status muted"></span>
             </div>
             <div class="reels-templates-row">
               <label class="cp-label">Templates</label>
               <select id="reels-template-select" class="inline-select"></select>
               <label class="cb"><input id="reels-template-append" type="checkbox" /> adicionar às atuais</label>
-              <button id="reels-template-apply-btn" class="btn-ghost">📥 Aplicar</button>
-              <button id="reels-template-save-btn" class="btn-ghost">💾 Salvar atuais como template…</button>
+              <button id="reels-template-apply-btn" class="btn-ghost"><span data-icon="upload-cloud"></span> Aplicar</button>
+              <button id="reels-template-save-btn" class="btn-ghost"><span data-icon="save"></span> Salvar atuais como template…</button>
               <button id="reels-template-delete-btn" class="btn-ghost" title="apaga só templates do usuário">🗑</button>
               <span id="reels-template-hint" class="cp-hint"></span>
             </div>
@@ -545,8 +548,8 @@
               <div class="reels-preview-head">
                 <strong id="reels-preview-title">Preview</strong>
                 <span id="reels-preview-stats" class="cp-hint"></span>
-                <button id="reels-preview-reload" class="btn-ghost">↻ recarregar</button>
-                <button id="reels-preview-close" class="btn-ghost">✕ fechar</button>
+                <button id="reels-preview-reload" class="btn-ghost"><span data-icon="rotate-cw"></span> recarregar</button>
+                <button id="reels-preview-close" class="btn-ghost"><span data-icon="x"></span> fechar</button>
               </div>
               <iframe id="reels-preview-iframe" class="reels-preview-iframe" title="Preview reels"></iframe>
               <video id="reels-preview-video" class="reels-preview-video hidden" controls playsinline></video>
@@ -554,10 +557,10 @@
           </section>
 
           <section class="card" data-cat="music">
-            <h3>7 · Música por IA</h3>
+            <header class="section-head"><span class="eyebrow">Música</span><h2>Sugestão por IA</h2></header>
             <p class="card-help">A IA analisa a transcrição e sugere mood, gênero, BPM. Se você tiver token da Epidemic Sound em <code>.env</code>, o sistema busca faixas direto.</p>
             <div class="actions">
-              <button id="music-suggest-btn" class="btn-primary">✨ Sugerir música</button>
+              <button id="music-suggest-btn" class="btn-primary"><span data-icon="sparkles"></span> Sugerir música</button>
               <button id="music-search-btn" class="btn-ghost">Buscar na Epidemic</button>
               <a id="epidemic-link" class="btn-ghost" target="_blank" rel="noopener" href="https://www.epidemicsound.com/search/" style="display:none">Abrir busca no site</a>
             </div>
@@ -578,15 +581,15 @@
               </select>
               <input id="music-db" type="number" value="-8" step="1" class="snap-input" style="max-width:80px" />
               <span class="card-help" style="margin:0 6px 0 0; font-size:11px">dB</span>
-              <button id="mix-btn" class="btn-primary">🎚 Mixar com voz</button>
-              <a id="mix-link" class="btn-ghost" href="#" download style="display:none">⬇ Mix MP4</a>
+              <button id="mix-btn" class="btn-primary"><span data-icon="sliders"></span> Mixar com voz</button>
+              <a id="mix-link" class="btn-ghost" href="#" download style="display:none"><span data-icon="download"></span> Mix MP4</a>
             </div>
           </section>
 
           <section class="card" id="export-card" data-cat="export">
-            <h3>8 · Exportar</h3>
+            <header class="section-head"><span class="eyebrow">Saída</span><h2>Exportar</h2></header>
             <div class="roughcut-bar">
-              <button id="roughcut-btn" class="btn-primary" data-prereq="roughcut">⚡ Gerar rough cut do roteiro</button>
+              <button id="roughcut-btn" class="btn-primary" data-prereq="roughcut"><span data-icon="zap"></span> Gerar rough cut do roteiro</button>
               <label class="cb"><input id="rc-loudnorm" type="checkbox" /> loudnorm</label>
               <label class="cb"><input id="rc-denoise" type="checkbox" /> denoise</label>
               <span id="roughcut-status" class="status muted"></span>
@@ -606,8 +609,8 @@
                 <option value="1:1">1:1 (Feed)</option>
               </select>
               <button id="do-export" class="btn-ghost">Reframar (letterbox)</button>
-              <button id="smart-reframe-btn" class="btn-ghost">✨ Smart crop (IA)</button>
-              <a id="download-link" class="btn-primary" href="#" download>⬇ Baixar MP4</a>
+              <button id="smart-reframe-btn" class="btn-ghost"><span data-icon="sparkles"></span> Smart crop (IA)</button>
+              <a id="download-link" class="btn-primary" href="#" download><span data-icon="download"></span> Baixar MP4</a>
             </div>
             <div class="export-divider"></div>
             <div class="actions">
@@ -621,10 +624,10 @@
               </select>
               <label class="cb"><input id="caps-roughcut" type="checkbox" /> usar rough cut</label>
               <label class="cb"><input id="caps-speakers" type="checkbox" /> labels de speaker</label>
-              <a id="caps-link" class="btn-primary" href="#" download style="display:none">⬇ Baixar legenda</a>
+              <a id="caps-link" class="btn-primary" href="#" download style="display:none"><span data-icon="download"></span> Baixar legenda</a>
             </div>
             <div class="actions">
-              <button id="burn-btn" class="btn-primary" data-prereq="burn_caps">🔥 Queimar legenda no MP4</button>
+              <button id="burn-btn" class="btn-primary" data-prereq="burn_caps"><span data-icon="flame"></span> Queimar legenda no MP4</button>
               <select id="burn-source" class="inline-select">
                 <option value="graded">graded</option>
                 <option value="roughcut">roughcut</option>
@@ -636,7 +639,7 @@
                 <option value="minimal">Minimal</option>
                 <option value="podcast">Podcast</option>
               </select>
-              <a id="burn-link" class="btn-ghost" href="#" download style="display:none">⬇ MP4 com legenda</a>
+              <a id="burn-link" class="btn-ghost" href="#" download style="display:none"><span data-icon="download"></span> MP4 com legenda</a>
             </div>
             <div class="export-divider"></div>
             <div class="nle-card" id="nle-card">
@@ -661,10 +664,10 @@
                 <div id="nle-edl-body" class="nle-edl-body"></div>
               </details>
               <div class="nle-actions">
-                <button id="fcpxml-btn" class="btn-primary" data-prereq="fcpxml">📄 Exportar FCPXML</button>
-                <a id="fcpxml-link" class="btn-ghost" href="#" download style="display:none">⬇ Último FCPXML</a>
-                <button id="premiere-btn" class="btn-ghost" data-prereq="fcpxml">📄 Premiere / Resolve XML</button>
-                <a id="premiere-link" class="btn-ghost" href="#" download style="display:none">⬇ Último Premiere XML</a>
+                <button id="fcpxml-btn" class="btn-primary" data-prereq="fcpxml"><span data-icon="file-text"></span> Exportar FCPXML</button>
+                <a id="fcpxml-link" class="btn-ghost" href="#" download style="display:none"><span data-icon="download"></span> Último FCPXML</a>
+                <button id="premiere-btn" class="btn-ghost" data-prereq="fcpxml"><span data-icon="file-text"></span> Premiere / Resolve XML</button>
+                <a id="premiere-link" class="btn-ghost" href="#" download style="display:none"><span data-icon="download"></span> Último Premiere XML</a>
                 <label class="cb"><input id="premiere-roughcut" type="checkbox" /> usar rough cut</label>
                 <label class="cb"><input id="premiere-broll" type="checkbox" /> incluir B-roll</label>
               </div>
@@ -683,18 +686,18 @@
                 <option value="source">source</option>
                 <option value="highlights">highlights</option>
               </select>
-              <button id="audio-btn" class="btn-ghost">🎧 Áudio</button>
-              <a id="audio-link" class="btn-primary" href="#" download style="display:none">⬇ áudio</a>
-              <button id="bundle-btn" class="btn-ghost">📦 Bundle (.zip)</button>
-              <a id="bundle-link" class="btn-primary" href="#" download style="display:none">⬇ Baixar bundle</a>
-              <button id="dup-btn" class="btn-ghost">🪞 Duplicar projeto</button>
+              <button id="audio-btn" class="btn-ghost"><span data-icon="music"></span> Áudio</button>
+              <a id="audio-link" class="btn-primary" href="#" download style="display:none"><span data-icon="download"></span> áudio</a>
+              <button id="bundle-btn" class="btn-ghost"><span data-icon="package"></span> Bundle (.zip)</button>
+              <a id="bundle-link" class="btn-primary" href="#" download style="display:none"><span data-icon="download"></span> Baixar bundle</a>
+              <button id="dup-btn" class="btn-ghost"><span data-icon="copy"></span> Duplicar projeto</button>
               <button id="speakers-btn" class="btn-ghost">🎤 Detectar falas (auto)</button>
-              <button id="speakers-level-btn" class="btn-ghost">🎚 Nivelar speakers</button>
-              <button id="chapters-btn" class="btn-ghost">📑 Capítulos do podcast</button>
+              <button id="speakers-level-btn" class="btn-ghost"><span data-icon="sliders"></span> Nivelar speakers</button>
+              <button id="chapters-btn" class="btn-ghost"><span data-icon="list"></span> Capítulos do podcast</button>
               <button id="multicam-sync-btn" class="btn-ghost">🔗 Sync multicam (áudio)</button>
-              <button id="thumbs-btn" class="btn-ghost">🖼 Thumbnails de capítulos</button>
-              <button id="peak-thumb-btn" class="btn-ghost">⭐ Thumb do peak</button>
-              <button id="hook-btn" class="btn-ghost">🪝 Gerar hook 4s</button>
+              <button id="thumbs-btn" class="btn-ghost"><span data-icon="image"></span> Thumbnails de capítulos</button>
+              <button id="peak-thumb-btn" class="btn-ghost"><span data-icon="sparkles"></span> Thumb do peak</button>
+              <button id="hook-btn" class="btn-ghost"><span data-icon="wand"></span> Gerar hook 4s</button>
               <button id="emojify-btn" class="btn-ghost">😄 Decorar legendas com emoji</button>
             </div>
             <div id="thumbs-grid" class="thumbs-grid"></div>
