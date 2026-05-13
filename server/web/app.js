@@ -195,6 +195,11 @@ async function runSearch(q) {
 async function loadProject(id) {
   const p = await api(`/api/projects/${id}`);
   state.current = p;
+  // Persist so a refresh / share-link lands back on the same project.
+  try { localStorage.setItem("hfvp.current_project", id); } catch {}
+  if (location.hash !== `#p/${id}`) {
+    history.replaceState(null, "", `#p/${id}`);
+  }
   attachEventStream(id);
   renderStaleWarnings(p);
   renderCutsTimeline(p);
@@ -2090,9 +2095,7 @@ async function archiveProject() {
     const r = await api(`/api/projects/${state.current.id}/archive`, { method: "POST" });
     log(`<span data-icon=&quot;check&quot;></span> archived: ${r.archived}`, "ok");
     toast(`Arquivado: ${r.archived}`, "ok");
-    state.current = null;
-    $("#project-view").classList.add("hidden");
-    $("#empty").classList.remove("hidden");
+    clearActiveProject();
     await refreshList();
   } catch (e) {
     log(`✗ archive: ${e.message}`, "err");
@@ -2254,6 +2257,14 @@ async function doExport() {
   }
 }
 
+function clearActiveProject() {
+  state.current = null;
+  try { localStorage.removeItem("hfvp.current_project"); } catch {}
+  if (location.hash.startsWith("#p/")) history.replaceState(null, "", location.pathname);
+  $("#project-view").classList.add("hidden");
+  $("#empty").classList.remove("hidden");
+}
+
 async function deleteProject() {
   if (!state.current) return;
   if (!(await brandedConfirm(
@@ -2261,9 +2272,7 @@ async function deleteProject() {
     {title: "Excluir projeto", okText: "Excluir"}
   ))) return;
   await api(`/api/projects/${state.current.id}`, { method: "DELETE" });
-  state.current = null;
-  $("#project-view").classList.add("hidden");
-  $("#empty").classList.remove("hidden");
+  clearActiveProject();
   await refreshList();
 }
 
@@ -3200,6 +3209,36 @@ function bind() {
 
 bind();
 refreshList();
+restoreActiveProject();
+
+async function restoreActiveProject() {
+  // Priority: URL hash (so shared links work) → localStorage (so a plain
+  // refresh keeps context). Falls back to empty state on failure.
+  let want = null;
+  const m = location.hash.match(/^#p\/([\w-]+)/);
+  if (m) want = m[1];
+  if (!want) {
+    try { want = localStorage.getItem("hfvp.current_project"); } catch {}
+  }
+  if (!want) return;
+  try {
+    await loadProject(want);
+  } catch (e) {
+    // Stale id (project deleted, etc) — clear and stay on home.
+    try { localStorage.removeItem("hfvp.current_project"); } catch {}
+    if (location.hash.startsWith("#p/")) history.replaceState(null, "", location.pathname);
+  }
+}
+
+// Back/forward navigation — sync project switch with the URL.
+window.addEventListener("hashchange", () => {
+  const m = location.hash.match(/^#p\/([\w-]+)/);
+  if (m && m[1] !== state.current?.id) {
+    loadProject(m[1]).catch(() => {});
+  } else if (!m && state.current) {
+    clearActiveProject();
+  }
+});
 
 // ---- Reels (animation overlays) -------------------------------------------
 
