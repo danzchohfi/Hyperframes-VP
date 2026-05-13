@@ -438,7 +438,7 @@ async function loadProject(id) {
   renderMulticamChecklist(p);
   const etaEl = document.getElementById("podcast-1click-eta");
   if (etaEl) etaEl.textContent = podcastEtaHint(p);
-  maybeSuggestMulticamMode(p);
+  applyModeFiltering();  // updates topbar kind pill + section visibility
 
   const preview = $("#preview");
   if (p.source_filename) {
@@ -890,15 +890,83 @@ function attachEventStream(pid) {
 }
 
 async function newProject() {
-  const name = prompt("Nome do projeto:", "Meu vídeo");
-  if (!name) return;
+  const choice = await openCreateProjectModal();
+  if (!choice) return;
   const p = await api("/api/projects", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name: choice.name, kind: choice.kind }),
   });
   await refreshList();
   await loadProject(p.id);
+}
+
+// Resolves with { name, kind } or null when the user cancels.
+function openCreateProjectModal() {
+  return new Promise((resolve) => {
+    const backdrop = document.getElementById("create-project-backdrop");
+    const nameInput = document.getElementById("cp-name");
+    const createBtn = document.getElementById("cp-create");
+    const cancelBtn = document.getElementById("cp-cancel");
+    const closeBtn  = document.getElementById("cp-close");
+    const advanced  = document.getElementById("cp-advanced");
+    const cards = backdrop.querySelectorAll(".kind-card");
+    if (!backdrop || !nameInput) return resolve(null);
+
+    let selectedKind = null;
+
+    function syncEnabled() {
+      const ok = nameInput.value.trim().length > 0 && !!selectedKind;
+      createBtn.disabled = !ok;
+    }
+    function selectKind(kind) {
+      selectedKind = kind;
+      for (const c of cards) c.classList.toggle("selected", c.dataset.kind === kind);
+      advanced.classList.toggle("selected", kind === "general");
+      syncEnabled();
+    }
+
+    nameInput.value = "Meu vídeo";
+    selectedKind = null;
+    syncEnabled();
+    backdrop.classList.remove("hidden");
+    setTimeout(() => { nameInput.focus(); nameInput.select(); }, 50);
+
+    function cleanup(result) {
+      backdrop.classList.add("hidden");
+      nameInput.removeEventListener("input", syncEnabled);
+      cards.forEach(c => c.removeEventListener("click", onCard));
+      advanced.removeEventListener("click", onAdvanced);
+      createBtn.removeEventListener("click", onCreate);
+      cancelBtn.removeEventListener("click", onCancel);
+      closeBtn.removeEventListener("click", onCancel);
+      backdrop.removeEventListener("click", onBackdrop);
+      document.removeEventListener("keydown", onKey);
+      resolve(result);
+    }
+    function onCard(e)     { selectKind(e.currentTarget.dataset.kind); }
+    function onAdvanced()  { selectKind("general"); }
+    function onCreate()    {
+      if (createBtn.disabled) return;
+      cleanup({ name: nameInput.value.trim(), kind: selectedKind });
+    }
+    function onCancel()    { cleanup(null); }
+    function onBackdrop(e) { if (e.target === backdrop) cleanup(null); }
+    function onKey(e)      {
+      if (e.key === "Escape") cleanup(null);
+      if (e.key === "Enter" && !createBtn.disabled) onCreate();
+    }
+
+    nameInput.addEventListener("input", syncEnabled);
+    cards.forEach(c => c.addEventListener("click", onCard));
+    advanced.addEventListener("click", onAdvanced);
+    createBtn.addEventListener("click", onCreate);
+    cancelBtn.addEventListener("click", onCancel);
+    closeBtn.addEventListener("click", onCancel);
+    backdrop.addEventListener("click", onBackdrop);
+    document.addEventListener("keydown", onKey);
+    if (window.HFIcons) HFIcons.render(backdrop);
+  });
 }
 
 async function uploadFile(file) {
@@ -3038,69 +3106,73 @@ function activeSection() {
   return localStorage.getItem("hfvp.section") || "overview";
 }
 
-function activeMode() {
-  return localStorage.getItem("hfvp.mode") || "podcast";
+// The active project "kind" drives which sidebar sections are visible.
+// It's persisted server-side (state.kind) — frozen for the project unless
+// the user explicitly changes it via the topbar "Tipo" pill.
+function activeKind() {
+  return (state.current && state.current.kind) || "podcast";
 }
 
-function inferMode(p) {
-  // Suggest a default mode based on project shape; user can override.
-  if (!p) return "podcast";
-  if ((p.clips || []).length > 0) return "vlog";
-  if ((p.angles || []).length > 0) return "multicam";
-  return "podcast";
-}
-
-// When the project picks up angles and the user is still on the default
-// "podcast" mode, prompt them to switch to multicam. We track the
-// project ids we've already nudged so the toast doesn't reappear.
-const _multicamNudged = new Set();
-function maybeSuggestMulticamMode(p) {
-  if (!p || !p.id) return;
-  if (_multicamNudged.has(p.id)) return;
-  if ((p.angles || []).length < 1) return;
-  if (activeMode() !== "podcast") return;   // already on multicam / vlog / all
-  _multicamNudged.add(p.id);
-  // Subtle toast with a switch action — non-blocking.
-  if (typeof toast === "function") {
-    toast(
-      `<span data-icon="film" data-icon-size="14"></span> ${p.angles.length} câmera(s) extra(s) detectadas. <a href="#" data-act="switch-multicam" style="color:var(--accent);font-weight:600">Mudar pra Multicam?</a>`,
-      "info",
-      8000,
-    );
-    // The toast container is dynamic — wire the click via event delegation.
-    setTimeout(() => {
-      const link = document.querySelector('[data-act="switch-multicam"]');
-      if (link) link.addEventListener("click", (e) => {
-        e.preventDefault();
-        setMode("multicam");
-        setSection("multicam");
-      });
-    }, 50);
-  }
-}
-
-function setMode(mode) {
-  localStorage.setItem("hfvp.mode", mode);
-  applyModeFiltering();
-  for (const btn of document.querySelectorAll(".ws-mode")) {
-    btn.classList.toggle("active", btn.dataset.mode === mode);
-  }
-  // If the current section was hidden by the new mode, fall back to overview.
-  const currentBtn = document.querySelector(`.ws-section[data-section="${activeSection()}"]`);
-  if (currentBtn && currentBtn.dataset.modes && !currentBtn.dataset.modes.split(/\s+/).includes(mode)) {
-    setSection("overview");
-  } else {
-    setSection(activeSection());
-  }
-}
-
+// Kept under the old name so all existing call sites keep working,
+// but it now reads from project.kind instead of localStorage.
 function applyModeFiltering() {
-  const mode = activeMode();
+  const kind = activeKind();
   for (const btn of document.querySelectorAll(".ws-section")) {
     const modes = (btn.dataset.modes || "").split(/\s+/);
-    btn.style.display = modes.includes(mode) ? "" : "none";
+    btn.style.display = modes.includes(kind) ? "" : "none";
+  }
+  // Update topbar kind pill to match.
+  updateKindPill(kind);
+  // If the current section is now hidden, fall back to overview.
+  const currentBtn = document.querySelector(`.ws-section[data-section="${activeSection()}"]`);
+  if (currentBtn && currentBtn.dataset.modes && !currentBtn.dataset.modes.split(/\s+/).includes(kind)) {
+    setSection("overview");
   }
 }
+
+const KIND_META = {
+  podcast:          { label: "Podcast",          icon: "mic" },
+  multicam_podcast: { label: "Podcast multicam", icon: "film" },
+  reels:            { label: "Reels",            icon: "sparkles" },
+  vlog:             { label: "Vlog",             icon: "video" },
+  general:          { label: "Tudo",             icon: "settings" },
+};
+
+function updateKindPill(kind) {
+  const pill = document.getElementById("topbar-kind");
+  if (!pill) return;
+  const meta = KIND_META[kind] || KIND_META.podcast;
+  const iconEl = pill.querySelector(".kp-icon");
+  const labelEl = pill.querySelector(".kp-label");
+  if (iconEl) {
+    iconEl.dataset.icon = meta.icon;
+    if (window.HFIcons) HFIcons.render(pill);
+  }
+  if (labelEl) labelEl.textContent = meta.label;
+}
+
+async function setKind(kind) {
+  if (!state.current || !KIND_META[kind]) return;
+  try {
+    const updated = await api(`/api/projects/${state.current.id}/kind`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ kind }),
+    });
+    state.current.kind = updated.kind;
+    applyModeFiltering();
+    toast?.(`Tipo do projeto: ${KIND_META[kind].label}`, "ok");
+  } catch (e) {
+    toast?.(`Falha: ${e.message}`, "err");
+  }
+}
+
+// Backwards-compat shim: anything still calling activeMode/setMode/etc
+// continues to work without further refactor (they now go through kind).
+const activeMode = activeKind;
+function setMode(_) { /* no-op — sidebar is now driven by project.kind */ }
+function inferMode(p) { return (p && p.kind) || "podcast"; }
+function maybeSuggestMulticamMode() { /* superseded by explicit kind choice */ }
 
 function setSection(section) {
   const cats = new Set(SECTION_CATS[section] || SECTION_CATS.overview);
@@ -3158,9 +3230,6 @@ function bindSections() {
   for (const btn of document.querySelectorAll(".ws-section")) {
     btn.addEventListener("click", () => setSection(btn.dataset.section));
   }
-  for (const btn of document.querySelectorAll(".ws-mode")) {
-    btn.addEventListener("click", () => setMode(btn.dataset.mode));
-  }
   const drawer = document.querySelector(".ws-drawer-toggle");
   if (drawer) {
     drawer.addEventListener("click", () => {
@@ -3168,10 +3237,50 @@ function bindSections() {
       drawer.setAttribute("aria-expanded", String(open));
     });
   }
-  // Initial mode: stored or inferred from project.
-  let mode = localStorage.getItem("hfvp.mode");
-  if (!mode) mode = inferMode(state.current);
-  setMode(mode);
+  // Topbar pill — opens the kind popover.
+  const pill = document.getElementById("topbar-kind");
+  if (pill) pill.addEventListener("click", openKindPopover);
+  // Bind every kind-card click (both in the create modal and the popover)
+  // via event delegation; selection logic differs per host.
+  document.addEventListener("click", (e) => {
+    const card = e.target.closest("#kind-popover .kind-card, #kind-popover .cp-advanced");
+    if (card) {
+      const kind = card.dataset.kind;
+      if (kind) { setKind(kind); closeKindPopover(); }
+    }
+  });
+  // Drop the legacy localStorage key — kind now lives on the project.
+  try { localStorage.removeItem("hfvp.mode"); } catch {}
+  // Initial filter pass uses the current project's kind (or "podcast" if
+  // no project is open yet).
+  applyModeFiltering();
+}
+
+function openKindPopover() {
+  const pop = document.getElementById("kind-popover");
+  const pill = document.getElementById("topbar-kind");
+  if (!pop || !pill) return;
+  // Position the popover anchored to the pill.
+  const rect = pill.getBoundingClientRect();
+  pop.style.top = `${rect.bottom + 6}px`;
+  pop.style.right = `${window.innerWidth - rect.right}px`;
+  pop.classList.remove("hidden");
+  // Mark the current kind as selected.
+  const current = activeKind();
+  for (const c of pop.querySelectorAll(".kind-card, .cp-advanced")) {
+    c.classList.toggle("selected", c.dataset.kind === current);
+  }
+  // Click outside closes it.
+  setTimeout(() => document.addEventListener("click", _kindPopoverOutside), 0);
+}
+function closeKindPopover() {
+  const pop = document.getElementById("kind-popover");
+  if (pop) pop.classList.add("hidden");
+  document.removeEventListener("click", _kindPopoverOutside);
+}
+function _kindPopoverOutside(e) {
+  if (e.target.closest("#kind-popover") || e.target.closest("#topbar-kind")) return;
+  closeKindPopover();
 }
 
 // ---- Pre-flight checks (disable actions whose prerequisites are missing) ---

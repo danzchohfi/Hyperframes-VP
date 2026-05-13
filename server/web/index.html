@@ -55,6 +55,11 @@
             <div class="topbar-actions">
               <span id="topbar-status" class="pill" data-tone="neutral" style="display:none"></span>
               <button id="topbar-next-step" class="btn btn-soft btn-sm" style="display:none"></button>
+              <button id="topbar-kind" class="kind-pill" type="button" title="Tipo do projeto">
+                <span class="kp-icon" data-icon="mic" data-icon-size="14"></span>
+                <span class="kp-label">Podcast</span>
+                <span class="kp-edit muted">· mudar</span>
+              </button>
               <button id="topbar-cmdk" class="kbd-chip" title="Abrir comandos">
                 <span data-icon="search" data-icon-size="12"></span>
                 <span>Comandos</span>
@@ -108,50 +113,42 @@
 
           <div class="workspace">
             <aside class="ws-nav" id="ws-nav" aria-label="Seções do projeto">
-              <div class="ws-mode-group" role="tablist" aria-label="Modo de uso">
-                <button class="ws-mode" data-mode="podcast" title="Podcast com 1 câmera">Podcast</button>
-                <button class="ws-mode" data-mode="multicam" title="Podcast multicam">Multicam</button>
-                <button class="ws-mode" data-mode="reels" title="Reels com animações">Reels</button>
-                <button class="ws-mode" data-mode="vlog" title="Vlog (vários clipes)">Vlog</button>
-                <button class="ws-mode" data-mode="all" title="Mostra todas as ferramentas">Tudo</button>
-              </div>
-              <div class="ws-divider"></div>
-              <button class="ws-section" data-section="overview" data-modes="podcast multicam reels vlog all">
+              <button class="ws-section" data-section="overview" data-modes="podcast multicam_podcast reels vlog general">
                 <span class="ws-icon" data-icon="home"></span><span>Visão geral</span>
               </button>
               <div class="ws-divider"></div>
-              <button class="ws-section" data-section="upload" data-modes="podcast multicam reels vlog all">
+              <button class="ws-section" data-section="upload" data-modes="podcast multicam_podcast reels vlog general">
                 <span class="ws-icon" data-icon="upload-cloud"></span><span>Upload</span>
               </button>
-              <button class="ws-section" data-section="edit" data-modes="podcast multicam reels all">
+              <button class="ws-section" data-section="edit" data-modes="podcast multicam_podcast reels general">
                 <span class="ws-icon" data-icon="scissors"></span><span>Editar</span>
               </button>
-              <button class="ws-section" data-section="soundbites" data-modes="podcast multicam reels all">
+              <button class="ws-section" data-section="soundbites" data-modes="podcast multicam_podcast reels general">
                 <span class="ws-icon" data-icon="target"></span><span>Soundbites</span>
               </button>
-              <button class="ws-section" data-section="podcast" data-modes="podcast multicam all">
+              <button class="ws-section" data-section="podcast" data-modes="podcast multicam_podcast general">
                 <span class="ws-icon" data-icon="mic"></span><span>Podcast</span>
               </button>
-              <button class="ws-section" data-section="vlog" data-modes="vlog all">
+              <button class="ws-section" data-section="vlog" data-modes="vlog general">
                 <span class="ws-icon" data-icon="video"></span><span>Vlog</span>
               </button>
-              <button class="ws-section" data-section="multicam" data-modes="multicam all">
+              <button class="ws-section" data-section="multicam" data-modes="multicam_podcast general">
                 <span class="ws-icon" data-icon="film"></span><span>Multicam</span>
               </button>
-              <button class="ws-section" data-section="reels" data-modes="reels vlog all">
+              <button class="ws-section" data-section="reels" data-modes="reels vlog general">
                 <span class="ws-icon" data-icon="sparkles"></span><span>Reels</span>
               </button>
-              <button class="ws-section" data-section="brand" data-modes="podcast multicam reels vlog all">
+              <button class="ws-section" data-section="brand" data-modes="podcast multicam_podcast reels vlog general">
                 <span class="ws-icon" data-icon="palette"></span><span>Brand</span>
               </button>
-              <button class="ws-section" data-section="music" data-modes="vlog all">
+              <button class="ws-section" data-section="music" data-modes="vlog general">
                 <span class="ws-icon" data-icon="music"></span><span>Música</span>
               </button>
-              <button class="ws-section" data-section="export" data-modes="podcast multicam reels vlog all">
+              <button class="ws-section" data-section="export" data-modes="podcast multicam_podcast reels vlog general">
                 <span class="ws-icon" data-icon="send"></span><span>Exportar</span>
               </button>
               <div class="ws-divider"></div>
-              <button class="ws-section" data-section="all" data-modes="all">
+              <button class="ws-section" data-section="all" data-modes="general">
                 <span class="ws-icon" data-icon="layout"></span><span>Tudo</span>
               </button>
             </aside>
@@ -792,6 +789,74 @@
           <button id="confirm-ok" class="btn-primary">Confirmar</button>
         </div>
       </div>
+    </div>
+
+    <!-- Create-project modal: pick name + project kind -->
+    <div id="create-project-backdrop" class="confirm-backdrop hidden" aria-hidden="true">
+      <div class="create-project-dialog" role="dialog" aria-modal="true" aria-labelledby="cp-title">
+        <header class="cp-header">
+          <h2 id="cp-title">Criar novo projeto</h2>
+          <button class="cp-close" id="cp-close" type="button" aria-label="Fechar"><span data-icon="x" data-icon-size="18"></span></button>
+        </header>
+        <div class="cp-row">
+          <label class="cp-label" for="cp-name">Nome do projeto</label>
+          <input id="cp-name" type="text" placeholder="Meu vídeo" autocomplete="off" />
+        </div>
+        <div class="cp-row">
+          <label class="cp-label">O que vamos editar?</label>
+          <div class="kind-grid">
+            <button type="button" class="kind-card" data-kind="podcast">
+              <span class="kc-icon"><span data-icon="mic" data-icon-size="20"></span></span>
+              <span class="kc-title">Podcast</span>
+              <span class="kc-sub">1 câmera · cortes, capítulos, FCPXML</span>
+            </button>
+            <button type="button" class="kind-card" data-kind="multicam_podcast">
+              <span class="kc-icon"><span data-icon="film" data-icon-size="20"></span></span>
+              <span class="kc-title">Podcast multicam</span>
+              <span class="kc-sub">2+ câmeras · alterna por speaker</span>
+            </button>
+            <button type="button" class="kind-card" data-kind="reels">
+              <span class="kc-icon"><span data-icon="sparkles" data-icon-size="20"></span></span>
+              <span class="kc-title">Reels</span>
+              <span class="kc-sub">Vertical · animações · hook + CTA</span>
+            </button>
+            <button type="button" class="kind-card" data-kind="vlog">
+              <span class="kc-icon"><span data-icon="video" data-icon-size="20"></span></span>
+              <span class="kc-title">Vlog</span>
+              <span class="kc-sub">Vários clipes · narrativa</span>
+            </button>
+          </div>
+          <button type="button" class="cp-advanced" id="cp-advanced">Avançado — editar tudo manualmente (Tudo)</button>
+        </div>
+        <footer class="cp-actions">
+          <button id="cp-cancel" type="button" class="btn btn-ghost">Cancelar</button>
+          <button id="cp-create" type="button" class="btn btn-primary" disabled>Criar projeto</button>
+        </footer>
+      </div>
+    </div>
+
+    <!-- Topbar kind popover: change project type after creation -->
+    <div id="kind-popover" class="kind-popover hidden" role="dialog" aria-modal="false">
+      <div class="kp-title">Tipo do projeto</div>
+      <div class="kind-grid">
+        <button type="button" class="kind-card" data-kind="podcast">
+          <span class="kc-icon"><span data-icon="mic" data-icon-size="16"></span></span>
+          <span class="kc-title">Podcast</span>
+        </button>
+        <button type="button" class="kind-card" data-kind="multicam_podcast">
+          <span class="kc-icon"><span data-icon="film" data-icon-size="16"></span></span>
+          <span class="kc-title">Multicam</span>
+        </button>
+        <button type="button" class="kind-card" data-kind="reels">
+          <span class="kc-icon"><span data-icon="sparkles" data-icon-size="16"></span></span>
+          <span class="kc-title">Reels</span>
+        </button>
+        <button type="button" class="kind-card" data-kind="vlog">
+          <span class="kc-icon"><span data-icon="video" data-icon-size="16"></span></span>
+          <span class="kc-title">Vlog</span>
+        </button>
+      </div>
+      <button type="button" class="cp-advanced" data-kind="general">Avançado — Tudo</button>
     </div>
 
     <!-- Command palette (⌘K) -->

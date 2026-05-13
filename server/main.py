@@ -155,8 +155,16 @@ app.add_middleware(BasicAuthMiddleware)
 
 # ---- request models ----------------------------------------------------------
 
+VALID_KINDS = {"podcast", "multicam_podcast", "reels", "vlog", "general"}
+
+
 class CreateProjectIn(BaseModel):
     name: str = "Untitled"
+    kind: str = "podcast"   # "podcast" | "multicam_podcast" | "reels" | "vlog" | "general"
+
+
+class KindIn(BaseModel):
+    kind: str
 
 
 class CutOptionsIn(BaseModel):
@@ -359,7 +367,20 @@ def _load(pid: str) -> storage.ProjectState:
 
 @app.post("/api/projects")
 async def create_project(body: CreateProjectIn) -> dict[str, Any]:
+    kind = body.kind if body.kind in VALID_KINDS else "podcast"
     state = storage.create(body.name)
+    state.kind = kind
+    storage.save(state)
+    return state.model_dump()
+
+
+@app.put("/api/projects/{pid}/kind")
+async def set_project_kind(pid: str, body: KindIn) -> dict[str, Any]:
+    if body.kind not in VALID_KINDS:
+        raise HTTPException(400, f"kind must be one of {sorted(VALID_KINDS)}")
+    state = _load(pid)
+    state.kind = body.kind
+    storage.save(state)
     return state.model_dump()
 
 

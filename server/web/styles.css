@@ -1831,6 +1831,138 @@ a { color: inherit; text-decoration: none; }
   color: var(--text-dim);
 }
 
+/* ── Project-kind picker (modal + popover) ───────────────────────────── */
+
+.create-project-dialog {
+  width: min(640px, 92vw);
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: 0 30px 80px -20px rgba(0,0,0,0.6);
+  padding: 22px;
+  display: flex; flex-direction: column; gap: 16px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.cp-header {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.cp-header h2 {
+  margin: 0; font-size: 18px; letter-spacing: -0.015em;
+}
+.cp-close {
+  background: transparent; border: 0; cursor: pointer;
+  color: var(--text-mute); padding: 4px;
+  border-radius: var(--r-sm);
+  transition: background var(--t-fast, 120ms) var(--ease, ease), color var(--t-fast, 120ms) var(--ease, ease);
+}
+.cp-close:hover { background: var(--bg-hover); color: var(--text); }
+.cp-row { display: flex; flex-direction: column; gap: 8px; }
+.cp-row .cp-label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-mute); font-weight: 600;
+}
+#cp-name {
+  height: 38px; padding: 0 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  color: var(--text); font-size: 14px;
+}
+#cp-name:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+.kind-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+}
+.kind-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+  padding: 12px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--t-fast, 120ms) var(--ease, ease),
+              background var(--t-fast, 120ms) var(--ease, ease),
+              transform var(--t-fast, 120ms) var(--ease, ease);
+}
+.kind-card:hover { border-color: var(--line-strong); background: var(--bg-hover); }
+.kind-card.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.kind-card .kc-icon {
+  width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--bg-card); color: var(--accent);
+  border-radius: 8px;
+}
+.kind-card.selected .kc-icon { background: var(--accent); color: var(--bg); }
+.kind-card .kc-title { font-size: 13px; font-weight: 600; color: var(--text); }
+.kind-card .kc-sub { font-size: 11px; color: var(--text-dim); line-height: 1.4; }
+
+.cp-advanced {
+  align-self: flex-start;
+  background: transparent; border: 0; cursor: pointer;
+  color: var(--text-dim); font-size: 12px;
+  padding: 4px 0;
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.cp-advanced:hover { color: var(--text); }
+.cp-advanced.selected { color: var(--accent); font-weight: 600; }
+
+.cp-actions {
+  display: flex; justify-content: flex-end; gap: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+/* Topbar kind pill */
+.kind-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 28px; padding: 0 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text); font-size: 12px;
+  cursor: pointer;
+  transition: background var(--t-fast, 120ms) var(--ease, ease),
+              border-color var(--t-fast, 120ms) var(--ease, ease);
+}
+.kind-pill:hover { background: var(--bg-hover); border-color: var(--line-strong); }
+.kind-pill .kp-icon { color: var(--accent); display: inline-flex; }
+.kind-pill .kp-edit { font-size: 11px; }
+
+/* Kind popover anchored to the pill */
+.kind-popover {
+  position: fixed;
+  z-index: 200;
+  min-width: 280px;
+  padding: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: 0 20px 50px -10px rgba(0,0,0,0.6);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.kind-popover.hidden { display: none; }
+.kind-popover .kp-title {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-mute); font-weight: 600;
+}
+.kind-popover .kind-grid {
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+.kind-popover .kind-card {
+  padding: 8px 10px;
+  flex-direction: row; align-items: center; gap: 8px;
+}
+.kind-popover .kind-card .kc-icon { width: 24px; height: 24px; border-radius: 6px; }
+.kind-popover .cp-advanced { font-size: 11px; }
+
 /* Pipeline checklist (Multicam) */
 .checklist {
   margin: 4px 0 16px;

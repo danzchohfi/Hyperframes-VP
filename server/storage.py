@@ -63,7 +63,11 @@ class ProjectState(BaseModel):
     has_render: bool = False
     last_export: str | None = None
     angles: list[dict[str, Any]] = Field(default_factory=list)  # [{name, filename, duration, tags?}, ...]
-    mode: str = "single"  # single | vlog | podcast
+    mode: str = "single"  # legacy single | vlog | podcast — kept for compat
+    # Project type the user picked at creation. Drives which sections of
+    # the UI appear (sidebar filter). Frozen for the project unless the
+    # user explicitly changes via the topbar pill.
+    kind: str = "podcast"  # "podcast" | "multicam_podcast" | "reels" | "vlog" | "general"
     clips: list[dict[str, Any]] = Field(default_factory=list)  # [{id, name, filename, duration, has_transcript, summary?}, ...]
     music_suggestion: dict[str, Any] | None = None
     music_track: dict[str, Any] | None = None
