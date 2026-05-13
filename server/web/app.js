@@ -429,6 +429,8 @@ async function loadProject(id) {
   refreshHeader();
   refreshMediaList();
   renderMulticamChecklist(p);
+  const etaEl = document.getElementById("podcast-1click-eta");
+  if (etaEl) etaEl.textContent = podcastEtaHint(p);
 
   const preview = $("#preview");
   if (p.source_filename) {
@@ -3195,13 +3197,19 @@ function computeNextStep(p) {
   const mode = activeMode();
   const renders = p.has_render;
   if (!p.source_filename) return { msg: "Suba o vídeo de origem", section: "upload" };
-  if (!p.has_transcript) return { msg: "Rode a transcrição", section: "edit" };
+  // Fresh project with source uploaded → point at the 1-click pipeline
+  // (works for single-cam too; angles make the output richer).
+  if (!p.has_transcript) {
+    return (mode === "podcast" || mode === "multicam")
+      ? { msg: "Roda a edição automática (Multicam → 1-clique)", section: "multicam" }
+      : { msg: "Rode a transcrição", section: "edit" };
+  }
   if (mode === "multicam" && (p.angles || []).length === 0)
     return { msg: "Suba os outros ângulos", section: "multicam" };
   if (mode === "multicam" && !p.has_speakers)
-    return { msg: "Detecte os speakers pra orientar o multicam", section: "podcast" };
+    return { msg: "Detecte os speakers (ou roda o 1-clique)", section: "multicam" };
   if (mode === "multicam" && !p.has_camera_plan)
-    return { msg: "Rode 'escolher câmera por turno'", section: "multicam" };
+    return { msg: "Rode 'escolher câmera por turno' (ou o 1-clique)", section: "multicam" };
   if (mode === "multicam" && p.has_camera_plan && !renders)
     return { msg: "Renderize o multicam", section: "multicam" };
   if (mode === "podcast" && !p.has_cuts && !p.has_fillers)
@@ -3211,6 +3219,24 @@ function computeNextStep(p) {
   if (renders && !p.last_export?.endsWith?.(".fcpxml"))
     return { msg: "Exporte FCPXML pro Final Cut", section: "export" };
   return { msg: "Pronto — refinar no Final Cut", section: "export" };
+}
+
+// Compute a rough ETA per step using the source duration as a baseline.
+// These are "wall-time multipliers" against the source duration based on
+// what I measured on a typical Mac M1: transcribe ≈ 0.15× (Whisper API),
+// multicam render ≈ 0.6× (libx264 veryfast on 1080p), etc.
+function podcastEtaHint(p) {
+  const dur = (p && p.source_duration) || 0;
+  if (!dur) return "~5–15 min";
+  const transcribe = dur * 0.15;
+  const apply = dur * 0.10;
+  const level = dur * 0.05;
+  const sync = Math.min(dur * 0.04, 45);
+  const render = dur * 0.6;
+  const total = transcribe + apply + level + sync + render + 30;  // +30s overhead
+  if (total < 60) return `~${Math.round(total)}s`;
+  if (total < 600) return `~${Math.round(total / 60)} min`;
+  return `~${Math.round(total / 60)} min`;
 }
 
 function refreshOverview() {
