@@ -196,9 +196,22 @@ function log(msg, kind = "") {
   const ts = new Date().toLocaleTimeString();
   const line = document.createElement("div");
   line.className = kind;
-  line.textContent = `[${ts}] ${msg}`;
+  // `msg` is allowed to contain our own data-icon spans (kind="ok" etc.).
+  // We don't run user-supplied text through innerHTML, so XSS surface
+  // stays at "self-authored markup + decoded filename/error strings",
+  // which is acceptable for a local tool. HFIcons.render hydrates spans.
+  line.innerHTML = `[${ts}] ${msg}`;
   el.appendChild(line);
+  if (window.HFIcons) HFIcons.render(line);
   el.scrollTop = el.scrollHeight;
+}
+
+// Set a button label that may include data-icon spans. textContent would
+// render the markup literally; this hydrates icons after assignment.
+function setBtnHTML(btn, html) {
+  if (!btn) return;
+  btn.innerHTML = html;
+  if (window.HFIcons) HFIcons.render(btn);
 }
 
 async function refreshList() {
@@ -519,7 +532,7 @@ function renderAngles(p) {
     li.querySelector(".a-tag").onclick = async (e) => {
       const btn = e.currentTarget;
       btn.disabled = true;
-      btn.textContent = "<span data-icon=&quot;wand-2&quot;></span> Analisando...";
+      setBtnHTML(btn, "<span data-icon=&quot;wand-2&quot;></span> Analisando...");
       try {
         const updated = await api(`/api/projects/${p.id}/angles/${a.index}/tag`, { method: "POST" });
         log(`<span data-icon=&quot;check&quot;></span> Ângulo "${updated.name}" → ${updated.tags.summary}`, "ok");
@@ -527,7 +540,7 @@ function renderAngles(p) {
       } catch (err) {
         log(`✗ tag: ${err.message}`, "err");
         btn.disabled = false;
-        btn.textContent = "<span data-icon=&quot;tag&quot;></span> Tag IA";
+        setBtnHTML(btn, "<span data-icon=&quot;tag&quot;></span> Tag IA");
       }
     };
     list.appendChild(li);
@@ -907,7 +920,7 @@ async function extractSoundbites() {
   if (!state.current) return;
   const btn = $("#soundbites-btn");
   btn.disabled = true;
-  btn.textContent = "<span data-icon=&quot;target&quot;></span> Analisando...";
+  setBtnHTML(btn, "<span data-icon=&quot;target&quot;></span> Analisando...");
   log("<span data-icon=&quot;play&quot;></span> soundbites");
   try {
     const a = await api(`/api/projects/${state.current.id}/soundbites`, { method: "POST" });
@@ -917,7 +930,7 @@ async function extractSoundbites() {
     log(`✗ soundbites: ${e.message}`, "err");
   } finally {
     btn.disabled = false;
-    btn.textContent = "<span data-icon=&quot;target&quot;></span> Extrair soundbites";
+    setBtnHTML(btn, "<span data-icon=&quot;target&quot;></span> Extrair soundbites");
   }
 }
 
@@ -925,7 +938,7 @@ async function buildStory() {
   if (!state.current) return;
   const btn = $("#story-btn");
   btn.disabled = true;
-  btn.textContent = "<span data-icon=&quot;file-text&quot;></span> Pensando...";
+  setBtnHTML(btn, "<span data-icon=&quot;file-text&quot;></span> Pensando...");
   log("<span data-icon=&quot;play&quot;></span> story");
   try {
     const s = await api(`/api/projects/${state.current.id}/story`, {
@@ -939,7 +952,7 @@ async function buildStory() {
     log(`✗ story: ${e.message}`, "err");
   } finally {
     btn.disabled = false;
-    btn.textContent = "<span data-icon=&quot;file-text&quot;></span> Propor roteiro";
+    setBtnHTML(btn, "<span data-icon=&quot;file-text&quot;></span> Propor roteiro");
   }
 }
 
@@ -1063,7 +1076,7 @@ async function smartReframe() {
   if (!state.current) return;
   const btn = $("#smart-reframe-btn");
   btn.disabled = true;
-  btn.textContent = "<span data-icon=&quot;sparkles&quot;></span> Detectando subject...";
+  setBtnHTML(btn, "<span data-icon=&quot;sparkles&quot;></span> Detectando subject...");
   log("<span data-icon=&quot;play&quot;></span> smart reframe");
   try {
     const r = await api(`/api/projects/${state.current.id}/smart-reframe`, {
@@ -1081,7 +1094,7 @@ async function smartReframe() {
     log(`✗ smart-reframe: ${e.message}`, "err");
   } finally {
     btn.disabled = false;
-    btn.textContent = "<span data-icon=&quot;sparkles&quot;></span> Smart crop (IA)";
+    setBtnHTML(btn, "<span data-icon=&quot;sparkles&quot;></span> Smart crop (IA)");
   }
 }
 
@@ -2466,7 +2479,7 @@ async function suggestMusic() {
   if (!state.current) return;
   const btn = $("#music-suggest-btn");
   btn.disabled = true;
-  btn.textContent = "<span data-icon=&quot;sparkles&quot;></span> Pensando...";
+  setBtnHTML(btn, "<span data-icon=&quot;sparkles&quot;></span> Pensando...");
   log("<span data-icon=&quot;play&quot;></span> music suggest");
   try {
     const s = await api(`/api/projects/${state.current.id}/music/suggest`, { method: "POST" });
@@ -2476,7 +2489,7 @@ async function suggestMusic() {
     log(`✗ music suggest: ${e.message}`, "err");
   } finally {
     btn.disabled = false;
-    btn.textContent = "<span data-icon=&quot;sparkles&quot;></span> Sugerir música";
+    setBtnHTML(btn, "<span data-icon=&quot;sparkles&quot;></span> Sugerir música");
   }
 }
 
