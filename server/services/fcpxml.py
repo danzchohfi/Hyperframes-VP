@@ -112,11 +112,25 @@ def _pick_rate(num: int, den: int) -> tuple[str, str, int]:
     return (best[1], best[2], best[3])
 
 
-def _t(seconds: float, tb: int) -> str:
-    """Frame-aligned rational time."""
+def _t(seconds: float, tb: int, fd_num: int = 1) -> str:
+    """Frame-aligned rational time.
+
+    FCPXML requires every offset/duration on a clip/sequence to land on
+    an edit-frame boundary. For NTSC rates (29.97 / 23.976 / 59.94)
+    the frame duration is e.g. 1001/30000s, so every value must be
+    `n * 1001 / 30000` for some integer n. Otherwise FCP rejects the
+    XML with "The item is not on an edit frame boundary".
+
+    Pass `fd_num` from the format's `frame_duration` string (the
+    numerator, e.g. 1001 for 29.97). When omitted, falls back to
+    tick-level rounding — fine for 24/25/30/50/60 since their frame
+    duration numerator is 100 and the time base is a multiple of 100,
+    but unsafe for NTSC rates. Use the metadata.
+    """
     if seconds <= 0:
         return "0s"
-    ticks = round(seconds * tb)
+    frames = round(seconds * tb / max(fd_num, 1))
+    ticks = frames * max(fd_num, 1)
     return f"{ticks}/{tb}s"
 
 
@@ -130,11 +144,18 @@ async def _video_meta(source: Path) -> dict[str, Any]:
     num = int(rf[0])
     den = int(rf[1]) if len(rf) > 1 and int(rf[1]) > 0 else 1
     fd, suffix, tb = _pick_rate(num, den)
+    # Parse numerator out of e.g. "1001/30000s" so callers can pass it
+    # to _t() for proper NTSC frame snapping.
+    try:
+        fd_num = int(fd.split("/", 1)[0])
+    except (ValueError, IndexError):
+        fd_num = 1
     duration = float(info.get("format", {}).get("duration") or 0.0)
     return {
         "width": width,
         "height": height,
         "frame_duration": fd,
+        "frame_num": fd_num,
         "format_name": f"FFVideoFormat{height}{suffix}",
         "time_base": tb,
         "duration": duration,
@@ -153,6 +174,7 @@ async def build_single_cam_fcpxml(
 ) -> str:
     meta = await _video_meta(source)
     tb = meta["time_base"]
+    fd_num = meta["frame_num"]
     src_dur = meta["duration"] or 0.0
 
     fcpxml = ET.Element("fcpxml", {"version": "1.10"})
@@ -175,7 +197,7 @@ async def build_single_cam_fcpxml(
         asset_id="r2",
         name=source.stem,
         src_path=source,
-        duration_str=_t(src_dur, tb),
+        duration_str=_t(src_dur, tb, fd_num),
         color_profile=source_color_profile,
     )
 
@@ -191,7 +213,7 @@ async def build_single_cam_fcpxml(
         "sequence",
         {
             "format": "r1",
-            "duration": _t(timeline_dur, tb),
+            "duration": _t(timeline_dur, tb, fd_num),
             "tcStart": "0s",
             "tcFormat": "NDF",
             "audioLayout": "stereo",
@@ -210,9 +232,9 @@ async def build_single_cam_fcpxml(
             {
                 "ref": "r2",
                 "name": f"{project_name} cut {i + 1}",
-                "offset": _t(offset, tb),
-                "start": _t(s, tb),
-                "duration": _t(clip_dur, tb),
+                "offset": _t(offset, tb, fd_num),
+                "start": _t(s, tb, fd_num),
+                "duration": _t(clip_dur, tb, fd_num),
                 "tcFormat": "NDF",
             },
         )
@@ -224,8 +246,8 @@ async def build_single_cam_fcpxml(
                     clip,
                     "marker",
                     {
-                        "start": _t(ws, tb),
-                        "duration": _t(max(we - ws, 1 / 30.0), tb),
+                        "start": _t(ws, tb, fd_num),
+                        "duration": _t(max(we - ws, 1 / 30.0), tb, fd_num),
                         "value": str(w.get("word", "")).strip(),
                     },
                 )
@@ -251,6 +273,7 @@ async def build_multitrack_fcpxml(
     """
     meta = await _video_meta(source)
     tb = meta["time_base"]
+    fd_num = meta["frame_num"]
     src_dur = meta["duration"] or 0.0
     broll_angles = broll_angles or []
     broll_placements = broll_placements or []
@@ -275,7 +298,7 @@ async def build_multitrack_fcpxml(
         asset_id="r2",
         name=source.stem,
         src_path=source,
-        duration_str=_t(src_dur, tb),
+        duration_str=_t(src_dur, tb, fd_num),
         color_profile=source_color_profile,
     )
     # B-roll assets
@@ -288,7 +311,7 @@ async def build_multitrack_fcpxml(
             asset_id=f"b{i + 1}",
             name=name,
             src_path=path,
-            duration_str=_t(m["duration"] or 0.0, tb),
+            duration_str=_t(m["duration"] or 0.0, tb, fd_num),
             color_profile=source_color_profile,
         )
 
@@ -304,7 +327,7 @@ async def build_multitrack_fcpxml(
         "sequence",
         {
             "format": "r1",
-            "duration": _t(timeline_dur, tb),
+            "duration": _t(timeline_dur, tb, fd_num),
             "tcStart": "0s",
             "tcFormat": "NDF",
             "audioLayout": "stereo",
@@ -325,9 +348,9 @@ async def build_multitrack_fcpxml(
             {
                 "ref": "r2",
                 "name": f"{project_name} cut {i + 1}",
-                "offset": _t(offset, tb),
-                "start": _t(s, tb),
-                "duration": _t(clip_dur, tb),
+                "offset": _t(offset, tb, fd_num),
+                "start": _t(s, tb, fd_num),
+                "duration": _t(clip_dur, tb, fd_num),
                 "tcFormat": "NDF",
             },
         )
@@ -341,8 +364,8 @@ async def build_multitrack_fcpxml(
                     clip,
                     "marker",
                     {
-                        "start": _t(ws, tb),
-                        "duration": _t(max(we - ws, 1 / 30.0), tb),
+                        "start": _t(ws, tb, fd_num),
+                        "duration": _t(max(we - ws, 1 / 30.0), tb, fd_num),
                         "value": str(w.get("word", "")).strip(),
                     },
                 )
@@ -376,9 +399,9 @@ async def build_multitrack_fcpxml(
                 "ref": f"b{ai + 1}",
                 "lane": "1",
                 "name": broll_angles[ai][0],
-                "offset": _t(tl_off - host_start, tb),
-                "start": _t(ang_in, tb),
-                "duration": _t(tl_dur, tb),
+                "offset": _t(tl_off - host_start, tb, fd_num),
+                "start": _t(ang_in, tb, fd_num),
+                "duration": _t(tl_dur, tb, fd_num),
                 "audioRole": "music",
             },
         )
@@ -421,6 +444,7 @@ async def build_multicam_fcpxml(
     primary_name, primary_path = angles[primary_index]
     meta = await _video_meta(primary_path)
     tb = meta["time_base"]
+    fd_num = meta["frame_num"]
     src_dur = meta["duration"] or 0.0
 
     fcpxml = ET.Element("fcpxml", {"version": "1.10"})
@@ -451,7 +475,7 @@ async def build_multicam_fcpxml(
             asset_id=aid,
             name=name,
             src_path=path,
-            duration_str=_t(m["duration"] or 0.0, tb),
+            duration_str=_t(m["duration"] or 0.0, tb, fd_num),
             color_profile=source_color_profile,
         )
 
@@ -486,9 +510,9 @@ async def build_multicam_fcpxml(
             {
                 "ref": asset_ids[i],
                 "name": name,
-                "offset": _t(off, tb),
+                "offset": _t(off, tb, fd_num),
                 "start": "0s",
-                "duration": _t(angle_durations[i], tb),
+                "duration": _t(angle_durations[i], tb, fd_num),
             },
         )
 
@@ -525,7 +549,7 @@ async def build_multicam_fcpxml(
         "sequence",
         {
             "format": "r1",
-            "duration": _t(timeline_dur, tb),
+            "duration": _t(timeline_dur, tb, fd_num),
             "tcStart": "0s",
             "tcFormat": "NDF",
             "audioLayout": "stereo",
@@ -543,7 +567,7 @@ async def build_multicam_fcpxml(
         return text if len(text) <= n else text[: n - 1] + "…"
 
     def _marker_for(start_s: float, value: str, dur_s: float = 1 / 30.0) -> dict:
-        return {"start": _t(start_s, tb), "duration": _t(max(dur_s, 1 / 30.0), tb), "value": value}
+        return {"start": _t(start_s, tb, fd_num), "duration": _t(max(dur_s, 1 / 30.0), tb, fd_num), "value": value}
 
     # Pre-collect all markers into (start, marker_dict) so we can place them
     # on the correct clip. Each marker is rendered relative to the source
@@ -592,9 +616,9 @@ async def build_multicam_fcpxml(
             {
                 "ref": multi_id,
                 "name": f"{project_name} · {angles[max(0, min(ai, len(angles) - 1))][0]}",
-                "offset": _t(offset, tb),
-                "start": _t(s, tb),
-                "duration": _t(clip_dur, tb),
+                "offset": _t(offset, tb, fd_num),
+                "start": _t(s, tb, fd_num),
+                "duration": _t(clip_dur, tb, fd_num),
             },
         )
         ET.SubElement(
@@ -611,8 +635,8 @@ async def build_multicam_fcpxml(
                     mc,
                     "marker",
                     {
-                        "start": _t(ws, tb),
-                        "duration": _t(max(we - ws, 1 / 30.0), tb),
+                        "start": _t(ws, tb, fd_num),
+                        "duration": _t(max(we - ws, 1 / 30.0), tb, fd_num),
                         "value": str(w.get("word", "")).strip(),
                     },
                 )
