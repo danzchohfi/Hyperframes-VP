@@ -473,6 +473,32 @@
             <header class="section-head"><span class="eyebrow">Multicam</span><h2>Câmeras adicionais</h2></header>
             <p class="card-help">O <strong>vídeo de origem</strong> (Captura) já é a Câmera A. Suba aqui a B, C, D… O sistema sincroniza pelo áudio e escolhe qual câmera mostrar em cada turno do podcast.</p>
 
+            <div id="podcast-1click-banner" class="hero-cta">
+              <div class="hero-cta-body">
+                <div class="hero-cta-eyebrow"><span data-icon="wand-2"></span> Edição automática</div>
+                <h3>Editar meu podcast multicam</h3>
+                <p>Roda tudo sozinho: transcreve, detecta speakers + capítulos, corta silêncios e muletas, sincroniza câmeras, escolhe qual ângulo mostrar em cada turno, renderiza o vídeo final e gera o FCPXML pro Final Cut. ~5-15 min dependendo do tamanho do podcast.</p>
+              </div>
+              <div class="hero-cta-actions">
+                <button id="podcast-1click-btn" class="btn btn-primary btn-lg" data-prereq="podcast_1click"><span data-icon="zap"></span> Editar com 1 clique</button>
+                <select id="podcast-1click-lang" class="inline-select" title="Idioma do áudio (auto = Whisper detecta)">
+                  <option value="">Idioma: auto</option>
+                  <option value="pt">Português</option>
+                  <option value="en">Inglês</option>
+                  <option value="es">Espanhol</option>
+                </select>
+              </div>
+              <div id="podcast-1click-progress" class="hero-progress hidden">
+                <div class="hp-bar"><div class="hp-bar-fill" id="hp-fill"></div></div>
+                <div class="hp-label">
+                  <span class="hp-step" id="hp-step">…</span>
+                  <span class="hp-pct" id="hp-pct">0%</span>
+                </div>
+                <ol class="hp-steps" id="hp-steps"></ol>
+              </div>
+              <div id="podcast-1click-result" class="hero-result hidden"></div>
+            </div>
+
             <div id="multicam-checklist" class="checklist"></div>
             <div class="row">
               <div class="dropzone small" id="angle-zone" role="button" tabindex="0">

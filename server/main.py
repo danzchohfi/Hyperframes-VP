@@ -82,6 +82,7 @@ from .services import vlog_pipeline as vlog_pipeline_svc
 from .services import vlog_broll as vlog_broll_svc
 from .services import take_grouping as take_grouping_svc
 from .services import podcast_pipeline as podcast_pipeline_svc
+from .services import podcast_multicam_pipeline as podcast_mc_pipeline_svc
 from .services import shorts as shorts_svc
 from .services import yt_thumbnail as yt_thumb_svc
 from .services import repetitions as repetitions_svc
@@ -3888,6 +3889,27 @@ async def podcast_pipeline_endpoint(pid: str, body: PodcastPipelineIn) -> dict[s
         return await podcast_pipeline_svc.run(ctx, language=body.language)
 
     job_id = await jobs_svc.manager.submit(pid, "podcast_pipeline", _run)
+    return {"job_id": job_id, "status": "pending"}
+
+
+@app.post("/api/projects/{pid}/podcast-multicam-pipeline")
+async def podcast_multicam_pipeline_endpoint(pid: str, body: PodcastPipelineIn) -> dict[str, Any]:
+    """One-click "edit my podcast multicam" pipeline.
+
+    Runs: transcribe → speakers → chapters → silences/fillers → apply
+    edits → level speakers → multicam-sync → multicam-pick → multicam-
+    render → FCPXML export → social copy. Each step idempotent: skips
+    if already done. Returns a job_id; subscribe to /events for live
+    progress + final outputs payload.
+    """
+    state = _load(pid)
+    if not state.source_filename:
+        raise HTTPException(400, "Suba o vídeo de origem antes de rodar o pipeline.")
+
+    async def _run(ctx: jobs_svc.JobContext) -> dict[str, Any]:
+        return await podcast_mc_pipeline_svc.run(ctx, language=body.language)
+
+    job_id = await jobs_svc.manager.submit(pid, "podcast_multicam_pipeline", _run)
     return {"job_id": job_id, "status": "pending"}
 
 

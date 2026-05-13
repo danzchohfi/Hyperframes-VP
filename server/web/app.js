@@ -3146,6 +3146,7 @@ const PREREQS = {
   multicam_render: p => p.has_camera_plan,
   fcpxml:          p => !!p.source_filename,
   burn_caps:       p => p.has_render && p.has_transcript,
+  podcast_1click:  p => !!p.source_filename,   // works single-cam too; angles make it richer
 };
 
 const PREREQ_LABELS = {
@@ -3157,6 +3158,7 @@ const PREREQ_LABELS = {
   multicam_render: "Rode 'escolher câmera' primeiro",
   fcpxml:          "Suba o vídeo de origem",
   burn_caps:       "Precisa de render + transcrição",
+  podcast_1click:  "Suba o vídeo de origem primeiro",
 };
 
 function applyPrereqs() {
@@ -3496,6 +3498,176 @@ function bind() {
 bind();
 refreshList();
 restoreActiveProject();
+bindPodcast1Click();
+
+// ── 1-click podcast multicam pipeline ──────────────────────────────────────
+
+const POD1CLICK_STEPS = [
+  { key: "transcribe",      label: "Transcrever (Whisper)" },
+  { key: "speakers",        label: "Detectar speakers" },
+  { key: "chapters",        label: "Detectar capítulos" },
+  { key: "silences",        label: "Silêncios + muletas" },
+  { key: "apply_edits",     label: "Aplicar cortes + LUT" },
+  { key: "level_speakers",  label: "Nivelar speakers" },
+  { key: "multicam_sync",   label: "Sincronizar câmeras" },
+  { key: "multicam_pick",   label: "Escolher câmera por turno" },
+  { key: "multicam_render", label: "Renderizar multicam" },
+  { key: "fcpxml_export",   label: "Gerar FCPXML" },
+  { key: "social_copy",     label: "Copy social" },
+];
+
+let _pod1clickJobId = null;
+
+function bindPodcast1Click() {
+  const btn = document.getElementById("podcast-1click-btn");
+  if (!btn) return;
+  btn.addEventListener("click", startPodcast1Click);
+  // Render the step list shell once
+  const stepsEl = document.getElementById("hp-steps");
+  if (stepsEl) {
+    stepsEl.innerHTML = POD1CLICK_STEPS.map(s =>
+      `<li class="hp-row" data-step="${s.key}">
+        <span class="hp-mark"><span data-icon="chevron-right" data-icon-size="14"></span></span>
+        <span class="hp-name">${escapeHtml(s.label)}</span>
+        <span class="hp-msg muted"></span>
+      </li>`
+    ).join("");
+    if (window.HFIcons) HFIcons.render(stepsEl);
+  }
+}
+
+async function startPodcast1Click() {
+  if (!state.current) return;
+  const btn = document.getElementById("podcast-1click-btn");
+  const progress = document.getElementById("podcast-1click-progress");
+  const result = document.getElementById("podcast-1click-result");
+  if (!confirm("Vai rodar a pipeline inteira de edição (~5–15 min). Quer começar?")) return;
+  btn.disabled = true;
+  progress.classList.remove("hidden");
+  result.classList.add("hidden");
+  result.innerHTML = "";
+  // Reset step rows
+  for (const li of progress.querySelectorAll(".hp-row")) {
+    li.classList.remove("done", "warn", "running");
+    const msg = li.querySelector(".hp-msg"); if (msg) msg.textContent = "";
+    const mark = li.querySelector(".hp-mark");
+    if (mark) {
+      mark.innerHTML = `<span data-icon="chevron-right" data-icon-size="14"></span>`;
+      if (window.HFIcons) HFIcons.render(mark);
+    }
+  }
+  document.getElementById("hp-step").textContent = "Iniciando…";
+  document.getElementById("hp-pct").textContent = "0%";
+  document.getElementById("hp-fill").style.width = "0%";
+  const lang = document.getElementById("podcast-1click-lang")?.value || "";
+  try {
+    const res = await api(`/api/projects/${state.current.id}/podcast-multicam-pipeline`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(lang ? { language: lang } : {}),
+    });
+    _pod1clickJobId = res.job_id;
+  } catch (e) {
+    document.getElementById("hp-step").textContent = `✗ ${e.message}`;
+    btn.disabled = false;
+  }
+}
+
+// Hook into the existing SSE stream — extend the message handler to
+// recognize our job events.
+const _origAttachES = attachEventStream;
+attachEventStream = function(pid) {
+  _origAttachES(pid);
+  // Also listen for job events directly on state.sse (already attached)
+  if (state.sse) {
+    state.sse.addEventListener("message", (ev) => {
+      let data;
+      try { data = JSON.parse(ev.data); } catch { return; }
+      if (data.type === "job" && data.job_id === _pod1clickJobId) {
+        handlePodcast1ClickEvent(data);
+      }
+    });
+  }
+};
+
+function handlePodcast1ClickEvent(data) {
+  const pct = Math.round((data.progress || 0) * 100);
+  document.getElementById("hp-fill").style.width = `${pct}%`;
+  document.getElementById("hp-pct").textContent = `${pct}%`;
+  if (data.message) document.getElementById("hp-step").textContent = data.message;
+
+  if (data.status === "done") {
+    document.getElementById("hp-step").textContent = "✓ Tudo pronto!";
+    document.getElementById("hp-fill").style.width = "100%";
+    renderPodcast1ClickResult(data.result || {});
+    document.getElementById("podcast-1click-btn").disabled = false;
+  } else if (data.status === "error" || data.status === "cancelled") {
+    document.getElementById("hp-step").textContent = `✗ ${data.message || "falhou"}`;
+    document.getElementById("podcast-1click-btn").disabled = false;
+  }
+
+  // Step list: which step is "running" based on progress fraction.
+  // Use cumulative weights to figure out which step is active.
+  const cumPct = pct / 100;
+  let active = -1;
+  let acc = 0;
+  // Weights mirroring the server. Out of sync isn't catastrophic since the
+  // server already sends a label.
+  const weights = [0.18,0.06,0.03,0.04,0.10,0.06,0.05,0.05,0.35,0.02,0.06];
+  for (let i = 0; i < weights.length; i++) {
+    const next = acc + weights[i];
+    if (cumPct >= acc && cumPct < next) { active = i; break; }
+    acc = next;
+  }
+  if (active < 0 && cumPct >= 0.999) active = weights.length;
+  // Apply states
+  const rows = document.querySelectorAll("#hp-steps .hp-row");
+  rows.forEach((row, i) => {
+    row.classList.remove("running", "done");
+    let icon = "chevron-right";
+    if (i < active) { row.classList.add("done"); icon = "check"; }
+    else if (i === active) { row.classList.add("running"); icon = "rotate-cw"; }
+    const mark = row.querySelector(".hp-mark");
+    if (mark) {
+      mark.innerHTML = `<span data-icon="${icon}" data-icon-size="14"></span>`;
+      if (window.HFIcons) HFIcons.render(mark);
+    }
+  });
+}
+
+function renderPodcast1ClickResult(result) {
+  const root = document.getElementById("podcast-1click-result");
+  if (!root) return;
+  const outputs = result.outputs || {};
+  const warnings = result.warnings || [];
+  const cards = [];
+  function card(title, info, urlOpts) {
+    if (!info) return "";
+    const bytes = info.bytes ? fmtBytes(info.bytes) : "";
+    return `<a class="hr-card" href="${info.url}" download>
+      <div class="hr-icon"><span data-icon="download" data-icon-size="18"></span></div>
+      <div class="hr-meta">
+        <div class="hr-title">${escapeHtml(title)}</div>
+        <div class="hr-sub muted">${escapeHtml(info.name || "")} · ${escapeHtml(bytes)}</div>
+      </div>
+    </a>`;
+  }
+  cards.push(card("Vídeo multicam editado",  outputs.multicam));
+  cards.push(card("Vídeo single-cam (graded)", outputs.graded));
+  cards.push(card("Áudio com volumes nivelados", outputs.levelled));
+  cards.push(card("FCPXML pro Final Cut Pro",   outputs.fcpxml));
+  root.innerHTML = `
+    <div class="hr-head">
+      <span data-icon="check" data-icon-size="16"></span>
+      <strong>Tudo pronto.</strong>
+      ${warnings.length ? `<span class="muted">${warnings.length} aviso(s) — veja o log.</span>` : ""}
+    </div>
+    <div class="hr-grid">${cards.join("")}</div>
+    ${warnings.length ? `<details class="hr-warnings"><summary>${warnings.length} avisos</summary><ul>${warnings.map(w => `<li>${escapeHtml(w)}</li>`).join("")}</ul></details>` : ""}
+  `;
+  root.classList.remove("hidden");
+  if (window.HFIcons) HFIcons.render(root);
+}
 
 async function restoreActiveProject() {
   // Priority: URL hash (so shared links work) → localStorage (so a plain
