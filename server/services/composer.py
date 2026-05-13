@@ -438,7 +438,12 @@ def build_composition(
     # Chapter overlays ("Eddie cut" mode). Each chapter shows a flash card with
     # its name + summary for ~1.6s at the chapter boundary on the timeline.
     chapter_html = ""
-    if chapters:
+    # Skip chapter cards entirely on short clips (reels, hooks, etc.) —
+    # a full-frame cinematic card eating 1.8s of a 20s reel reads as
+    # an interruption, not a transition. Same logic: skip if the user
+    # only got 1 chapter back from the detector — that's "the whole
+    # video is one topic", not a structure worth signposting.
+    if chapters and main_dur >= 45.0 and len(chapters) >= 2:
         cards = []
         for i, ch in enumerate(chapters):
             ch_start = float(ch.get("start", 0.0)) + intro_dur

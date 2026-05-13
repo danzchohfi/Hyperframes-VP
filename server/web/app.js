@@ -3982,12 +3982,16 @@ function renderPodcast1ClickResult(result) {
   const fcpxmlPath = outputs.fcpxml && outputs.fcpxml.url
     ? `${pdirAbs(state.media)}/exports/${outputs.fcpxml.name}`
     : null;
+  // Surface sync warnings prominently — those are the most actionable
+  // for the editor and the easiest to miss inside a <details> roll-up.
+  const syncWarn = warnings.find(w => /multicam_sync|sync|lock/i.test(w));
   root.innerHTML = `
     <div class="hr-head">
       <span data-icon="check" data-icon-size="16"></span>
       <strong>Tudo pronto.</strong>
-      ${warnings.length ? `<span class="muted">${warnings.length} aviso(s) — veja o log.</span>` : ""}
+      ${warnings.length ? `<span class="tag warn">${warnings.length} aviso(s)</span>` : ""}
     </div>
+    ${syncWarn ? `<div class="hr-banner warn"><span data-icon="alert-triangle" data-icon-size="14"></span> ${escapeHtml(syncWarn)}</div>` : ""}
     <div class="hr-grid">${cards.join("")}</div>
     <div class="hr-cta">
       ${outputs.fcpxml ? `<button id="hr-open-fcp" class="btn btn-primary btn-sm" type="button"><span data-icon="film" data-icon-size="14"></span> Abrir no Final Cut Pro</button>` : ""}
