@@ -3149,12 +3149,12 @@ function applyModeFiltering() {
     const modes = (btn.dataset.modes || "").split(/\s+/);
     btn.style.display = modes.includes(kind) ? "" : "none";
   }
-  // Show the angle-uploader row only for multicam-podcast (and general
-  // advanced mode). For plain podcast kind it stays hidden — there are
-  // no extra cameras to add.
+  // Show the angle-uploader row whenever the workflow could plausibly
+  // use multiple cameras — multicam podcast, reels (multi-cam vertical
+  // edits are common), and advanced. Plain podcast (1 câm) stays hidden.
   const angleRow = document.getElementById("angle-row");
   if (angleRow) {
-    const showAngles = kind === "multicam_podcast" || kind === "general";
+    const showAngles = kind === "multicam_podcast" || kind === "reels" || kind === "general";
     angleRow.classList.toggle("hidden", !showAngles);
   }
   // Update topbar kind pill to match.
