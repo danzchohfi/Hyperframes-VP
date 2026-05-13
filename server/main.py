@@ -180,6 +180,10 @@ class FcpxmlIn(BaseModel):
     use_cuts: bool = True
     use_roughcut: bool = False
     include_broll: bool = False
+    use_camera_plan: bool = True       # apply camera_plan.json when present
+    include_chapters: bool = True
+    include_soundbites: bool = True
+    include_speakers: bool = True
 
 
 class AngleIn(BaseModel):
@@ -297,6 +301,10 @@ async def list_projects() -> list[dict[str, Any]]:
 @app.get("/api/projects/{pid}")
 async def get_project(pid: str) -> dict[str, Any]:
     state = _load(pid)
+    # Re-sync filesystem-derived flags so UI sees current state without
+    # depending on every route remembering to flip them.
+    storage.refresh_artifact_flags(state)
+    storage.save(state)
     payload = state.model_dump()
 
     # stale-state hints — recompute from file mtimes
@@ -814,6 +822,52 @@ async def export_fcpxml(pid: str, body: FcpxmlIn) -> dict[str, Any]:
                 angle_paths.append((a["name"], angles_dir / a["filename"]))
                 offsets.append(float(a.get("audio_offset") or 0.0))
             primary = max(0, min(body.primary_angle, len(angle_paths) - 1))
+
+            camera_cuts = None
+            plan_path = pdir / "camera_plan.json"
+            if body.use_camera_plan and plan_path.exists():
+                plan = storage.read_json(pid, "camera_plan.json")
+                raw = plan.get("cuts") or []
+                camera_cuts = [
+                    {
+                        "start": float(c.get("start") or 0.0),
+                        "end": float(c.get("end") or 0.0),
+                        "angle_index": int(c.get("angle_index") or 0),
+                        "reason": str(c.get("reason") or ""),
+                    }
+                    for c in raw
+                    if (float(c.get("end") or 0.0) - float(c.get("start") or 0.0)) > 1.0 / 60.0
+                ]
+                if not camera_cuts:
+                    camera_cuts = None
+
+            chapters = soundbites = speakers = None
+            if body.include_chapters and (pdir / "chapters.json").exists():
+                ch = storage.read_json(pid, "chapters.json")
+                chapters = ch.get("chapters") if isinstance(ch, dict) else ch
+            if body.include_soundbites and (pdir / "soundbites.json").exists():
+                sb = storage.read_json(pid, "soundbites.json")
+                if isinstance(sb, dict):
+                    flat: list[dict] = []
+                    for topic in sb.get("topics") or []:
+                        topic_name = topic.get("topic") or topic.get("title") or ""
+                        for bite in topic.get("bites") or []:
+                            flat.append({
+                                "start": bite.get("start"),
+                                "end": bite.get("end"),
+                                "topic": topic_name,
+                                "quote": bite.get("quote") or bite.get("text"),
+                            })
+                    soundbites = flat or sb.get("bites")
+                else:
+                    soundbites = sb
+            if body.include_speakers and (pdir / "speakers.json").exists():
+                sp = storage.read_json(pid, "speakers.json")
+                if isinstance(sp, dict):
+                    speakers = sp.get("turns") or sp.get("segments")
+                else:
+                    speakers = sp
+
             xml = await fcpxml.build_multicam_fcpxml(
                 project_name=state.name,
                 angles=angle_paths,
@@ -821,8 +875,12 @@ async def export_fcpxml(pid: str, body: FcpxmlIn) -> dict[str, Any]:
                 cuts=keep,
                 transcript=transcript,
                 angle_offsets=offsets,
+                camera_cuts=camera_cuts,
+                chapters=chapters,
+                soundbites=soundbites,
+                speakers=speakers,
             )
-            kind = "multicam"
+            kind = "multicam+plan" if camera_cuts else "multicam"
         else:
             xml = await fcpxml.build_single_cam_fcpxml(
                 project_name=state.name,
@@ -839,11 +897,101 @@ async def export_fcpxml(pid: str, body: FcpxmlIn) -> dict[str, Any]:
     out_path.parent.mkdir(exist_ok=True)
     out_path.write_text(xml, encoding="utf-8")
     _stage(state, "fcpxml", "done", f"{kind} · {out_path.name}")
+    storage.append_render_history(
+        pid,
+        name=out_path.name,
+        kind=f"fcpxml ({kind})",
+        url=f"/api/projects/{pid}/exports/{out_path.name}",
+        bytes=out_path.stat().st_size,
+    )
     return {
         "export": out_path.name,
         "kind": kind,
         "url": f"/api/projects/{pid}/exports/{out_path.name}",
         "bytes": out_path.stat().st_size,
+    }
+
+
+@app.get("/api/projects/{pid}/export/fcpxml/preview")
+async def export_fcpxml_preview(pid: str) -> dict[str, Any]:
+    """Return everything the UI needs to render the NLE export card.
+
+    Includes the EDL (when camera_plan.json exists) so the user can see
+    the cuts that would be baked into the FCPXML before exporting.
+    """
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    source = pdir / "source.mp4"
+    if not source.exists():
+        raise HTTPException(400, "no source video")
+
+    plan_path = pdir / "camera_plan.json"
+    available = {
+        "multicam": bool(state.angles),
+        "camera_plan": plan_path.exists(),
+        "rough_cut": state.has_roughcut,
+        "silence_cuts": state.has_cuts,
+        "chapters": (pdir / "chapters.json").exists(),
+        "soundbites": (pdir / "soundbites.json").exists(),
+        "speakers": (pdir / "speakers.json").exists(),
+        "transcript": state.has_transcript,
+        "broll_placement": (pdir / "broll_placement.json").exists(),
+        "render": state.has_render,
+    }
+
+    angles_meta: list[dict[str, Any]] = [
+        {"name": state.name + " (A)", "primary": True, "audio_offset": 0.0}
+    ]
+    for a in state.angles:
+        angles_meta.append({
+            "name": a.get("name"),
+            "primary": False,
+            "audio_offset": float(a.get("audio_offset") or 0.0),
+            "filename": a.get("filename"),
+        })
+    available["angles"] = angles_meta
+
+    edl: list[dict[str, Any]] = []
+    warnings: list[str] = []
+    total = state.source_duration or 0.0
+
+    if plan_path.exists():
+        plan = storage.read_json(pid, "camera_plan.json")
+        cuts = plan.get("cuts") or []
+        angle_names = [a["name"] for a in angles_meta]
+        for c in cuts:
+            try:
+                s = float(c.get("start") or 0.0)
+                e = float(c.get("end") or 0.0)
+                ai = int(c.get("angle_index") or 0)
+            except (TypeError, ValueError):
+                continue
+            if e - s <= 0:
+                continue
+            ai_safe = max(0, min(ai, len(angle_names) - 1))
+            edl.append({
+                "start": s,
+                "end": e,
+                "duration": e - s,
+                "angle_index": ai_safe,
+                "angle_name": angle_names[ai_safe],
+                "reason": c.get("reason") or "",
+                "score": c.get("score"),
+            })
+        if not edl:
+            warnings.append("camera_plan.json existe mas está vazio — rode o pick novamente")
+
+    if available["multicam"] and not available["camera_plan"]:
+        warnings.append("Ângulos prontos mas sem plano de câmera — rode multicam-pick antes de exportar pra cortar automaticamente.")
+    if available["multicam"] and not state.has_speakers:
+        warnings.append("Sem diarização de speakers — o plano de câmera vai usar só framing/qualidade.")
+
+    return {
+        "available": available,
+        "edl": edl,
+        "edl_count": len(edl),
+        "total_duration": total,
+        "warnings": warnings,
     }
 
 

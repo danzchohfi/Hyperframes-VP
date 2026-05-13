@@ -173,6 +173,9 @@ async function loadProject(id) {
   // fall back to has_render + last_export, else show a placeholder.
   await refreshExportPreview(p);
   refreshOverview();
+  applyPrereqs();
+  refreshNleExport();
+  annotateSourcePickers(p);
 
   renderAngles(p);
   renderMusicSuggestion(p.music_suggestion);
@@ -2288,6 +2291,10 @@ async function exportFcpxml() {
         use_roughcut: $("#fcpxml-roughcut")?.checked || false,
         include_broll: $("#fcpxml-broll")?.checked || false,
         include_word_markers: $("#fcpxml-markers").checked,
+        use_camera_plan: $("#fcpxml-plan")?.checked !== false,
+        include_chapters: $("#fcpxml-chapters")?.checked !== false,
+        include_soundbites: $("#fcpxml-bites")?.checked !== false,
+        include_speakers: $("#fcpxml-speakers")?.checked !== false,
       }),
     });
     log(`✓ FCPXML ${res.kind} · ${res.bytes} bytes`, "ok");
@@ -2295,8 +2302,123 @@ async function exportFcpxml() {
     link.href = res.url;
     link.style.display = "inline-block";
     link.textContent = `⬇ Baixar ${res.export}`;
+    refreshNleExport();
   } catch (e) {
     log(`✗ FCPXML: ${e.message}`, "err");
+  }
+}
+
+// ---- Source-video pickers (burn, audio, music, render) --------------------
+
+function annotateSourcePickers(p) {
+  // Each option (graded/roughcut/source/highlights) is disabled when the
+  // corresponding file doesn't exist yet. The label is annotated with a
+  // small marker so the user sees what's actually pickable.
+  const availability = {
+    graded:     (p?.has_render || p?.has_cuts || p?.has_fillers || p?.has_lut) ? "ok" : "missing",
+    roughcut:   p?.has_roughcut ? "ok" : "missing",
+    source:     p?.source_filename ? "ok" : "missing",
+    highlights: (p?.last_export || "").includes("highlight") ? "ok" : "maybe",
+  };
+  for (const sel of ["#render-source", "#burn-source", "#audio-source", "#music-source"]) {
+    const el = document.querySelector(sel);
+    if (!el) continue;
+    for (const opt of el.options) {
+      const status = availability[opt.value];
+      const baseLabel = opt.value;
+      if (status === "ok") {
+        opt.textContent = baseLabel;
+        opt.disabled = false;
+      } else if (status === "missing") {
+        opt.textContent = `${baseLabel} (não gerado)`;
+        opt.disabled = true;
+      } else {
+        opt.textContent = `${baseLabel} (?)`;
+        opt.disabled = false;
+      }
+    }
+    // If currently-selected option is now disabled, fall back to first
+    // enabled one.
+    if (el.selectedOptions[0]?.disabled) {
+      for (const opt of el.options) {
+        if (!opt.disabled) { el.value = opt.value; break; }
+      }
+    }
+  }
+}
+
+// ---- NLE export panel ------------------------------------------------------
+
+function fmtTimecode(seconds) {
+  const s = Math.max(0, Number(seconds) || 0);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = (s % 60).toFixed(2).padStart(5, "0");
+  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
+}
+
+async function refreshNleExport() {
+  const card = $("#nle-card");
+  if (!card || !state.current) return;
+  const pills = $("#nle-pills");
+  const warnings = $("#nle-warnings");
+  const body = $("#nle-edl-body");
+  const count = $("#nle-edl-count");
+  try {
+    const data = await api(`/api/projects/${state.current.id}/export/fcpxml/preview`);
+    const a = data.available || {};
+    const has = (k) => a[k] ? "ok" : "muted";
+    pills.innerHTML = [
+      `<span class="nle-pill ${has("multicam")}">${a.multicam ? "✓" : "·"} multicam (${(a.angles || []).length} ângulos)</span>`,
+      `<span class="nle-pill ${has("camera_plan")}">${a.camera_plan ? "✓" : "·"} plano de câmera${a.camera_plan ? ` · ${data.edl_count} cortes` : ""}</span>`,
+      `<span class="nle-pill ${has("rough_cut")}">${a.rough_cut ? "✓" : "·"} rough cut</span>`,
+      `<span class="nle-pill ${has("silence_cuts")}">${a.silence_cuts ? "✓" : "·"} silêncios</span>`,
+      `<span class="nle-pill ${has("chapters")}">${a.chapters ? "✓" : "·"} chapters</span>`,
+      `<span class="nle-pill ${has("soundbites")}">${a.soundbites ? "✓" : "·"} soundbites</span>`,
+      `<span class="nle-pill ${has("speakers")}">${a.speakers ? "✓" : "·"} speakers</span>`,
+    ].join("");
+    warnings.innerHTML = (data.warnings || []).map(w =>
+      `<div class="nle-warn">⚠ ${escapeHtml(w)}</div>`
+    ).join("");
+
+    // Smart defaults: pre-check things that are available, hide irrelevant.
+    const mc = $("#fcpxml-multicam");
+    if (mc) mc.checked = !!a.multicam;
+    const plan = $("#fcpxml-plan");
+    if (plan) {
+      plan.checked = !!a.camera_plan;
+      plan.closest("label").style.display = a.multicam ? "" : "none";
+    }
+    const broll = $("#fcpxml-broll");
+    if (broll) broll.closest("label").style.display = a.broll_placement ? "" : "none";
+    const cuts = $("#fcpxml-cuts");
+    if (cuts) cuts.checked = !!a.silence_cuts;
+    const chap = $("#fcpxml-chapters");
+    if (chap) chap.closest("label").style.display = a.chapters ? "" : "none";
+    const bites = $("#fcpxml-bites");
+    if (bites) bites.closest("label").style.display = a.soundbites ? "" : "none";
+    const sp = $("#fcpxml-speakers");
+    if (sp) sp.closest("label").style.display = a.speakers ? "" : "none";
+
+    const edl = data.edl || [];
+    count.textContent = String(edl.length);
+    if (edl.length === 0) {
+      body.innerHTML = a.multicam
+        ? `<div class="muted">Sem plano de câmera ainda — rode <em>multicam-pick</em> antes de exportar pra ter cortes automáticos.</div>`
+        : `<div class="muted">Não é multicam — XML vai ter um clip único do source.</div>`;
+    } else {
+      body.innerHTML = `<table class="nle-edl-table">
+        <thead><tr><th>De</th><th>→</th><th>Até</th><th>Dur</th><th>Câmera</th><th>Razão</th></tr></thead>
+        <tbody>${edl.map(r => `<tr>
+          <td>${fmtTimecode(r.start)}</td><td>→</td><td>${fmtTimecode(r.end)}</td>
+          <td>${r.duration.toFixed(2)}s</td>
+          <td><strong>${escapeHtml(r.angle_name || "—")}</strong></td>
+          <td class="muted">${escapeHtml(r.reason || "")}</td>
+        </tr>`).join("")}</tbody>
+      </table>`;
+    }
+  } catch (e) {
+    if (pills) pills.innerHTML = `<span class="nle-pill muted">preview indisponível</span>`;
   }
 }
 
@@ -2462,6 +2584,41 @@ function activeSection() {
   return localStorage.getItem("hfvp.section") || "overview";
 }
 
+function activeMode() {
+  return localStorage.getItem("hfvp.mode") || "podcast";
+}
+
+function inferMode(p) {
+  // Suggest a default mode based on project shape; user can override.
+  if (!p) return "podcast";
+  if ((p.clips || []).length > 0) return "vlog";
+  if ((p.angles || []).length > 0) return "multicam";
+  return "podcast";
+}
+
+function setMode(mode) {
+  localStorage.setItem("hfvp.mode", mode);
+  applyModeFiltering();
+  for (const btn of document.querySelectorAll(".ws-mode")) {
+    btn.classList.toggle("active", btn.dataset.mode === mode);
+  }
+  // If the current section was hidden by the new mode, fall back to overview.
+  const currentBtn = document.querySelector(`.ws-section[data-section="${activeSection()}"]`);
+  if (currentBtn && currentBtn.dataset.modes && !currentBtn.dataset.modes.split(/\s+/).includes(mode)) {
+    setSection("overview");
+  } else {
+    setSection(activeSection());
+  }
+}
+
+function applyModeFiltering() {
+  const mode = activeMode();
+  for (const btn of document.querySelectorAll(".ws-section")) {
+    const modes = (btn.dataset.modes || "").split(/\s+/);
+    btn.style.display = modes.includes(mode) ? "" : "none";
+  }
+}
+
 function setSection(section) {
   const cats = new Set(SECTION_CATS[section] || SECTION_CATS.overview);
   for (const card of document.querySelectorAll(".card[data-cat]")) {
@@ -2471,14 +2628,109 @@ function setSection(section) {
     btn.classList.toggle("active", btn.dataset.section === section);
   }
   localStorage.setItem("hfvp.section", section);
+  const label = document.querySelector(`.ws-section[data-section="${section}"] span:last-child`);
+  const drawerLabel = $("#ws-drawer-label");
+  if (drawerLabel && label) drawerLabel.textContent = label.textContent;
+  // Close mobile drawer on selection.
+  document.body.classList.remove("ws-drawer-open");
   if (section === "overview") refreshOverview();
+  if (section === "export") refreshNleExport();
 }
 
 function bindSections() {
   for (const btn of document.querySelectorAll(".ws-section")) {
     btn.addEventListener("click", () => setSection(btn.dataset.section));
   }
-  setSection(activeSection());
+  for (const btn of document.querySelectorAll(".ws-mode")) {
+    btn.addEventListener("click", () => setMode(btn.dataset.mode));
+  }
+  const drawer = document.querySelector(".ws-drawer-toggle");
+  if (drawer) {
+    drawer.addEventListener("click", () => {
+      const open = document.body.classList.toggle("ws-drawer-open");
+      drawer.setAttribute("aria-expanded", String(open));
+    });
+  }
+  // Initial mode: stored or inferred from project.
+  let mode = localStorage.getItem("hfvp.mode");
+  if (!mode) mode = inferMode(state.current);
+  setMode(mode);
+}
+
+// ---- Pre-flight checks (disable actions whose prerequisites are missing) ---
+
+const PREREQS = {
+  story:           p => p.has_soundbites,
+  roughcut:        p => p.has_story || p.has_soundbites,
+  highlights:      p => p.has_story,
+  shorts:          p => p.has_story || p.has_soundbites,
+  multicam_pick:   p => (p.angles || []).length >= 1,
+  multicam_render: p => p.has_camera_plan,
+  fcpxml:          p => !!p.source_filename,
+  burn_caps:       p => p.has_render && p.has_transcript,
+};
+
+const PREREQ_LABELS = {
+  story:           "Requer soundbites",
+  roughcut:        "Requer roteiro ou soundbites",
+  highlights:      "Requer roteiro",
+  shorts:          "Requer roteiro ou soundbites",
+  multicam_pick:   "Suba pelo menos 1 ângulo",
+  multicam_render: "Rode 'escolher câmera' primeiro",
+  fcpxml:          "Suba o vídeo de origem",
+  burn_caps:       "Precisa de render + transcrição",
+};
+
+function applyPrereqs() {
+  const p = state.current;
+  if (!p) return;
+  for (const btn of document.querySelectorAll("[data-prereq]")) {
+    const key = btn.dataset.prereq;
+    const check = PREREQS[key];
+    if (!check) continue;
+    const ok = check(p);
+    btn.disabled = !ok;
+    btn.classList.toggle("disabled", !ok);
+    if (!ok) {
+      btn.title = PREREQ_LABELS[key] || "Pré-requisito faltando";
+      if (!btn.dataset.origHint && btn.nextElementSibling?.classList?.contains("prereq-hint")) {
+        // already shown
+      } else if (!btn.querySelector(".prereq-hint")) {
+        // Append inline hint on first miss.
+        const hint = document.createElement("span");
+        hint.className = "prereq-hint";
+        hint.textContent = " · " + (PREREQ_LABELS[key] || "indisponível");
+        btn.appendChild(hint);
+      }
+    } else {
+      btn.title = "";
+      const h = btn.querySelector(".prereq-hint");
+      if (h) h.remove();
+    }
+  }
+}
+
+function computeNextStep(p) {
+  if (!p) return null;
+  const mode = activeMode();
+  const renders = p.has_render;
+  if (!p.source_filename) return { msg: "Suba o vídeo de origem", section: "upload" };
+  if (!p.has_transcript) return { msg: "Rode a transcrição", section: "edit" };
+  if (mode === "multicam" && (p.angles || []).length === 0)
+    return { msg: "Suba os outros ângulos", section: "multicam" };
+  if (mode === "multicam" && !p.has_speakers)
+    return { msg: "Detecte os speakers pra orientar o multicam", section: "podcast" };
+  if (mode === "multicam" && !p.has_camera_plan)
+    return { msg: "Rode 'escolher câmera por turno'", section: "multicam" };
+  if (mode === "multicam" && p.has_camera_plan && !renders)
+    return { msg: "Renderize o multicam", section: "multicam" };
+  if (mode === "podcast" && !p.has_cuts && !p.has_fillers)
+    return { msg: "Detecte silêncios e muletas", section: "edit" };
+  if (mode === "podcast" && !p.has_soundbites)
+    return { msg: "Extraia soundbites pra montar um rough cut", section: "soundbites" };
+  if (renders && !p.last_export?.endsWith?.(".fcpxml"))
+    return { msg: "Exporte FCPXML pro Final Cut", section: "export" };
+  return { msg: "Pronto — refinar no Final Cut", section: "export" };
 }
 
 function refreshOverview() {
@@ -2487,30 +2739,50 @@ function refreshOverview() {
   const p = state.current;
   if (!p) { root.innerHTML = ""; return; }
 
-  function card(label, value, sub, cls = "") {
-    return `<div class="ov-card ${cls}">
+  applyPrereqs();
+
+  // Next-step hint
+  const next = computeNextStep(p);
+  const nextEl = $("#ph-next-step");
+  if (nextEl) {
+    if (next) {
+      nextEl.style.display = "";
+      nextEl.innerHTML = `<span class="ns-arrow">→</span> <span class="ns-msg">${escapeHtml(next.msg)}</span> <span class="ns-link">Abrir</span>`;
+      nextEl.onclick = () => setSection(next.section);
+    } else {
+      nextEl.style.display = "none";
+    }
+  }
+
+  function cell(label, value, sub, cls, target) {
+    return `<button class="ov-card cell-link ${cls || ""}" type="button" data-target="${target || ""}">
       <div class="ov-label">${escapeHtml(label)}</div>
       <div class="ov-value">${escapeHtml(String(value))}</div>
       ${sub ? `<div class="ov-sub">${escapeHtml(sub)}</div>` : ""}
-    </div>`;
+    </button>`;
   }
 
   const dur = p.source_duration ? `${p.source_duration.toFixed(1)}s` : "—";
-  const mode = (p.clips && p.clips.length) ? "vlog" : "single";
+  const modeLabel = (p.clips && p.clips.length) ? "Vlog" : ((p.angles || []).length ? "Multicam" : "Single");
   const cells = [];
-  cells.push(card("Modo", mode === "vlog" ? "Vlog" : "Single", mode === "vlog" ? `${p.clips.length} clipes` : (p.source_filename || "sem upload")));
-  cells.push(card("Duração", dur, p.source_filename || ""));
-  cells.push(card("Transcrição", p.has_transcript ? "ok" : "—", p.has_transcript ? "" : "rode /transcribe", p.has_transcript ? "ok" : "muted"));
-  cells.push(card("Cortes", p.has_cuts ? "ok" : (p.has_fillers ? "fillers" : "—"), "", (p.has_cuts || p.has_fillers) ? "ok" : "muted"));
-  cells.push(card("Soundbites", p.has_soundbites ? "ok" : "—", "", p.has_soundbites ? "ok" : "muted"));
-  cells.push(card("Roteiro", p.has_story ? "ok" : "—", "", p.has_story ? "ok" : "muted"));
-  cells.push(card("Rough cut", p.has_roughcut ? "ok" : "—", "", p.has_roughcut ? "ok" : "muted"));
-  cells.push(card("Render", p.has_render ? "ok" : "—", p.has_render ? (p.last_export || "") : "rode o render", p.has_render ? "ok" : "muted"));
-  cells.push(card("Brand", p.has_brand ? "ok" : "—", "", p.has_brand ? "ok" : "muted"));
-  cells.push(card("Multicam", (p.angles || []).length, (p.angles || []).length ? "ângulos" : "", (p.angles || []).length ? "ok" : "muted"));
-  if (p.render_active) cells.push(card("Status", "renderizando", "", "warn"));
+  cells.push(cell("Modo", modeLabel, modeLabel === "Vlog" ? `${p.clips.length} clipes` : (p.source_filename || "sem upload"), "", modeLabel === "Vlog" ? "vlog" : ((p.angles || []).length ? "multicam" : "upload")));
+  cells.push(cell("Duração", dur, p.source_filename || "", "", "upload"));
+  cells.push(cell("Transcrição", p.has_transcript ? "ok" : "—", p.has_transcript ? "" : "rode a transcrição", p.has_transcript ? "ok" : "muted", "edit"));
+  cells.push(cell("Cortes", p.has_cuts ? "ok" : (p.has_fillers ? "fillers" : "—"), "", (p.has_cuts || p.has_fillers) ? "ok" : "muted", "edit"));
+  cells.push(cell("Soundbites", p.has_soundbites ? "ok" : "—", "", p.has_soundbites ? "ok" : "muted", "soundbites"));
+  cells.push(cell("Roteiro", p.has_story ? "ok" : "—", "", p.has_story ? "ok" : "muted", "soundbites"));
+  cells.push(cell("Rough cut", p.has_roughcut ? "ok" : "—", "", p.has_roughcut ? "ok" : "muted", "export"));
+  cells.push(cell("Speakers", p.has_speakers ? "ok" : "—", "", p.has_speakers ? "ok" : "muted", "podcast"));
+  cells.push(cell("Multicam", (p.angles || []).length, (p.angles || []).length ? (p.has_camera_plan ? "plano ok" : "sem plano") : "sem ângulos", (p.angles || []).length ? (p.has_camera_plan ? "ok" : "warn") : "muted", "multicam"));
+  cells.push(cell("Brand", p.has_brand ? "ok" : "—", "", p.has_brand ? "ok" : "muted", "brand"));
+  cells.push(cell("Render", p.has_render ? "ok" : "—", p.has_render ? (p.last_export || "") : "rode o render", p.has_render ? "ok" : "muted", "export"));
+  if (p.render_active) cells.push(cell("Status", "renderizando", "", "warn"));
 
   root.innerHTML = cells.join("");
+  for (const btn of root.querySelectorAll(".cell-link")) {
+    const target = btn.dataset.target;
+    if (target) btn.addEventListener("click", () => setSection(target));
+  }
 }
 
 // ---- (legado) Workflow filter horizontal — ainda no DOM mas escondido -----

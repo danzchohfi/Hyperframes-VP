@@ -65,6 +65,9 @@ class ProjectState(BaseModel):
     has_soundbites: bool = False
     has_story: bool = False
     has_roughcut: bool = False
+    has_camera_plan: bool = False
+    has_speakers: bool = False
+    has_chapters: bool = False
     stages: dict[str, Stage] = Field(default_factory=dict)
 
     def stage(self, name: str) -> Stage:
@@ -254,11 +257,24 @@ def restore_snapshot(project_id: str, snap_id: str) -> dict[str, Any]:
             (project_dir(project_id) / name).write_text(src.read_text())
             restored.append(name)
     state = load(project_id)
-    state.has_cuts = (project_dir(project_id) / "cuts.json").exists()
-    state.has_fillers = (project_dir(project_id) / "fillers.json").exists()
-    state.has_soundbites = (project_dir(project_id) / "soundbites.json").exists()
-    state.has_story = (project_dir(project_id) / "story.json").exists()
-    state.has_roughcut = (project_dir(project_id) / "roughcut.json").exists()
-    state.has_brand = (project_dir(project_id) / "brand.json").exists()
+    refresh_artifact_flags(state)
     save(state)
     return {"id": snap_id, "restored_files": restored}
+
+
+def refresh_artifact_flags(state: ProjectState) -> None:
+    """Re-sync the `has_*` boolean flags from the filesystem.
+
+    Called after operations that produce/remove artifacts so the UI sees
+    them without each route having to remember to flip the flag.
+    """
+    pdir = project_dir(state.id)
+    state.has_cuts = (pdir / "cuts.json").exists()
+    state.has_fillers = (pdir / "fillers.json").exists()
+    state.has_soundbites = (pdir / "soundbites.json").exists()
+    state.has_story = (pdir / "story.json").exists()
+    state.has_roughcut = (pdir / "roughcut.json").exists()
+    state.has_brand = (pdir / "brand.json").exists()
+    state.has_camera_plan = (pdir / "camera_plan.json").exists()
+    state.has_speakers = (pdir / "speakers.json").exists()
+    state.has_chapters = (pdir / "chapters.json").exists()

@@ -98,41 +98,53 @@
             </div>
           </nav>
 
+          <button class="ws-drawer-toggle" type="button" aria-controls="ws-nav" aria-expanded="false">
+            <span>☰ Seções</span>
+            <span class="ws-drawer-label" id="ws-drawer-label">Visão geral</span>
+          </button>
+
           <div class="workspace">
-            <aside class="ws-nav" aria-label="Seções do projeto">
-              <button class="ws-section" data-section="overview">
+            <aside class="ws-nav" id="ws-nav" aria-label="Seções do projeto">
+              <div class="ws-mode-group" role="tablist" aria-label="Modo de uso">
+                <button class="ws-mode" data-mode="podcast" title="Podcast com 1 câmera">Podcast</button>
+                <button class="ws-mode" data-mode="multicam" title="Podcast multicam">Multicam</button>
+                <button class="ws-mode" data-mode="vlog" title="Vlog (vários clipes)">Vlog</button>
+                <button class="ws-mode" data-mode="all" title="Mostra todas as ferramentas">Tudo</button>
+              </div>
+              <div class="ws-divider"></div>
+              <button class="ws-section" data-section="overview" data-modes="podcast multicam vlog all">
                 <span class="ws-icon">🏠</span><span>Visão geral</span>
               </button>
               <div class="ws-divider"></div>
-              <button class="ws-section" data-section="upload">
+              <button class="ws-section" data-section="upload" data-modes="podcast multicam vlog all">
                 <span class="ws-icon">📥</span><span>Upload</span>
               </button>
-              <button class="ws-section" data-section="edit">
+              <button class="ws-section" data-section="edit" data-modes="podcast multicam all">
                 <span class="ws-icon">✂</span><span>Editar</span>
               </button>
-              <button class="ws-section" data-section="soundbites">
+              <button class="ws-section" data-section="soundbites" data-modes="podcast multicam all">
                 <span class="ws-icon">🎯</span><span>Soundbites</span>
               </button>
-              <button class="ws-section" data-section="podcast">
+              <button class="ws-section" data-section="podcast" data-modes="podcast multicam all">
                 <span class="ws-icon">🎙</span><span>Podcast</span>
               </button>
-              <button class="ws-section" data-section="vlog">
+              <button class="ws-section" data-section="vlog" data-modes="vlog all">
                 <span class="ws-icon">📹</span><span>Vlog</span>
               </button>
-              <button class="ws-section" data-section="multicam">
+              <button class="ws-section" data-section="multicam" data-modes="multicam all">
                 <span class="ws-icon">🎬</span><span>Multicam</span>
               </button>
-              <button class="ws-section" data-section="brand">
+              <button class="ws-section" data-section="brand" data-modes="podcast multicam vlog all">
                 <span class="ws-icon">🎨</span><span>Brand</span>
               </button>
-              <button class="ws-section" data-section="music">
+              <button class="ws-section" data-section="music" data-modes="vlog all">
                 <span class="ws-icon">🎵</span><span>Música</span>
               </button>
-              <button class="ws-section" data-section="export">
+              <button class="ws-section" data-section="export" data-modes="podcast multicam vlog all">
                 <span class="ws-icon">📤</span><span>Exportar</span>
               </button>
               <div class="ws-divider"></div>
-              <button class="ws-section" data-section="all">
+              <button class="ws-section" data-section="all" data-modes="all">
                 <span class="ws-icon">⚙</span><span>Tudo</span>
               </button>
             </aside>
@@ -142,7 +154,8 @@
               <!-- OVERVIEW (only visible when section=overview) -->
               <section class="card ws-overview" data-cat="overview">
                 <h3>Visão geral</h3>
-                <p class="card-help">Status do projeto. Use a navegação à esquerda pra abrir cada conjunto de ferramentas só quando precisar.</p>
+                <p class="card-help">Status do projeto. Clique num cartão pra pular pra ferramenta correspondente.</p>
+                <button id="ph-next-step" class="next-step" type="button" style="display:none"></button>
                 <div id="overview-grid" class="overview-grid"></div>
               </section>
 
@@ -385,13 +398,13 @@
                 <option value="testimonial">Testemunho (antes/virada/depois/recomendação)</option>
                 <option value="before_after">Antes/depois</option>
               </select>
-              <button id="story-btn" class="btn-ghost">📜 Propor roteiro</button>
+              <button id="story-btn" class="btn-ghost" data-prereq="story">📜 Propor roteiro</button>
             </div>
             <div id="story-summary" class="story-summary hidden"></div>
             <div id="topics-list" class="topics-list"></div>
             <div class="actions" style="margin-top:14px">
               <input id="hl-target" type="number" value="30" step="5" min="10" max="120" class="snap-input" style="max-width:90px" />
-              <button id="hl-btn" class="btn-primary">⚡ Gerar highlights reel</button>
+              <button id="hl-btn" class="btn-primary" data-prereq="highlights">⚡ Gerar highlights reel</button>
               <a id="hl-link" class="btn-ghost" href="#" download style="display:none">⬇ highlights.mp4</a>
               <input id="shorts-count" type="number" value="5" min="1" max="20" class="snap-input" style="max-width:60px" />
               <select id="shorts-aspect" class="inline-select">
@@ -399,7 +412,7 @@
                 <option value="1:1">1:1</option>
                 <option value="16:9">16:9</option>
               </select>
-              <button id="shorts-btn" class="btn-primary">✂ Gerar N shorts</button>
+              <button id="shorts-btn" class="btn-primary" data-prereq="shorts">✂ Gerar N shorts</button>
             </div>
           </section>
 
@@ -436,8 +449,8 @@
             <div class="actions">
               <button id="place-broll-btn" class="btn-primary">🎯 Posicionar B-roll automaticamente</button>
               <button id="subject-tl-btn" class="btn-ghost">🧭 Linha de tempo do sujeito</button>
-              <button id="multicam-pick-btn" class="btn-ghost">🎬 Escolher câmera por turno</button>
-              <button id="multicam-render-btn" class="btn-ghost">🎞 Renderizar multicam</button>
+              <button id="multicam-pick-btn" class="btn-ghost" data-prereq="multicam_pick">🎬 Escolher câmera por turno</button>
+              <button id="multicam-render-btn" class="btn-ghost" data-prereq="multicam_render">🎞 Renderizar multicam</button>
               <a id="multicam-link" class="btn-ghost" href="#" download style="display:none">⬇ multicam.mp4</a>
               <span id="broll-place-status" class="status muted"></span>
             </div>
@@ -477,7 +490,7 @@
           <section class="card" id="export-card" data-cat="export">
             <h3>8 · Exportar</h3>
             <div class="roughcut-bar">
-              <button id="roughcut-btn" class="btn-primary">⚡ Gerar rough cut do roteiro</button>
+              <button id="roughcut-btn" class="btn-primary" data-prereq="roughcut">⚡ Gerar rough cut do roteiro</button>
               <label class="cb"><input id="rc-loudnorm" type="checkbox" /> loudnorm</label>
               <label class="cb"><input id="rc-denoise" type="checkbox" /> denoise</label>
               <span id="roughcut-status" class="status muted"></span>
@@ -515,7 +528,7 @@
               <a id="caps-link" class="btn-primary" href="#" download style="display:none">⬇ Baixar legenda</a>
             </div>
             <div class="actions">
-              <button id="burn-btn" class="btn-primary">🔥 Queimar legenda no MP4</button>
+              <button id="burn-btn" class="btn-primary" data-prereq="burn_caps">🔥 Queimar legenda no MP4</button>
               <select id="burn-source" class="inline-select">
                 <option value="graded">graded</option>
                 <option value="roughcut">roughcut</option>
@@ -530,20 +543,37 @@
               <a id="burn-link" class="btn-ghost" href="#" download style="display:none">⬇ MP4 com legenda</a>
             </div>
             <div class="export-divider"></div>
-            <div class="actions">
-              <label class="cb"><input id="fcpxml-multicam" type="checkbox" /> Multicam</label>
-              <label class="cb"><input id="fcpxml-cuts" type="checkbox" checked /> Aplicar cortes do silêncio</label>
-              <label class="cb"><input id="fcpxml-roughcut" type="checkbox" /> Usar rough cut</label>
-              <label class="cb"><input id="fcpxml-broll" type="checkbox" /> Inserir B-roll (V2)</label>
-              <label class="cb"><input id="fcpxml-markers" type="checkbox" checked /> Marcadores por palavra</label>
-              <button id="fcpxml-btn" class="btn-ghost">📄 FCPXML</button>
-              <a id="fcpxml-link" class="btn-primary" href="#" download style="display:none">⬇ Baixar FCPXML</a>
-              <button id="premiere-btn" class="btn-ghost">📄 Premiere/Resolve XML</button>
-              <a id="premiere-link" class="btn-primary" href="#" download style="display:none">⬇ Baixar Premiere XML</a>
-              <label class="cb"><input id="premiere-roughcut" type="checkbox" /> usar rough cut</label>
-              <label class="cb"><input id="premiere-broll" type="checkbox" /> incluir B-roll</label>
+            <div class="nle-card" id="nle-card">
+              <div class="nle-head">
+                <h4>Exportar pro Final Cut / Premiere / Resolve</h4>
+                <div id="nle-pills" class="nle-pills"></div>
+              </div>
+              <div id="nle-warnings" class="nle-warnings"></div>
+              <div class="nle-options">
+                <label class="cb"><input id="fcpxml-multicam" type="checkbox" /> Multicam</label>
+                <label class="cb"><input id="fcpxml-plan" type="checkbox" checked /> Aplicar plano de câmera (auto switching)</label>
+                <label class="cb"><input id="fcpxml-cuts" type="checkbox" checked /> Aplicar cortes de silêncio</label>
+                <label class="cb"><input id="fcpxml-roughcut" type="checkbox" /> Usar rough cut</label>
+                <label class="cb"><input id="fcpxml-broll" type="checkbox" /> Inserir B-roll (V2)</label>
+                <label class="cb"><input id="fcpxml-markers" type="checkbox" /> Marcadores por palavra</label>
+                <label class="cb"><input id="fcpxml-chapters" type="checkbox" checked /> Capítulos</label>
+                <label class="cb"><input id="fcpxml-bites" type="checkbox" checked /> Soundbites</label>
+                <label class="cb"><input id="fcpxml-speakers" type="checkbox" checked /> Speakers</label>
+              </div>
+              <details id="nle-edl" class="nle-edl">
+                <summary>Preview dos cortes (<span id="nle-edl-count">0</span>)</summary>
+                <div id="nle-edl-body" class="nle-edl-body"></div>
+              </details>
+              <div class="nle-actions">
+                <button id="fcpxml-btn" class="btn-primary" data-prereq="fcpxml">📄 Exportar FCPXML</button>
+                <a id="fcpxml-link" class="btn-ghost" href="#" download style="display:none">⬇ Último FCPXML</a>
+                <button id="premiere-btn" class="btn-ghost" data-prereq="fcpxml">📄 Premiere / Resolve XML</button>
+                <a id="premiere-link" class="btn-ghost" href="#" download style="display:none">⬇ Último Premiere XML</a>
+                <label class="cb"><input id="premiere-roughcut" type="checkbox" /> usar rough cut</label>
+                <label class="cb"><input id="premiere-broll" type="checkbox" /> incluir B-roll</label>
+              </div>
+              <p class="card-help">Importe em FCP → <em>Arquivo → Importar → XML</em>. Os cortes vêm aplicados — é só ajustar.</p>
             </div>
-            <p class="card-help">FCPXML abre no Final Cut Pro (<em>Arquivo → Importar → XML</em>). O Premiere/Resolve XML (xmeml) abre no Premiere Pro e DaVinci Resolve. Os cortes ficam não-destrutivos.</p>
             <div class="export-divider"></div>
             <div class="actions">
               <select id="audio-format" class="inline-select">
