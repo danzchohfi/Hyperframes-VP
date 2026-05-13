@@ -251,7 +251,10 @@ def build_composition(
         logo_html = (
             f'<img id="brand-logo" src="{html.escape(logo_src)}" '
             f'style="position:absolute;{pos_css}width:{int(width * brand.logo.size)}px;'
-            f'opacity:0.92;pointer-events:none;filter:drop-shadow(0 2px 12px rgba(0,0,0,0.55));z-index:5"/>'
+            # opacity 0 so the GSAP entrance can tween it in.
+            f'opacity:0;pointer-events:none;'
+            f'filter:drop-shadow(0 2px 12px rgba(0,0,0,0.55));z-index:5;'
+            f'will-change:transform,opacity"/>'
         )
 
     # Lower-thirds: pinned chip showing current speaker name + role.
@@ -272,6 +275,9 @@ def build_composition(
                 f'data-start="{start_tl:.3f}" data-duration="{dur_tl:.3f}" '
                 f'data-track-index="4" '
                 f'style="--lt-color: {style.color};">'
+                # Underline draws on entry via GSAP scaleX 0→1, then
+                # collapses on exit.
+                f'<div class="lt-accent"></div>'
                 f'<div class="lt-name">{html.escape(style.name)}</div>'
                 f'{role_html}'
                 f'</div>'
@@ -436,12 +442,17 @@ def build_composition(
         cards = []
         for i, ch in enumerate(chapters):
             ch_start = float(ch.get("start", 0.0)) + intro_dur
-            ch_dur = min(1.6, float(ch.get("duration") or 1.6))
+            # Hold a touch longer so the cinematic in/out doesn't feel rushed.
+            ch_dur = min(2.0, float(ch.get("duration") or 1.8))
             cards.append(
                 f'<div id="ch{i}" class="chapter-card clip" '
-                f'data-start="{ch_start:.3f}" data-duration="{ch_dur:.3f}" data-track-index="3">'
+                f'data-start="{ch_start:.3f}" data-duration="{ch_dur:.3f}" data-track-index="6">'
+                # Vignette overlay paints the frame for cinematic feel.
+                f'<div class="ch-veil"></div>'
+                f'<div class="ch-inner">'
                 f'<div class="ch-num">CHAPTER {i + 1:02d}</div>'
                 f'<div class="ch-name">{html.escape(ch.get("name", ""))}</div>'
+                f'</div>'
                 f'</div>'
             )
         chapter_html = "\n      ".join(cards)
@@ -574,26 +585,48 @@ def build_composition(
         position: absolute;
         left: 4%;
         bottom: 18%;
-        padding: 12px 18px;
-        background: rgba(0,0,0,0.55);
-        border-left: 4px solid var(--lt-color, {palette.accent});
-        border-radius: 6px;
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
-        max-width: 60%;
+        padding: 14px 22px 12px 22px;
+        background: linear-gradient(120deg,
+          rgba(0,0,0,0.72) 0%,
+          rgba(0,0,0,0.45) 60%,
+          rgba(0,0,0,0.30) 100%);
+        border-radius: 10px;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        max-width: 64%;
+        box-shadow: 0 12px 38px rgba(0,0,0,0.45);
+        overflow: hidden;
+      }}
+      /* Accent underline that draws on entry (scaleX 0->1) and collapses
+         on exit. transform-origin left so the wipe reads as a confident
+         broadcaster stinger rather than a wobble. */
+      .lt-chip .lt-accent {{
+        position: absolute;
+        left: 0;
+        bottom: 0;
+        height: 3px;
+        width: 100%;
+        background: linear-gradient(90deg,
+          var(--lt-color, {palette.accent}) 0%,
+          {palette.accent} 100%);
+        transform: scaleX(0);
+        transform-origin: left center;
       }}
       .lt-chip .lt-name {{
         font-family: "{typo.title_family}", sans-serif;
-        font-weight: 700;
-        font-size: {int(width * 0.028)}px;
+        font-weight: 800;
+        font-size: {int(width * 0.030)}px;
         color: var(--lt-color, {palette.foreground});
         letter-spacing: -0.01em;
+        line-height: 1.1;
       }}
       .lt-chip .lt-role {{
         font-size: {int(width * 0.018)}px;
-        font-weight: 400;
-        color: rgba(255,255,255,0.78);
-        margin-top: 2px;
+        font-weight: 500;
+        color: rgba(255,255,255,0.82);
+        margin-top: 4px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
       }}
       .cta-card {{
         position: absolute;
@@ -618,32 +651,51 @@ def build_composition(
         opacity: 0.85;
         margin-top: 4px;
       }}
+      /* Cinematic chapter card: full-frame vignette behind the title so
+         the cut between chapters reads as a deliberate "next act"
+         transition, not a sticker. */
       .chapter-card {{
         position: absolute;
-        top: 8%; left: 6%;
-        padding: 14px 22px 16px 22px;
-        background: linear-gradient(135deg, {palette.background}cc, {palette.background}99);
-        border: 1px solid {palette.primary}55;
-        border-left: 3px solid {palette.primary};
-        border-radius: 10px;
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        padding-left: 8%;
+        padding-right: 8%;
+      }}
+      .chapter-card .ch-veil {{
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(ellipse at 30% 50%,
+          {palette.background}aa 0%,
+          {palette.background}cc 60%,
+          {palette.background}ee 100%);
+        opacity: 0;
+      }}
+      .chapter-card .ch-inner {{
+        position: relative;
+        max-width: 80%;
       }}
       .chapter-card .ch-num {{
-        font-size: {int(width * 0.018)}px;
-        font-weight: 700;
-        letter-spacing: 0.32em;
+        display: inline-block;
+        font-size: {int(width * 0.020)}px;
+        font-weight: 800;
+        letter-spacing: 0.42em;
         color: {palette.primary};
         text-transform: uppercase;
-        margin-bottom: 4px;
+        padding: 6px 14px;
+        margin-bottom: 14px;
+        border: 1px solid {palette.primary}80;
+        border-radius: 999px;
       }}
       .chapter-card .ch-name {{
         font-family: "{typo.title_family}", system-ui, sans-serif;
-        font-size: {int(width * 0.038)}px;
+        font-size: {int(width * 0.064)}px;
         font-weight: {typo.title_weight};
         color: {palette.foreground};
         letter-spacing: -0.02em;
+        line-height: 1.05;
+        text-shadow: 0 4px 38px rgba(0,0,0,0.85);
       }}
       {animations_css}
     </style>
@@ -691,12 +743,62 @@ def build_composition(
                   {{ opacity: 1, y: 0, duration: 0.8 }}, outroStart + 0.05);
       }}
 
-      // Lower-thirds slide-in/out
+      // Brand logo: confident entrance, subtle idle hover, sits at 0.92
+      // opacity during the body so it stays brand-present without
+      // stealing attention from the captions.
+      const brandLogo = document.getElementById("brand-logo");
+      if (brandLogo) {{
+        tl.fromTo(brandLogo,
+          {{ opacity: 0, scale: 0.6, y: -18 }},
+          {{ opacity: 0.92, scale: 1, y: 0, duration: 0.7, ease: "back.out(2.2)" }},
+          Math.max(0, {intro_dur} - 0.4)
+        );
+        // Looping idle bob during the body so the logo feels "alive"
+        // without animating anything dramatic. Bounded repeat (no -1)
+        // so Hyperframes' deterministic export knows the timeline
+        // duration; yoyo plays it both ways on each scrub.
+        const __bobReps = Math.max(1, Math.ceil({main_dur} / 4));
+        tl.to(brandLogo,
+          {{ y: -3, duration: 4, ease: "sine.inOut", yoyo: true, repeat: __bobReps }},
+          {intro_dur} + 0.1
+        );
+        // Fade-out into the outro card so the logo doesn't fight the
+        // CTA for attention.
+        const outroStart2 = {intro_dur + main_dur};
+        tl.to(brandLogo,
+          {{ opacity: 0, scale: 0.95, duration: 0.5, ease: "power2.in" }},
+          outroStart2
+        );
+      }}
+
+      // Lower-thirds: broadcaster stinger — chip slides in, accent
+      // underline draws across, name/role appear with a small stagger,
+      // exit collapses vertically so it feels intentional, not abrupt.
       for (const lt of document.querySelectorAll(".lt-chip")) {{
         const start = parseFloat(lt.dataset.start);
         const dur = parseFloat(lt.dataset.duration);
-        tl.fromTo(lt, {{ opacity: 0, x: -36 }}, {{ opacity: 1, x: 0, duration: 0.45, ease: "power3.out" }}, start);
-        tl.to(lt, {{ opacity: 0, x: -36, duration: 0.35, ease: "power2.in" }}, start + dur - 0.35);
+        tl.fromTo(lt,
+          {{ opacity: 0, x: -36, scaleY: 0.85 }},
+          {{ opacity: 1, x: 0, scaleY: 1, duration: 0.5, ease: "power3.out", transformOrigin: "left bottom" }},
+          start
+        );
+        const accent = lt.querySelector(".lt-accent");
+        if (accent) {{
+          tl.fromTo(accent,
+            {{ scaleX: 0 }},
+            {{ scaleX: 1, duration: 0.55, ease: "power2.out" }},
+            start + 0.10
+          );
+        }}
+        const name = lt.querySelector(".lt-name");
+        if (name) tl.fromTo(name, {{ opacity: 0, y: 8 }}, {{ opacity: 1, y: 0, duration: 0.35 }}, start + 0.15);
+        const role = lt.querySelector(".lt-role");
+        if (role) tl.fromTo(role, {{ opacity: 0, y: 6 }}, {{ opacity: 1, y: 0, duration: 0.35 }}, start + 0.25);
+        // Exit: collapse vertically + fade
+        tl.to(lt,
+          {{ opacity: 0, scaleY: 0.3, duration: 0.4, ease: "power2.in", transformOrigin: "left bottom" }},
+          start + dur - 0.4
+        );
       }}
 
       // CTA cards
@@ -708,12 +810,37 @@ def build_composition(
         tl.to(cta, {{ opacity: 0, y: 30, duration: 0.45, ease: "power2.in" }}, start + dur - 0.45);
       }}
 
-      // Chapter card flash-ins
+      // Chapter cards — cinematic "next act" transition:
+      //   1. Vignette darkens the frame so the title pops.
+      //   2. Chapter number pill pops in (back.out scale).
+      //   3. Chapter name slides up underneath with a small delay.
+      //   4. Exit: zoom-blur out so the eye returns to the host.
       for (const card of document.querySelectorAll(".chapter-card")) {{
         const start = parseFloat(card.dataset.start);
         const dur = parseFloat(card.dataset.duration);
-        tl.fromTo(card, {{ opacity: 0, x: -24 }}, {{ opacity: 1, x: 0, duration: 0.45, ease: "power3.out" }}, start);
-        tl.to(card, {{ opacity: 0, duration: 0.4, ease: "power2.in" }}, start + dur - 0.4);
+        const veil = card.querySelector(".ch-veil");
+        const num = card.querySelector(".ch-num");
+        const name = card.querySelector(".ch-name");
+        if (veil) tl.fromTo(veil, {{ opacity: 0 }}, {{ opacity: 1, duration: 0.45, ease: "power2.out" }}, start);
+        if (num) {{
+          tl.fromTo(num,
+            {{ opacity: 0, scale: 0.6, y: 8 }},
+            {{ opacity: 1, scale: 1, y: 0, duration: 0.45, ease: "back.out(2.4)" }},
+            start + 0.10
+          );
+        }}
+        if (name) {{
+          tl.fromTo(name,
+            {{ opacity: 0, y: 28, filter: "blur(8px)" }},
+            {{ opacity: 1, y: 0, filter: "blur(0px)", duration: 0.55, ease: "power3.out" }},
+            start + 0.25
+          );
+        }}
+        // Exit: zoom + blur, vignette fades back to reveal the host.
+        tl.to(card,
+          {{ scale: 1.06, filter: "blur(6px)", opacity: 0, duration: 0.45, ease: "power2.in", transformOrigin: "30% 50%" }},
+          start + dur - 0.45
+        );
       }}
 
       {animations_js}
