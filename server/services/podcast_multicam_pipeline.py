@@ -55,9 +55,10 @@ STEP_WEIGHTS = {
     "silences":       0.04,
     "apply_edits":    0.10,
     "level_speakers": 0.06,
+    "enhance_audio":  0.03,
     "multicam_sync":  0.05,
     "multicam_pick":  0.05,
-    "multicam_render":0.35,
+    "multicam_render":0.32,
     "fcpxml_export":  0.02,
     "social_copy":    0.06,
 }
@@ -80,7 +81,8 @@ async def run(
     ctx: jobs_svc.JobContext,
     *,
     language: str | None = None,
-    cut_strategy: str = "silence",   # "silence" | "primary_speaker"
+    cut_strategy: str = "silence",   # "silence" | "primary_speaker" | "none"
+    enhance_audio: bool = False,
 ) -> dict[str, Any]:
     pid = ctx.project_id
     state = storage.load(pid)
@@ -173,11 +175,46 @@ async def run(
             })
             silences_count = 0
             keep_summary = f"primary={plan.get('primary_speaker')} · {len(plan['keep'])} blocos"
+        elif cut_strategy == "none":
+            # User explicitly asked to keep the natural rhythm of the
+            # conversation — no silence cutting at all. Write a cuts.json
+            # with a single keep range covering the entire source so
+            # downstream stages still find the expected schema.
+            full_range = [{"start": 0.0, "end": float(dur or 0.0)}]
+            storage.write_json(pid, "cuts.json", {
+                "options": {},
+                "source_duration": dur,
+                "silences": [],
+                "keep": full_range,
+                "kept_duration": float(dur or 0.0),
+                "source": "none",
+            })
+            silences_count = 0
+            keep_summary = "sem cortes (ritmo natural)"
         else:
-            silences = await ff.detect_silences(src, noise_db=-32.0, min_silence=0.5)
+            # Conservative defaults — old values (-32 dB / 0.5 s) cut
+            # every conversational pause and produced an episode that
+            # sounded "stretched". 1.5 s + -38 dB only catches truly
+            # awkward pauses while keeping the natural cadence.
+            noise_db = -38.0
+            min_silence = 1.5
+            silences = await ff.detect_silences(src, noise_db=noise_db, min_silence=min_silence)
+            # Safety net: if a recording somehow still produces an
+            # absurd number of cuts (> 3 per minute), re-run with a
+            # much wider window so the output is usable rather than
+            # confetti.
+            dur_min = max(1.0, float(dur or 0.0) / 60.0)
+            if len(silences) / dur_min > 3.0:
+                ctx.log(
+                    f"silence cuts overly aggressive ({len(silences)} in {dur_min:.1f}min); "
+                    f"falling back to min_silence=2.5s",
+                    level="warn",
+                )
+                min_silence = 2.5
+                silences = await ff.detect_silences(src, noise_db=noise_db, min_silence=min_silence)
             keep = silence_svc.plan_keep_segments(dur, silences)
             storage.write_json(pid, "cuts.json", {
-                "options": {"noise_db": -32.0, "min_silence": 0.5, "pad": 0.08},
+                "options": {"noise_db": noise_db, "min_silence": min_silence, "pad": 0.08},
                 "source_duration": dur,
                 "silences": [{"start": s, "end": e} for s, e in silences],
                 "keep": [{"start": s, "end": e} for s, e in keep],
@@ -250,6 +287,36 @@ async def run(
     else:
         warn("level_speakers", "speakers ou graded ausente")
     ctx.check_cancel()
+
+    # ── 6b. enhance audio (opt-in) ────────────────────────────────────
+    # Runs *after* speaker leveling because the leveler shifts per-turn
+    # gain, and a global denoise/compressor needs that balanced input
+    # so it doesn't pump on quiet turns. Output replaces levelled.mp4
+    # as the canonical "best audio we have" artifact, which the
+    # multicam render below already picks up via state.has_enhanced.
+    if enhance_audio:
+        step("enhance_audio", "Tratando áudio (denoise + compressor)…", 0.05)
+        try:
+            from . import audio_enhance as audio_enhance_svc
+            best_in = (
+                (pdir / "exports" / f"{state.name.replace(' ', '_')}-levelled.mp4")
+                if state.has_speakers else (graded if graded.exists() else src)
+            )
+            if not best_in.exists():
+                best_in = src
+            enhanced_out = pdir / "enhanced.mp4"
+            await audio_enhance_svc.enhance(best_in, enhanced_out)
+            state.has_enhanced = True
+            storage.save(state)
+            out["outputs"]["enhanced"] = {
+                "name": enhanced_out.name,
+                "url": f"/api/projects/{pid}/files/{enhanced_out.name}",
+                "bytes": enhanced_out.stat().st_size,
+            }
+            done("enhance_audio", "áudio tratado")
+        except Exception as e:
+            warn("enhance_audio", str(e))
+        ctx.check_cancel()
 
     # ── Multicam steps (only when the project has angles) ────────────
     if angles_count >= 1:

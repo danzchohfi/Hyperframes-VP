@@ -54,6 +54,7 @@ from .services import brand_presets
 from .services import bundle as bundle_svc
 from .services import speakers as speakers_svc
 from .services import primary_speaker_cuts as ps_cuts_svc
+from .services import audio_enhance as audio_enhance_svc
 from .services import highlights as highlights_svc
 from .services import social_copy as social_svc
 from .services import templates as templates_svc
@@ -637,6 +638,41 @@ async def primary_speaker_cuts(pid: str, body: PrimarySpeakerCutsIn) -> dict[str
     return full
 
 
+@app.post("/api/projects/{pid}/enhance-audio")
+async def enhance_audio(pid: str) -> dict[str, Any]:
+    """Run the ffmpeg voice cleanup chain on the best available video.
+
+    Source priority: levelled.mp4 → graded.mp4 → source.mp4. Output:
+    pdir/enhanced.mp4 (always under the project root so do_render and
+    the composer can pick it up via state.has_enhanced).
+    """
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    levelled = pdir / "exports" / f"{state.name.replace(' ', '_')}-levelled.mp4"
+    candidates = [levelled, pdir / "graded.mp4", pdir / "source.mp4"]
+    src = next((p for p in candidates if p.exists()), None)
+    if src is None:
+        raise HTTPException(400, "no source video to enhance")
+
+    out = pdir / "enhanced.mp4"
+    _stage(state, "enhance_audio", "running", f"src={src.name}")
+    try:
+        await audio_enhance_svc.enhance(src, out)
+    except Exception as e:
+        _stage(state, "enhance_audio", "error", str(e))
+        raise HTTPException(500, str(e))
+
+    state.has_enhanced = True
+    storage.save(state)
+    _stage(state, "enhance_audio", "done", f"{out.stat().st_size // 1024} KB")
+    return {
+        "name": out.name,
+        "url": f"/api/projects/{pid}/files/{out.name}",
+        "bytes": out.stat().st_size,
+        "source": src.name,
+    }
+
+
 # ---- LUT ---------------------------------------------------------------------
 
 @app.post("/api/projects/{pid}/lut")
@@ -765,13 +801,18 @@ async def do_render(pid: str, body: RenderIn) -> dict[str, Any]:
 
     candidates = {
         "roughcut": pdir / "roughcut.mp4",
+        "enhanced": pdir / "enhanced.mp4",
         "graded": pdir / "graded.mp4",
         "source": pdir / "source.mp4",
     }
-    edited = candidates.get(body.source) or candidates["graded"]
+    # If the user enhanced audio (enhanced.mp4 exists) and didn't pick a
+    # specific source, prefer enhanced. body.source can still override
+    # explicitly via "graded" / "source" / "roughcut".
+    default_pick = "enhanced" if (state.has_enhanced and candidates["enhanced"].exists()) else "graded"
+    edited = candidates.get(body.source) or candidates[default_pick]
     if not edited.exists():
-        # fall back through preferences
-        for pick in ("roughcut", "graded", "source"):
+        # fall back through preferences (enhanced first when available)
+        for pick in ("roughcut", "enhanced", "graded", "source"):
             if candidates[pick].exists():
                 edited = candidates[pick]
                 break
@@ -3965,7 +4006,8 @@ async def serve_short(pid: str, name: str):
 
 class PodcastPipelineIn(BaseModel):
     language: str | None = None  # auto-detect when None
-    cut_strategy: str = "silence"  # "silence" | "primary_speaker"
+    cut_strategy: str = "silence"  # "silence" | "primary_speaker" | "none"
+    enhance_audio: bool = False    # run audio_enhance step after level_speakers
 
 
 @app.post("/api/projects/{pid}/podcast-pipeline")
@@ -3998,6 +4040,7 @@ async def podcast_multicam_pipeline_endpoint(pid: str, body: PodcastPipelineIn) 
             ctx,
             language=body.language,
             cut_strategy=body.cut_strategy,
+            enhance_audio=body.enhance_audio,
         )
 
     job_id = await jobs_svc.manager.submit(pid, "podcast_multicam_pipeline", _run)

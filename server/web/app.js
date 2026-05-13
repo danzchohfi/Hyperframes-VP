@@ -417,6 +417,19 @@ async function runSearch(q) {
 }
 
 async function loadProject(id) {
+  // Detect a project switch so we can reset transient UI state from the
+  // previous project (last section, export form selections, status
+  // banners). Without this, a fresh project lands on whatever section
+  // the user left last time, with stale text in the inputs.
+  let prevPid = null;
+  try { prevPid = localStorage.getItem("hfvp.last_pid"); } catch {}
+  const isSwitch = prevPid && prevPid !== id;
+  if (isSwitch || !state.current) {
+    clearProjectVisualState();
+    setSection("overview");
+  }
+  try { localStorage.setItem("hfvp.last_pid", id); } catch {}
+
   const p = await api(`/api/projects/${id}`);
   state.current = p;
   // Persist so a refresh / share-link lands back on the same project.
@@ -910,7 +923,76 @@ async function newProject() {
     body: JSON.stringify({ name: choice.name, kind: choice.kind }),
   });
   await refreshList();
+  // Force a clean slate before we hand off to loadProject — a brand new
+  // project should always open on overview with default form values, even
+  // if the user's previous session ended on Export.
+  try { localStorage.removeItem("hfvp.last_pid"); } catch {}
+  clearProjectVisualState();
+  setSection("overview");
   await loadProject(p.id);
+}
+
+// Reset UI text/inputs that belong to "the currently-loaded project"
+// before we switch into a different one. Called from loadProject() and
+// newProject(). Touches only DOM — does NOT clear localStorage besides
+// what loadProject explicitly manages.
+function clearProjectVisualState() {
+  const resetText = (sel, text = "", cls = "status muted") => {
+    const el = document.querySelector(sel);
+    if (!el) return;
+    el.textContent = text;
+    el.className = cls;
+  };
+  resetText("#upload-status");
+  resetText("#angle-status");
+  resetText("#brand-status");
+  resetText("#lut-status", "Sem LUT");
+  resetText("#roughcut-status");
+
+  // 1-click pipeline result + progress shell
+  const result1c = document.getElementById("podcast-1click-result");
+  if (result1c) { result1c.innerHTML = ""; result1c.classList.add("hidden"); }
+  const prog1c = document.getElementById("podcast-1click-progress");
+  if (prog1c) prog1c.classList.add("hidden");
+  const hpFill = document.getElementById("hp-fill");
+  if (hpFill) hpFill.style.width = "0%";
+  const hpStep = document.getElementById("hp-step");
+  if (hpStep) hpStep.textContent = "…";
+  const hpPct = document.getElementById("hp-pct");
+  if (hpPct) hpPct.textContent = "0%";
+
+  // Export form selects — back to first option (the markup-declared default)
+  for (const sel of document.querySelectorAll(
+    "#render-aspect, #render-source, #export-aspect, #ass-style, #burn-source, #burn-style"
+  )) {
+    if (sel.options && sel.options.length > 0) sel.selectedIndex = 0;
+  }
+  // Export form checkboxes back off
+  for (const id of [
+    "render-chapters", "caps-roughcut", "caps-speakers",
+    "rc-loudnorm", "rc-denoise",
+    "podcast-1click-host-only", "podcast-1click-skip-silence",
+    "podcast-1click-enhance-audio",
+  ]) {
+    const el = document.getElementById(id);
+    if (el && "checked" in el) el.checked = false;
+  }
+  // Reset language selectors back to "auto"
+  for (const sel of document.querySelectorAll("#podcast-1click-lang, #podcast-lang")) {
+    if (sel.options && sel.options.length > 0) sel.selectedIndex = 0;
+  }
+  // Angle name input
+  const angleName = document.getElementById("angle-name");
+  if (angleName) angleName.value = "";
+
+  // Clear any rendered result containers
+  for (const id of [
+    "shorts-gallery", "social-copy", "media-list", "stale-warnings",
+    "pipeline-log",
+  ]) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = "";
+  }
 }
 
 // Resolves with { name, kind } or null when the user cancels.
@@ -3761,10 +3843,16 @@ async function startPodcast1Click() {
   document.getElementById("hp-fill").style.width = "0%";
   const lang = document.getElementById("podcast-1click-lang")?.value || "";
   const hostOnly = !!document.getElementById("podcast-1click-host-only")?.checked;
+  const skipSilence = !!document.getElementById("podcast-1click-skip-silence")?.checked;
+  const enhanceAudio = !!document.getElementById("podcast-1click-enhance-audio")?.checked;
   try {
     const body = {};
     if (lang) body.language = lang;
+    // host-only wins over skip-silence (primary_speaker already implies
+    // "no silence-based cutting", just smarter).
     if (hostOnly) body.cut_strategy = "primary_speaker";
+    else if (skipSilence) body.cut_strategy = "none";
+    if (enhanceAudio) body.enhance_audio = true;
     const res = await api(`/api/projects/${state.current.id}/podcast-multicam-pipeline`, {
       method: "POST",
       headers: { "content-type": "application/json" },
