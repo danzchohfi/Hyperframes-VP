@@ -482,7 +482,8 @@
               <label class="cb"><input id="reels-use-llm" type="checkbox" checked /> usar IA pra refinar</label>
               <label class="cb"><input id="reels-replace" type="checkbox" checked /> substituir as atuais</label>
               <button id="reels-add-btn" class="btn-ghost">➕ Adicionar manual</button>
-              <button id="reels-preview-btn" class="btn-ghost">👁 Preview ao vivo</button>
+              <button id="reels-preview-btn" class="btn-ghost">👁 Preview HTML (instantâneo)</button>
+              <button id="reels-quick-preview-btn" class="btn-ghost">⚡ Preview MP4 (~10s)</button>
               <span id="reels-status" class="status muted"></span>
             </div>
             <div class="reels-templates-row">
@@ -517,11 +518,13 @@
             </div>
             <div id="reels-preview-pane" class="reels-preview-pane hidden">
               <div class="reels-preview-head">
-                <strong>Preview ao vivo</strong>
+                <strong id="reels-preview-title">Preview</strong>
+                <span id="reels-preview-stats" class="cp-hint"></span>
                 <button id="reels-preview-reload" class="btn-ghost">↻ recarregar</button>
                 <button id="reels-preview-close" class="btn-ghost">✕ fechar</button>
               </div>
               <iframe id="reels-preview-iframe" class="reels-preview-iframe" title="Preview reels"></iframe>
+              <video id="reels-preview-video" class="reels-preview-video hidden" controls playsinline></video>
             </div>
           </section>
 

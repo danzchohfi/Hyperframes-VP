@@ -3320,30 +3320,73 @@ async function suggestReelAnims() {
   }
 }
 
+// REELS_STATE.preview_mode: "html" (live iframe) or "mp4" (quick MP4)
 function openReelsPreview() {
   if (!state.current) return;
-  const pane = $("#reels-preview-pane");
-  pane.classList.remove("hidden");
+  REELS_STATE.preview_mode = "html";
+  $("#reels-preview-pane").classList.remove("hidden");
+  $("#reels-preview-iframe").classList.remove("hidden");
+  $("#reels-preview-video").classList.add("hidden");
+  $("#reels-preview-title").textContent = "Preview HTML";
+  $("#reels-preview-stats").textContent = "instantâneo · GSAP timeline";
   reloadReelsPreview();
 }
 
 function reloadReelsPreview() {
   if (!state.current) return;
+  if (REELS_STATE.preview_mode === "mp4") return quickPreviewReel();
   const iframe = $("#reels-preview-iframe");
   if (!iframe) return;
-  // Pick the freshest source the preview can stream.
   const p = state.current;
   let pick = "source";
   if (p.has_roughcut) pick = "roughcut";
   else if (p.has_render || p.has_cuts) pick = "graded";
-  // Cache-bust so changes to animations are visible without a hard reload.
   iframe.src = `/api/projects/${state.current.id}/reels/preview?source=${pick}&t=${Date.now()}`;
 }
 
-function closeReelsPreview() {
+async function quickPreviewReel() {
+  if (!state.current) return;
+  REELS_STATE.preview_mode = "mp4";
   const pane = $("#reels-preview-pane");
-  pane.classList.add("hidden");
+  pane.classList.remove("hidden");
+  $("#reels-preview-iframe").classList.add("hidden");
+  const video = $("#reels-preview-video");
+  video.classList.remove("hidden");
+  $("#reels-preview-title").textContent = "Preview MP4";
+  $("#reels-preview-stats").textContent = "renderizando…";
+  const p = state.current;
+  let pick = "source";
+  if (p.has_roughcut) pick = "roughcut";
+  else if (p.has_render || p.has_cuts) pick = "graded";
+  try {
+    const res = await api(`/api/projects/${state.current.id}/reels/quick-preview`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ source: pick, width: 540 }),
+    });
+    video.src = `${res.url}?t=${Date.now()}`;
+    video.load();
+    video.play().catch(() => {});
+    $("#reels-preview-stats").textContent =
+      `✓ ${(res.took_ms / 1000).toFixed(1)}s · ${res.rasterized} novas, ${res.reused} reusadas · ${res.width}×${res.height}`;
+    log(`✓ quick preview: ${res.took_ms}ms`, "ok");
+  } catch (e) {
+    $("#reels-preview-stats").textContent = `✗ ${e.message}`;
+    log(`✗ quick preview: ${e.message}`, "err");
+    // Fall back to HTML preview so the pane isn't dead
+    REELS_STATE.preview_mode = "html";
+    $("#reels-preview-iframe").classList.remove("hidden");
+    video.classList.add("hidden");
+    reloadReelsPreview();
+  }
+}
+
+function closeReelsPreview() {
+  $("#reels-preview-pane").classList.add("hidden");
   $("#reels-preview-iframe").src = "about:blank";
+  const video = $("#reels-preview-video");
+  video.pause();
+  video.src = "";
 }
 
 function bindReels() {
@@ -3357,6 +3400,8 @@ function bindReels() {
   if (b4) b4.onclick = closeReelsForm;
   const b5 = $("#reels-preview-btn");
   if (b5) b5.onclick = openReelsPreview;
+  const b5b = $("#reels-quick-preview-btn");
+  if (b5b) b5b.onclick = quickPreviewReel;
   const b6 = $("#reels-preview-reload");
   if (b6) b6.onclick = reloadReelsPreview;
   const b7 = $("#reels-preview-close");

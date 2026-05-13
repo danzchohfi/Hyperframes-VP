@@ -72,6 +72,7 @@ from .services import multicam_render as mc_render_svc
 from .services import reels_suggest as reels_suggest_svc
 from .services import reels_animations as reels_anim_svc
 from .services import reel_templates as reel_tpl_svc
+from .services import reels_preview as reels_preview_svc
 from .services import vlog as vlog_svc
 from .services import vlog_assemble as vlog_assemble_svc
 from .services import vlog_pipeline as vlog_pipeline_svc
@@ -1259,6 +1260,74 @@ async def suggest_reels_animations(pid: str, body: ReelsSuggestIn) -> dict[str, 
     storage.write_json(pid, "reels_animations.json", {"animations": cleaned})
     _stage(state, "reels_suggest", "done", f"{len(cleaned)} animações")
     return {"animations": cleaned, "count": len(cleaned)}
+
+
+# ---- reels quick preview (PIL + ffmpeg, ~10s) --------------------------------
+
+class ReelsQuickPreviewIn(BaseModel):
+    source: str = "source"  # source | graded | roughcut
+    width: int = 540
+    aspect: str | None = None  # if None, honors the source's aspect
+
+
+@app.post("/api/projects/{pid}/reels/quick-preview")
+async def reels_quick_preview(pid: str, body: ReelsQuickPreviewIn) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    candidates = {
+        "source": pdir / "source.mp4",
+        "graded": pdir / "graded.mp4",
+        "roughcut": pdir / "roughcut.mp4",
+    }
+    video = candidates.get(body.source) or candidates["source"]
+    if not video.exists():
+        for pick in ("source", "graded", "roughcut"):
+            if candidates[pick].exists():
+                video = candidates[pick]
+                break
+    if not video.exists():
+        raise HTTPException(400, "sem vídeo de origem — suba primeiro")
+
+    brand = (
+        BrandBook.model_validate(storage.read_json(pid, "brand.json"))
+        if state.has_brand else BrandBook()
+    )
+    animations: list[dict[str, Any]] = []
+    if (pdir / "reels_animations.json").exists():
+        try:
+            animations = storage.read_json(pid, "reels_animations.json").get("animations") or []
+        except Exception:
+            animations = []
+
+    _stage(state, "reels_quick_preview", "running", f"{len(animations)} animações")
+    try:
+        result = await reels_preview_svc.render_quick_preview(
+            project_dir=pdir,
+            source=video,
+            animations=animations,
+            brand=brand,
+            width=body.width,
+            aspect=body.aspect,
+        )
+    except Exception as e:
+        _stage(state, "reels_quick_preview", "error", str(e))
+        raise HTTPException(500, str(e))
+
+    out_path = result["path"]
+    _stage(
+        state, "reels_quick_preview", "done",
+        f"{result['took_ms']}ms · {result['rasterized']} novas · {result['reused']} reusadas",
+    )
+    return {
+        "url": f"/api/projects/{pid}/files/{out_path.name}",
+        "bytes": out_path.stat().st_size,
+        "duration": result["duration"],
+        "took_ms": result["took_ms"],
+        "rasterized": result["rasterized"],
+        "reused": result["reused"],
+        "width": result["width"],
+        "height": result["height"],
+    }
 
 
 # ---- reel templates ----------------------------------------------------------

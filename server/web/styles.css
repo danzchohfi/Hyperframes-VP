@@ -1381,17 +1381,18 @@ a { color: inherit; text-decoration: none; }
   margin-bottom: 10px;
 }
 .reels-preview-head strong { flex: 1; }
-.reels-preview-iframe {
+.reels-preview-iframe, .reels-preview-video {
   width: 100%;
-  max-width: 600px;
-  height: 1080px;
-  max-height: 80vh;
+  max-width: 540px;
   border: 0;
   border-radius: 8px;
   background: #000;
   display: block;
   margin: 0 auto;
 }
+.reels-preview-iframe { height: 1080px; max-height: 80vh; }
+.reels-preview-video  { aspect-ratio: 9/16; max-height: 80vh; object-fit: contain; }
+.reels-preview-head #reels-preview-stats { flex: 1; }
 .nle-warnings { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
 .nle-warn {
   font-size: 12px;
