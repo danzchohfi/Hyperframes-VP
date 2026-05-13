@@ -201,11 +201,17 @@ def build_composition(
         else:
             speaker_names[sp] = f"Speaker {sp}"
 
-    # Build caption HTML
+    # Build caption HTML. Each word gets a `.cw-bg` span behind it so we
+    # can draw an animated underline (scaleX 0→1) during the word, and the
+    # word text itself sits inside `.cw-text` so we can tween color/scale
+    # via the .hot CSS class without fighting GSAP's transform.
     caption_html_parts: list[str] = []
     for i, line in enumerate(caption_lines):
         word_spans = " ".join(
-            f'<span class="cw" data-w-start="{w["start"]}" data-w-end="{w["end"]}">{html.escape(w["word"])}</span>'
+            f'<span class="cw" data-w-start="{w["start"]}" data-w-end="{w["end"]}">'
+            f'<span class="cw-bg"></span>'
+            f'<span class="cw-text">{html.escape(w["word"])}</span>'
+            f'</span>'
             for w in line["words"]
         )
         sp = line.get("speaker")
@@ -515,11 +521,41 @@ def build_composition(
         text-shadow: {('0 4px 28px rgba(0,0,0,0.95), 2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000' if brand.caption_style == 'tiktok' else '0 2px 14px rgba(0,0,0,0.7)' if brand.caption_style == 'podcast' else '0 4px 28px rgba(0,0,0,0.85), 0 0 2px rgba(0,0,0,0.6)')};
         {'background: rgba(0,0,0,0.55); padding: 14px 20px; border-radius: 10px; backdrop-filter: blur(8px);' if brand.caption_style == 'podcast' else ''}
       }}
-      .caption .cw {{ display: inline-block; margin: 0 0.18em; transition: color 60ms linear, transform 80ms ease; }}
-      .caption .cw.hot {{
+      .caption .cw {{
+        position: relative;
+        display: inline-block;
+        margin: 0 0.18em;
+        /* hidden until GSAP entrance tween brings them in */
+        opacity: 0;
+        transform: translateY(14px) scale(0.92);
+        will-change: transform, opacity;
+      }}
+      .caption .cw-text {{
+        position: relative;
+        z-index: 2;
+        display: inline-block;
+        transition: color 80ms linear, transform 110ms cubic-bezier(.34,1.56,.64,1), text-shadow 80ms linear;
+      }}
+      .caption .cw-bg {{
+        position: absolute;
+        left: -0.12em;
+        right: -0.12em;
+        bottom: -0.04em;
+        height: {('0.42em' if brand.caption_style == 'tiktok' else '0.22em')};
+        background: linear-gradient(90deg,
+          {caption_highlight} 0%,
+          {palette.accent} 100%);
+        opacity: 0.85;
+        border-radius: 4px;
+        transform: scaleX(0);
+        transform-origin: left center;
+        z-index: 1;
+        will-change: transform;
+      }}
+      .caption .cw.hot .cw-text {{
         color: {caption_highlight};
-        text-shadow: 0 0 20px {caption_highlight}aa, 0 4px 28px rgba(0,0,0,0.85);
-        {'transform: scale(1.15);' if brand.caption_style == 'tiktok' else ''}
+        text-shadow: 0 0 24px {caption_highlight}cc, 0 4px 28px rgba(0,0,0,0.92);
+        transform: scale({'1.20' if brand.caption_style == 'tiktok' else '1.10'});
       }}
       .cs-label {{
         display: inline-block;
@@ -681,11 +717,38 @@ def build_composition(
       }}
 
       {animations_js}
+
+      // Per-word kinetic caption animation — entrance pop + underline draw
+      // anchored on the main timeline so Hyperframes can scrub it
+      // deterministically (no wall-clock dependency).
+      const allCw = Array.from(document.querySelectorAll(".caption .cw"));
+      for (const w of allCw) {{
+        const s = parseFloat(w.dataset.wStart);
+        const e = parseFloat(w.dataset.wEnd);
+        if (!isFinite(s) || !isFinite(e) || e <= s) continue;
+        const dur = Math.max(e - s, 0.06);
+        const entrance = Math.max(0, s - 0.08);
+        // Pop in just before the word is spoken
+        tl.fromTo(w,
+          {{ opacity: 0, y: 14, scale: 0.92 }},
+          {{ opacity: 1, y: 0, scale: 1, duration: 0.22, ease: "back.out(2)" }},
+          entrance
+        );
+        // Underline draws across the word as it's being spoken
+        const bg = w.querySelector(".cw-bg");
+        if (bg) {{
+          tl.fromTo(bg,
+            {{ scaleX: 0 }},
+            {{ scaleX: 1, duration: Math.min(dur, 0.45), ease: "power2.out" }},
+            s
+          );
+        }}
+      }}
+
       window.__timelines["main"] = tl;
 
-      // Word-level caption highlighting driven by hf-seek time.
-      const captions = Array.from(document.querySelectorAll(".caption"));
-      const allWords = captions.flatMap(c => Array.from(c.querySelectorAll(".cw")));
+      // Hot toggle for color/shadow — CSS-driven, runs on every scrub tick.
+      const allWords = allCw;
       function applyHotAt(t) {{
         for (const w of allWords) {{
           const s = parseFloat(w.dataset.wStart);

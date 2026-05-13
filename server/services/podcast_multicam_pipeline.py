@@ -53,12 +53,13 @@ STEP_WEIGHTS = {
     "speakers":       0.06,
     "chapters":       0.03,
     "silences":       0.04,
+    "auto_animations":0.01,
     "apply_edits":    0.10,
     "level_speakers": 0.06,
     "enhance_audio":  0.03,
     "multicam_sync":  0.05,
     "multicam_pick":  0.05,
-    "multicam_render":0.32,
+    "multicam_render":0.31,
     "fcpxml_export":  0.02,
     "social_copy":    0.06,
 }
@@ -83,6 +84,7 @@ async def run(
     language: str | None = None,
     cut_strategy: str = "silence",   # "silence" | "primary_speaker" | "none"
     enhance_audio: bool = False,
+    auto_animations: bool = True,
 ) -> dict[str, Any]:
     pid = ctx.project_id
     state = storage.load(pid)
@@ -242,6 +244,51 @@ async def run(
         filler_ranges = []
     ctx.check_cancel()
 
+    # ── 4b. auto-generate reels animations (opt-in, default ON) ──────
+    # Uses transcript + chapters + soundbites + questions + brand to
+    # build a baseline animation overlay so the rendered podcast looks
+    # produced instead of static. Doesn't touch the LLM — pure heuristic.
+    if auto_animations:
+        step("auto_animations", "Sugerindo animações automáticas…", 0.5)
+        try:
+            from . import podcast_animations as pa_svc
+            chapters_list = None
+            if (pdir / "chapters.json").exists():
+                try:
+                    chapters_list = (storage.read_json(pid, "chapters.json") or {}).get("chapters") or []
+                except Exception:
+                    chapters_list = None
+            soundbites_list = None
+            if (pdir / "soundbites.json").exists():
+                try:
+                    soundbites_list = (storage.read_json(pid, "soundbites.json") or {}).get("soundbites") or []
+                except Exception:
+                    soundbites_list = None
+            questions_list = None
+            if (pdir / "questions.json").exists():
+                try:
+                    questions_list = (storage.read_json(pid, "questions.json") or {}).get("questions") or []
+                except Exception:
+                    questions_list = None
+            brand_obj = (
+                BrandBook.model_validate(storage.read_json(pid, "brand.json"))
+                if state.has_brand else BrandBook()
+            )
+            dur_for_anims = state.source_duration or (await ff.duration(src))
+            plan = pa_svc.auto_generate(
+                source_duration=float(dur_for_anims or 0.0),
+                transcript=transcript,
+                chapters=chapters_list,
+                soundbites=soundbites_list,
+                questions=questions_list,
+                brand=brand_obj,
+            )
+            storage.write_json(pid, "reels_animations.json", plan)
+            done("auto_animations", f"{plan.get('count', 0)} overlay(s)")
+        except Exception as e:
+            warn("auto_animations", str(e))
+        ctx.check_cancel()
+
     # ── 5. apply edits ────────────────────────────────────────────────
     step("apply_edits", "Aplicando cortes + LUT…", 0.05)
     graded = pdir / "graded.mp4"
@@ -335,10 +382,17 @@ async def run(
                     if a.get("name") == entry["name"]:
                         a["audio_offset"] = entry["offset"]
                         a["audio_offset_score"] = entry.get("score", 0.0)
+                        a["audio_offset_reliable"] = bool(entry.get("reliable", False))
                         break
             storage.save(state_cur)
             storage.write_json(pid, "multicam_sync.json", {"offsets": offsets})
-            done("multicam_sync", f"{len(offsets) - 1} ângulo(s) alinhado(s)")
+            # Flag any unreliable sync so the user knows to verify manually.
+            weak = [e for e in offsets[1:] if not e.get("reliable", False)]
+            if weak:
+                names = ", ".join(e["name"] for e in weak)
+                warn("multicam_sync", f"locks fracos em: {names} — verifique manualmente no Final Cut")
+            else:
+                done("multicam_sync", f"{len(offsets) - 1} ângulo(s) alinhado(s)")
         except Exception as e:
             warn("multicam_sync", str(e))
         ctx.check_cancel()

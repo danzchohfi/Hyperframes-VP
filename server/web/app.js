@@ -3845,6 +3845,11 @@ async function startPodcast1Click() {
   const hostOnly = !!document.getElementById("podcast-1click-host-only")?.checked;
   const skipSilence = !!document.getElementById("podcast-1click-skip-silence")?.checked;
   const enhanceAudio = !!document.getElementById("podcast-1click-enhance-audio")?.checked;
+  // Auto-animations defaults to true (the checkbox is `checked` in HTML),
+  // so explicitly send `false` only when the user unchecks it. Default-true
+  // matches the server-side default.
+  const autoAnimEl = document.getElementById("podcast-1click-auto-animations");
+  const autoAnimations = autoAnimEl ? !!autoAnimEl.checked : true;
   try {
     const body = {};
     if (lang) body.language = lang;
@@ -3853,6 +3858,7 @@ async function startPodcast1Click() {
     if (hostOnly) body.cut_strategy = "primary_speaker";
     else if (skipSilence) body.cut_strategy = "none";
     if (enhanceAudio) body.enhance_audio = true;
+    if (!autoAnimations) body.auto_animations = false;
     const res = await api(`/api/projects/${state.current.id}/podcast-multicam-pipeline`, {
       method: "POST",
       headers: { "content-type": "application/json" },

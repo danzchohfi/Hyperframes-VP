@@ -4008,6 +4008,7 @@ class PodcastPipelineIn(BaseModel):
     language: str | None = None  # auto-detect when None
     cut_strategy: str = "silence"  # "silence" | "primary_speaker" | "none"
     enhance_audio: bool = False    # run audio_enhance step after level_speakers
+    auto_animations: bool = True   # auto-generate the reels_animations layer
 
 
 @app.post("/api/projects/{pid}/podcast-pipeline")
@@ -4041,6 +4042,7 @@ async def podcast_multicam_pipeline_endpoint(pid: str, body: PodcastPipelineIn) 
             language=body.language,
             cut_strategy=body.cut_strategy,
             enhance_audio=body.enhance_audio,
+            auto_animations=body.auto_animations,
         )
 
     job_id = await jobs_svc.manager.submit(pid, "podcast_multicam_pipeline", _run)
