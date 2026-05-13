@@ -3732,11 +3732,6 @@ function bind() {
   }
 }
 
-bind();
-refreshList();
-restoreActiveProject();
-bindPodcast1Click();
-
 // ── 1-click podcast multicam pipeline ──────────────────────────────────────
 
 const POD1CLICK_STEPS = [
@@ -4439,3 +4434,12 @@ async function refreshReelsOnLoad() {
     await loadReels();
   }
 }
+
+// ---- INIT (must stay at the very bottom, after every const/let/function
+// declaration above. Calling bind*() before those declarations triggers
+// TDZ errors that abort module evaluation — see commit history for the
+// 1-click / Reels regression). ----
+bind();
+refreshList();
+restoreActiveProject();
+bindPodcast1Click();
