@@ -616,6 +616,23 @@
                   <button id="hf-lib-refresh" class="btn btn-ghost btn-sm" type="button" title="Re-busca o catálogo do registry (cache de 5min)"><span data-icon="refresh-cw" data-icon-size="14"></span></button>
                 </div>
                 <div id="hf-lib-installed" class="hf-library-installed"></div>
+
+                <!-- Timeline editor: drag bands to move blocks, drag the
+                     right edge to resize. Surfaces ONLY when there's at
+                     least one scheduled block. Save persists via
+                     PUT /extra-blocks + rebuilds the composition. -->
+                <div id="hf-lib-timeline" class="hf-lib-timeline hidden">
+                  <div class="hf-lib-timeline-head">
+                    <span class="hf-lib-timeline-title">Timeline dos blocos</span>
+                    <span class="muted hf-lib-timeline-meta" id="hf-lib-timeline-meta"></span>
+                    <button id="hf-lib-timeline-revert" class="btn btn-ghost btn-sm" type="button" disabled><span data-icon="rotate-ccw" data-icon-size="13"></span> Reverter</button>
+                    <button id="hf-lib-timeline-save" class="btn btn-primary btn-sm" type="button" disabled><span data-icon="check" data-icon-size="13"></span> Salvar</button>
+                  </div>
+                  <div id="hf-lib-timeline-strip" class="hf-lib-timeline-strip" aria-label="Linha do tempo dos blocos"></div>
+                  <p class="muted hf-lib-timeline-hint">Arraste a banda para mover · arraste a borda direita para redimensionar · clique para selecionar.</p>
+                  <div id="hf-lib-timeline-inspector" class="hf-lib-timeline-inspector hidden"></div>
+                </div>
+
                 <div id="hf-lib-grid" class="hf-library-grid">
                   <div class="muted" style="padding:12px;text-align:center">Clique no cabeçalho pra carregar o catálogo.</div>
                 </div>

@@ -5261,8 +5261,16 @@ const _hfLib = {
   catalog: null,   // [{name,type,title,description,tags,dimensions?,duration?}, ...] | null
   installed: [],   // [{name, kind, type, title, ...}, ...]
   schedule: [],    // [{name, start, duration, opacity}, ...] from extra_blocks.json
+  savedSchedule: [],   // baseline for revert (deep-clone of last loaded schedule)
   filter: { search: "", type: "", tag: "" },
+  // Timeline editor state
+  selectedIdx: -1,
+  dirty: false,
+  drag: null,      // {idx, mode: "move"|"resize", originX, rect, originStart, originDuration}
 };
+
+const HF_TL_SNAP = 0.1;
+const HF_TL_MIN_DUR = 0.4;
 
 async function loadHfCatalog(force = false) {
   if (!force && _hfLib.catalog) return _hfLib.catalog;
@@ -5306,11 +5314,252 @@ async function loadHfInstalled() {
   // installed pills can show each block's start/duration.
   try {
     const sch = await api(`/api/projects/${state.current.id}/extra-blocks`);
-    _hfLib.schedule = sch.blocks || [];
+    _hfLib.schedule = (sch.blocks || []).map(b => ({ ...b }));
+    _hfLib.savedSchedule = (sch.blocks || []).map(b => ({ ...b }));
   } catch {
     _hfLib.schedule = [];
+    _hfLib.savedSchedule = [];
   }
+  _hfLib.dirty = false;
+  _hfLib.selectedIdx = -1;
   return _hfLib.installed;
+}
+
+function _hfLibSourceDuration() {
+  // The composition timeline length: source duration if known, else fall
+  // back to the max schedule end so bands never overflow the strip.
+  const fromSource = parseFloat(state.current?.source_duration || 0);
+  if (fromSource > 0) return fromSource;
+  let m = 1;
+  for (const b of _hfLib.schedule) {
+    const end = (parseFloat(b.start) || 0) + (parseFloat(b.duration) || 0);
+    if (end > m) m = end;
+  }
+  return Math.max(m, 5);
+}
+
+function _hfLibSetDirty(dirty) {
+  _hfLib.dirty = !!dirty;
+  const save = document.getElementById("hf-lib-timeline-save");
+  const rev = document.getElementById("hf-lib-timeline-revert");
+  if (save) save.disabled = !dirty;
+  if (rev) rev.disabled = !dirty;
+}
+
+function renderHfTimeline() {
+  const root = document.getElementById("hf-lib-timeline");
+  const strip = document.getElementById("hf-lib-timeline-strip");
+  const meta = document.getElementById("hf-lib-timeline-meta");
+  if (!root || !strip) return;
+  const sched = _hfLib.schedule || [];
+  // Hide the whole block when nothing's scheduled.
+  if (!sched.length) {
+    root.classList.add("hidden");
+    return;
+  }
+  root.classList.remove("hidden");
+  const dur = _hfLibSourceDuration();
+  if (meta) meta.textContent = `${sched.length} bloco(s) · ${dur.toFixed(1)}s totais`;
+
+  // Multi-row layout: pack overlapping bands onto separate rows so users
+  // can drag each one independently. Greedy first-fit: sort by start,
+  // assign each band to the lowest row whose last block ended before
+  // this band starts. Cap to 4 rows to keep the strip readable; further
+  // overlaps just visually stack.
+  const sorted = sched.map((b, i) => ({ ...b, _idx: i })).sort((a, b) => a.start - b.start);
+  const rowEnds = [];
+  for (const b of sorted) {
+    let row = rowEnds.findIndex(end => end <= b.start + 1e-6);
+    if (row === -1) {
+      if (rowEnds.length < 4) {
+        row = rowEnds.length;
+        rowEnds.push(0);
+      } else {
+        row = rowEnds.length - 1;
+      }
+    }
+    rowEnds[row] = b.start + b.duration;
+    b._row = row;
+  }
+  const totalRows = Math.max(1, rowEnds.length);
+  const palette = ["#a78bfa", "#3b82f6", "#f472b6", "#22c55e", "#f59e0b", "#ef4444"];
+  const rowHeight = 100 / totalRows;
+  const bands = sorted.map(b => {
+    const left = Math.max(0, (b.start / dur) * 100);
+    const width = Math.max(0.1, (b.duration / dur) * 100);
+    const top = b._row * rowHeight;
+    const color = palette[b._idx % palette.length];
+    const installed = _hfLib.installed.find(it => it.name === b.name);
+    const label = (installed?.title || b.name).slice(0, 28);
+    const isSel = b._idx === _hfLib.selectedIdx;
+    return `<div class="hf-tl-band${isSel ? ' selected' : ''}" data-idx="${b._idx}"
+      style="left:${left}%;width:${width}%;top:${top + 2}%;height:${rowHeight - 4}%;background:${color}"
+      title="${escapeHtml(label)} · ${b.start.toFixed(1)}s → ${(b.start + b.duration).toFixed(1)}s">
+      <span class="hf-tl-band-label">${escapeHtml(label)}</span>
+      <div class="hf-tl-band-resizer" data-idx="${b._idx}"></div>
+    </div>`;
+  }).join("");
+  // Time ruler: tick every ~10% of the timeline, labeled in seconds.
+  const tickCount = 6;
+  const ticks = Array.from({ length: tickCount + 1 }, (_, i) => {
+    const pct = (i / tickCount) * 100;
+    const t = (i / tickCount) * dur;
+    return `<div class="hf-tl-tick" style="left:${pct}%"><span>${t.toFixed(1)}s</span></div>`;
+  }).join("");
+  strip.style.setProperty("--rows", String(totalRows));
+  strip.innerHTML = ticks + bands;
+  renderHfTimelineInspector();
+}
+
+function renderHfTimelineInspector() {
+  const root = document.getElementById("hf-lib-timeline-inspector");
+  if (!root) return;
+  const idx = _hfLib.selectedIdx;
+  if (idx < 0 || idx >= _hfLib.schedule.length) {
+    root.classList.add("hidden");
+    root.innerHTML = "";
+    return;
+  }
+  const b = _hfLib.schedule[idx];
+  const installed = _hfLib.installed.find(it => it.name === b.name);
+  const title = installed?.title || b.name;
+  const naturalDur = parseFloat(installed?.duration || 5);
+  const maxDur = _hfLibSourceDuration();
+  root.innerHTML = `
+    <div class="hf-tl-insp-head">
+      <strong>${escapeHtml(title)}</strong>
+      <span class="muted">${escapeHtml(b.name)}</span>
+      <span style="flex:1"></span>
+      <button class="btn btn-ghost btn-sm" id="hf-tl-insp-natural" type="button" title="Volta pra duração natural do bloco (${naturalDur}s)">Duração natural</button>
+      <button class="btn btn-ghost btn-sm" id="hf-tl-insp-remove" type="button"><span data-icon="trash-2" data-icon-size="13"></span> Tirar do timeline</button>
+    </div>
+    <div class="hf-tl-insp-grid">
+      <label>Start (s)<input id="hf-tl-insp-start" type="number" step="0.1" min="0" max="${maxDur}" value="${b.start.toFixed(2)}" /></label>
+      <label>Duração (s)<input id="hf-tl-insp-dur" type="number" step="0.1" min="${HF_TL_MIN_DUR}" max="${maxDur}" value="${b.duration.toFixed(2)}" /></label>
+      <label>Opacidade<input id="hf-tl-insp-opacity" type="range" min="0" max="1" step="0.05" value="${b.opacity ?? 1}" /></label>
+    </div>`;
+  root.classList.remove("hidden");
+  if (window.HFIcons) HFIcons.render(root);
+  // Bind controls
+  document.getElementById("hf-tl-insp-start")?.addEventListener("input", (e) => {
+    const v = Math.max(0, Math.min(maxDur - HF_TL_MIN_DUR, parseFloat(e.target.value) || 0));
+    _hfLib.schedule[idx].start = v;
+    _hfLibSetDirty(true);
+    renderHfTimeline();
+  });
+  document.getElementById("hf-tl-insp-dur")?.addEventListener("input", (e) => {
+    const v = Math.max(HF_TL_MIN_DUR, parseFloat(e.target.value) || HF_TL_MIN_DUR);
+    _hfLib.schedule[idx].duration = v;
+    _hfLibSetDirty(true);
+    renderHfTimeline();
+  });
+  document.getElementById("hf-tl-insp-opacity")?.addEventListener("input", (e) => {
+    const v = Math.max(0, Math.min(1, parseFloat(e.target.value) || 0));
+    _hfLib.schedule[idx].opacity = v;
+    _hfLibSetDirty(true);
+  });
+  document.getElementById("hf-tl-insp-natural")?.addEventListener("click", () => {
+    _hfLib.schedule[idx].duration = naturalDur;
+    _hfLibSetDirty(true);
+    renderHfTimeline();
+  });
+  document.getElementById("hf-tl-insp-remove")?.addEventListener("click", () => {
+    _hfLib.schedule.splice(idx, 1);
+    _hfLib.selectedIdx = -1;
+    _hfLibSetDirty(true);
+    renderHfTimeline();
+  });
+}
+
+function startHfTlDrag(e, idx, mode) {
+  const strip = document.getElementById("hf-lib-timeline-strip");
+  if (!strip) return;
+  const b = _hfLib.schedule[idx];
+  if (!b) return;
+  const dur = _hfLibSourceDuration();
+  _hfLib.drag = {
+    idx, mode,
+    rect: strip.getBoundingClientRect(),
+    originStart: b.start,
+    originDuration: b.duration,
+    originX: e.clientX,
+    timelineDuration: dur,
+  };
+  _hfLib.selectedIdx = idx;
+  document.body.style.cursor = mode === "resize" ? "ew-resize" : "grabbing";
+  e.preventDefault();
+  e.stopPropagation();
+}
+
+function onHfTlDragMove(e) {
+  const drag = _hfLib.drag;
+  if (!drag) return;
+  const dxPx = e.clientX - drag.originX;
+  const dxSec = (dxPx / drag.rect.width) * drag.timelineDuration;
+  const b = _hfLib.schedule[drag.idx];
+  if (!b) return;
+  if (drag.mode === "move") {
+    let newStart = drag.originStart + dxSec;
+    newStart = Math.round(newStart / HF_TL_SNAP) * HF_TL_SNAP;
+    newStart = Math.max(0, Math.min(drag.timelineDuration - HF_TL_MIN_DUR, newStart));
+    b.start = newStart;
+  } else if (drag.mode === "resize") {
+    let newDur = drag.originDuration + dxSec;
+    newDur = Math.round(newDur / HF_TL_SNAP) * HF_TL_SNAP;
+    newDur = Math.max(HF_TL_MIN_DUR, Math.min(drag.timelineDuration - b.start, newDur));
+    b.duration = newDur;
+  }
+  _hfLibSetDirty(true);
+  renderHfTimeline();
+}
+
+function endHfTlDrag() {
+  if (!_hfLib.drag) return;
+  _hfLib.drag = null;
+  document.body.style.cursor = "";
+}
+
+async function saveHfTimeline() {
+  if (!state.current || !_hfLib.dirty) return;
+  const btn = document.getElementById("hf-lib-timeline-save");
+  if (btn) btn.disabled = true;
+  try {
+    const blocks = _hfLib.schedule.map(b => ({
+      name: b.name,
+      start: parseFloat(b.start) || 0,
+      duration: parseFloat(b.duration) || 5,
+      opacity: parseFloat(b.opacity ?? 1),
+    }));
+    await api(`/api/projects/${state.current.id}/extra-blocks`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ blocks }),
+    });
+    _hfLib.savedSchedule = blocks.map(b => ({ ...b }));
+    _hfLibSetDirty(false);
+    // Rebuild the composition so Preview Hyperframes shows the new layout.
+    try {
+      await api(`/api/projects/${state.current.id}/composition`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+    } catch {}
+    renderHfInstalled();
+    toast?.("Timeline salvo. Abra Preview Hyperframes pra ver.", "ok");
+  } catch (e) {
+    if (btn) btn.disabled = false;
+    toast?.(`Falha ao salvar: ${e.message}`, "err");
+  }
+}
+
+function revertHfTimeline() {
+  if (!_hfLib.dirty) return;
+  _hfLib.schedule = _hfLib.savedSchedule.map(b => ({ ...b }));
+  _hfLib.selectedIdx = -1;
+  _hfLibSetDirty(false);
+  renderHfTimeline();
+  renderHfInstalled();
 }
 
 function renderHfTagFilter() {
@@ -5436,6 +5685,7 @@ async function installHfBlock(name) {
     await loadHfInstalled();
     renderHfInstalled();
     renderHfGrid();
+    renderHfTimeline();
   } catch (e) {
     if (status) {
       status.textContent = `✗ ${e.message}`;
@@ -5463,6 +5713,7 @@ async function uninstallHfBlock(name) {
     await loadHfInstalled();
     renderHfInstalled();
     renderHfGrid();
+    renderHfTimeline();
     toast?.(`${name} removido do projeto.`, "ok");
   } catch (e) {
     toast?.(`Falha ao remover: ${e.message}`, "err");
@@ -5484,6 +5735,7 @@ function bindHfLibrary() {
     renderHfTagFilter();
     renderHfInstalled();
     renderHfGrid();
+    renderHfTimeline();
   });
 
   document.getElementById("hf-lib-search")?.addEventListener("input", (e) => {
@@ -5512,6 +5764,47 @@ function bindHfLibrary() {
     if (e.target.closest(".hf-lib-install")) installHfBlock(name);
     else if (e.target.closest(".hf-lib-uninstall")) uninstallHfBlock(name);
   });
+
+  // Timeline strip — drag bands to move, drag the right edge to resize,
+  // click to select. Event delegation survives re-renders of the strip's
+  // innerHTML (we re-render on every state change).
+  const strip = document.getElementById("hf-lib-timeline-strip");
+  if (strip) {
+    strip.addEventListener("mousedown", (e) => {
+      const resizer = e.target.closest(".hf-tl-band-resizer");
+      if (resizer) {
+        const idx = parseInt(resizer.dataset.idx || "-1", 10);
+        if (idx >= 0) startHfTlDrag(e, idx, "resize");
+        return;
+      }
+      const band = e.target.closest(".hf-tl-band");
+      if (band) {
+        const idx = parseInt(band.dataset.idx || "-1", 10);
+        if (idx >= 0) startHfTlDrag(e, idx, "move");
+      } else {
+        // Click on empty strip → deselect.
+        _hfLib.selectedIdx = -1;
+        renderHfTimeline();
+      }
+    });
+    strip.addEventListener("click", (e) => {
+      // Selection happens on mousedown already, but click handles the
+      // case where the user pressed without dragging — synchronize the
+      // inspector with whatever's currently selected.
+      const band = e.target.closest(".hf-tl-band");
+      if (!band) return;
+      const idx = parseInt(band.dataset.idx || "-1", 10);
+      if (idx >= 0 && idx !== _hfLib.selectedIdx) {
+        _hfLib.selectedIdx = idx;
+        renderHfTimeline();
+      }
+    });
+  }
+  document.addEventListener("mousemove", onHfTlDragMove);
+  document.addEventListener("mouseup", endHfTlDrag);
+
+  document.getElementById("hf-lib-timeline-save")?.addEventListener("click", saveHfTimeline);
+  document.getElementById("hf-lib-timeline-revert")?.addEventListener("click", revertHfTimeline);
 }
 
 // REELS_STATE.preview_mode: "html" (live iframe) or "mp4" (quick MP4)

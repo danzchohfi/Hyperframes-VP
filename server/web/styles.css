@@ -2426,6 +2426,127 @@ a { color: inherit; text-decoration: none; }
   padding-left: 4px;
   border-left: 1px solid color-mix(in srgb, var(--ok, #22c55e) 30%, transparent);
 }
+
+/* Hyperframes library timeline editor */
+.hf-lib-timeline {
+  margin: 10px 0;
+  padding: 10px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.hf-lib-timeline-head {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.hf-lib-timeline-title {
+  font-size: 12px; font-weight: 600;
+}
+.hf-lib-timeline-meta {
+  flex: 1;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.hf-lib-timeline-strip {
+  position: relative;
+  --rows: 1;
+  height: calc(34px * var(--rows));
+  min-height: 60px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 6px;
+  overflow: hidden;
+  user-select: none;
+}
+.hf-tl-tick {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 1px;
+  background: rgba(255,255,255,0.07);
+  pointer-events: none;
+}
+.hf-tl-tick > span {
+  position: absolute;
+  top: 2px;
+  left: 3px;
+  font-size: 9px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.hf-tl-band {
+  position: absolute;
+  border-radius: 4px;
+  opacity: 0.9;
+  cursor: grab;
+  display: flex; align-items: center; justify-content: flex-start;
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(0,0,0,0.82);
+  overflow: hidden;
+  white-space: nowrap;
+}
+.hf-tl-band:active { cursor: grabbing; }
+.hf-tl-band:hover { opacity: 1; outline: 1px solid rgba(255,255,255,0.4); }
+.hf-tl-band.selected {
+  opacity: 1;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,0.9);
+}
+.hf-tl-band-label {
+  pointer-events: none;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+.hf-tl-band-resizer {
+  position: absolute;
+  top: 0; bottom: 0; right: 0;
+  width: 6px;
+  cursor: ew-resize;
+  background: linear-gradient(90deg, transparent, rgba(0,0,0,0.25));
+  border-radius: 0 4px 4px 0;
+}
+.hf-tl-band-resizer:hover { background: rgba(0,0,0,0.45); }
+.hf-lib-timeline-hint {
+  margin: 0;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+.hf-lib-timeline-inspector {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 8px 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.hf-tl-insp-head {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: 12px;
+}
+.hf-tl-insp-head .muted { font-size: 11px; }
+.hf-tl-insp-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.hf-tl-insp-grid label {
+  display: flex; flex-direction: column; gap: 3px;
+  font-size: 10px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.hf-tl-insp-grid input {
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+#hf-lib-timeline-save:not([disabled]),
+#hf-lib-timeline-revert:not([disabled]) {
+  animation: mcDirtyPulse 1.6s ease-in-out infinite;
+}
 .hf-library-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
