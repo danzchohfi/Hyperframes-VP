@@ -2373,6 +2373,20 @@ a { color: inherit; text-decoration: none; }
 .reels-prompt-preview li .anim-type {
   font-weight: 600; color: var(--accent);
 }
+.hf-edit-help-row {
+  display: flex; gap: 8px; align-items: center;
+}
+.hf-edit-help-code {
+  flex: 1;
+  padding: 8px 10px;
+  font: 11px ui-monospace, "SF Mono", Menlo, monospace;
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  overflow-x: auto;
+  white-space: nowrap;
+}
 .anim-custom-badge {
   display: inline-block;
   margin-left: 6px;

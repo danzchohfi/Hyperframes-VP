@@ -187,6 +187,50 @@ function copyToClipboard(text) {
     fallbackCopy(text);
   }
 }
+
+// Always-visible feedback for "Editar no Hyperframes". The OS reveal is
+// best-effort (silently no-ops on headless / containerized servers), so
+// we surface the path + npm command in a modal that the user can copy.
+function showEditHfHelp(compPath) {
+  let modal = document.getElementById("hf-edit-help-modal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "hf-edit-help-modal";
+    modal.className = "confirm-backdrop hidden";
+    modal.innerHTML = `
+      <div class="confirm-dialog" style="text-align:left">
+        <h3 style="margin:0 0 8px;font-size:16px">Editar no Hyperframes</h3>
+        <p class="muted" style="margin:0 0 12px;font-size:12px">
+          Abra a pasta da composição num terminal e rode <code>npm run dev</code>
+          pra editar animações ao vivo. Em desktops locais a pasta abre no
+          gerenciador de arquivos automaticamente; em servidores remotos use o caminho abaixo.
+        </p>
+        <div class="hf-edit-help-row">
+          <code id="hf-edit-help-path" class="hf-edit-help-code"></code>
+          <button id="hf-edit-help-copy" class="btn btn-ghost btn-sm" type="button">Copiar</button>
+        </div>
+        <div class="hf-edit-help-row" style="margin-top:8px">
+          <code class="hf-edit-help-code">cd "$PATH" &amp;&amp; npm run dev</code>
+          <button id="hf-edit-help-copy-cmd" class="btn btn-ghost btn-sm" type="button">Copiar</button>
+        </div>
+        <div style="text-align:right;margin-top:14px">
+          <button id="hf-edit-help-close" class="btn btn-primary btn-sm" type="button">Ok</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener("click", (e) => { if (e.target === modal) modal.classList.add("hidden"); });
+    modal.querySelector("#hf-edit-help-close").addEventListener("click", () => modal.classList.add("hidden"));
+    modal.querySelector("#hf-edit-help-copy").addEventListener("click", () => {
+      copyToClipboard(modal.querySelector("#hf-edit-help-path").textContent);
+    });
+    modal.querySelector("#hf-edit-help-copy-cmd").addEventListener("click", () => {
+      const p = modal.querySelector("#hf-edit-help-path").textContent;
+      copyToClipboard(`cd "${p}" && npm run dev`);
+    });
+  }
+  modal.querySelector("#hf-edit-help-path").textContent = compPath;
+  modal.classList.remove("hidden");
+}
 function fallbackCopy(text) {
   const ta = document.createElement("textarea");
   ta.value = text;
@@ -2907,7 +2951,7 @@ const _hfPreview = {
   bakeUrl: null,
 };
 
-function openHfPreview(opts = {}) {
+async function openHfPreview(opts = {}) {
   if (!state.current) return;
   const pid = state.current.id;
   const backdrop = document.getElementById("hf-preview-backdrop");
@@ -2930,7 +2974,34 @@ function openHfPreview(opts = {}) {
     compareBtn.disabled = !opts.bakeUrl && !state.current?.has_multicam_export;
   }
 
-  // Append cache-buster so re-opening reflects the latest render
+  backdrop.classList.remove("hidden");
+  if (window.HFIcons) HFIcons.render(backdrop);
+
+  // Build the composition on demand if it isn't on disk yet. Without this,
+  // the iframe load returns 404 ({"detail":"Not Found"}) for any project
+  // that hasn't yet run a full render — including users who only want the
+  // preview to validate the look before paying for an MP4.
+  if (!state.current.has_composition) {
+    iframe.srcdoc = `<body style="background:#000;color:#aaa;font:14px system-ui;display:grid;place-items:center;height:100%">Construindo composição…</body>`;
+    try {
+      await api(`/api/projects/${pid}/composition`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      // Refresh project state so has_composition flips to true and we
+      // don't rebuild on next open.
+      try { await loadProject(pid); } catch {}
+    } catch (e) {
+      iframe.removeAttribute("srcdoc");
+      iframe.src = "about:blank";
+      toast?.(`Não foi possível construir a composição: ${e.message}`, "err", 8000);
+      return;
+    }
+  }
+
+  // Append cache-buster so re-opening reflects the latest build
+  iframe.removeAttribute("srcdoc");
   iframe.src = `/api/projects/${pid}/composition/index.html?_=${Date.now()}`;
 
   if (bake) {
@@ -2943,9 +3014,6 @@ function openHfPreview(opts = {}) {
       bake.style.display = "none";
     }
   }
-
-  backdrop.classList.remove("hidden");
-  if (window.HFIcons) HFIcons.render(backdrop);
 
   const scrub = document.getElementById("hf-preview-scrub");
   if (scrub) scrub.value = "0";
@@ -4704,14 +4772,36 @@ function renderPodcast1ClickResult(result) {
   document.getElementById("hr-mc-preview")?.addEventListener("click", openMulticamPreview);
   document.getElementById("hr-open-hf")?.addEventListener("click", async () => {
     if (!state.current) return;
-    const compPath = `${pdirAbs(state.media)}/composition`;
+    // Always show the path + dev command, regardless of whether the host
+    // OS reveal succeeds. On a remote / headless / containerized server
+    // `open`/`xdg-open` silently no-ops, so without this toast the user
+    // sees a button that does nothing. Surface the path immediately, then
+    // attempt the OS reveal best-effort.
+    const projectDir = pdirAbs(state.media);
+    if (!projectDir) {
+      // state.media still loading — build the composition if missing so
+      // at least the inline preview is available, and tell the user.
+      try {
+        await api(`/api/projects/${state.current.id}/composition`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({}),
+        });
+      } catch {}
+      toast?.("Caminho do projeto ainda carregando. Tenta de novo em 1s.", "info", 4000);
+      return;
+    }
+    const compPath = `${projectDir}/composition`;
+    showEditHfHelp(compPath);
+    // Best-effort OS reveal — succeeds on local macOS / Linux desktop,
+    // silently no-ops on remote/headless. We don't toast errors here
+    // because the modal already gave the user the path + command.
     try {
       await api(`/api/projects/${state.current.id}/reveal`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ path: compPath, mode: "reveal" }),
       });
-      toast?.(`Composição em ${compPath}. Rode \`npm run dev\` lá pra editar ao vivo.`, "ok", 7000);
     } catch (e) { log(`✗ open hf: ${e.message}`, "err"); }
   });
   document.getElementById("hr-preview-hf")?.addEventListener("click", (e) => {

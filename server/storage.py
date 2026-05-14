@@ -62,6 +62,7 @@ class ProjectState(BaseModel):
     has_brand: bool = False
     has_render: bool = False
     has_enhanced: bool = False  # audio_enhance.py produced an enhanced.mp4
+    has_composition: bool = False  # composer.build_composition wrote pdir/composition/index.html
     last_export: str | None = None
     angles: list[dict[str, Any]] = Field(default_factory=list)  # [{name, filename, duration, tags?}, ...]
     mode: str = "single"  # legacy single | vlog | podcast — kept for compat
@@ -317,3 +318,4 @@ def refresh_artifact_flags(state: ProjectState) -> None:
     state.has_speakers = (pdir / "speakers.json").exists()
     state.has_chapters = (pdir / "chapters.json").exists()
     state.has_enhanced = (pdir / "enhanced.mp4").exists()
+    state.has_composition = (pdir / "composition" / "index.html").exists()

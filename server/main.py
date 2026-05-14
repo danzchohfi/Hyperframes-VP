@@ -833,6 +833,91 @@ async def apply_edits(pid: str, body: ApplyIn | None = None) -> dict[str, Any]:
 
 # ---- render via Hyperframes --------------------------------------------------
 
+# ---- composition build (no MP4 render) --------------------------------------
+#
+# The Hyperframes composition is the HTML/JS/MP4 bundle in pdir/composition/.
+# It's normally built as a side effect of /render, but the inline iframe
+# preview needs it earlier (before the user pays for a full MP4 render).
+# This endpoint materializes the composition without rendering — fast (~1s)
+# and idempotent. The inline preview calls it on first open if
+# state.has_composition is false.
+
+@app.post("/api/projects/{pid}/composition")
+async def build_composition_only(pid: str, body: RenderIn | None = None) -> dict[str, Any]:
+    body = body or RenderIn()
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+
+    candidates = {
+        "roughcut": pdir / "roughcut.mp4",
+        "enhanced": pdir / "enhanced.mp4",
+        "graded": pdir / "graded.mp4",
+        "source": pdir / "source.mp4",
+    }
+    default_pick = "enhanced" if (state.has_enhanced and candidates["enhanced"].exists()) else "graded"
+    edited = candidates.get(body.source) or candidates[default_pick]
+    if not edited.exists():
+        for pick in ("roughcut", "enhanced", "graded", "source"):
+            if candidates[pick].exists():
+                edited = candidates[pick]
+                break
+    if not edited.exists():
+        raise HTTPException(400, "Suba o vídeo antes de pré-visualizar.")
+
+    brand = (
+        BrandBook.model_validate(storage.read_json(pid, "brand.json"))
+        if state.has_brand else BrandBook()
+    )
+    transcript = (
+        storage.read_json(pid, "transcript.json")
+        if (state.has_transcript and body.include_captions) else None
+    )
+
+    try:
+        dur = await ff.duration(edited)
+        chapters_for_render = None
+        if body.include_chapter_cards and state.has_story:
+            story = storage.read_json(pid, "story.json")
+            if state.has_soundbites:
+                analysis = storage.read_json(pid, "soundbites.json")
+                chapters_for_render = rc_svc.chapter_marker_plan(
+                    story["chapters"], analysis["soundbites"],
+                )
+        speaker_turns = None
+        if (pdir / "speakers.json").exists():
+            try:
+                speaker_turns = (storage.read_json(pid, "speakers.json") or {}).get("turns")
+            except Exception:
+                speaker_turns = None
+        animations: list[dict] | None = None
+        if getattr(body, "include_animations", True) and (pdir / "reels_animations.json").exists():
+            try:
+                animations = storage.read_json(pid, "reels_animations.json").get("animations") or None
+            except Exception:
+                animations = None
+        composer.build_composition(
+            project_dir=pdir,
+            video_path=edited,
+            video_duration=dur,
+            transcript=transcript,
+            brand=brand,
+            aspect=body.aspect,
+            chapters=chapters_for_render,
+            speaker_turns=speaker_turns,
+            animations=animations,
+        )
+    except Exception as e:
+        raise HTTPException(500, f"compose: {e}")
+
+    storage.refresh_artifact_flags(state)
+    storage.save(state)
+    return {
+        "composition_url": f"/api/projects/{pid}/composition/index.html",
+        "duration": dur,
+        "source_kind": edited.name,
+    }
+
+
 @app.post("/api/projects/{pid}/render")
 async def do_render(pid: str, body: RenderIn) -> dict[str, Any]:
     state = _load(pid)
