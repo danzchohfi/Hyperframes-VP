@@ -2859,6 +2859,224 @@ function tickMcPreview() {
   _mcPreview.raf = requestAnimationFrame(tickMcPreview);
 }
 
+// ── Hyperframes inline preview ────────────────────────────────────────────
+//
+// Mounts the rendered composition (an HTML page that registers a paused
+// GSAP timeline on window.__timelines["main"]) inside an iframe and drives
+// it from the parent via postMessage. The composer was patched to accept
+// {type:"seek", time} and re-emit a hf-seek event so the caption
+// hot-toggle stays in sync. Compare mode mounts multicam.mp4 in the same
+// stage so the editor can A/B the composition vs. the baked render.
+
+const _hfPreview = {
+  duration: 0,
+  currentTime: 0,
+  playing: false,
+  ready: false,
+  raf: 0,
+  startedAt: 0,
+  startedFrom: 0,
+  compare: false,
+  bakeUrl: null,
+};
+
+function openHfPreview(opts = {}) {
+  if (!state.current) return;
+  const pid = state.current.id;
+  const backdrop = document.getElementById("hf-preview-backdrop");
+  const iframe = document.getElementById("hf-preview-frame");
+  const bake = document.getElementById("hf-preview-bake");
+  if (!backdrop || !iframe) return;
+
+  _hfPreview.ready = false;
+  _hfPreview.playing = false;
+  _hfPreview.currentTime = 0;
+  _hfPreview.duration = 0;
+  _hfPreview.compare = !!opts.bakeUrl;
+  _hfPreview.bakeUrl = opts.bakeUrl || null;
+
+  const stageWrap = backdrop.querySelector(".hf-preview");
+  if (stageWrap) stageWrap.classList.toggle("compare", !!_hfPreview.bakeUrl);
+  const compareBtn = document.getElementById("hf-preview-compare");
+  if (compareBtn) {
+    compareBtn.setAttribute("aria-pressed", _hfPreview.bakeUrl ? "true" : "false");
+    compareBtn.disabled = !opts.bakeUrl && !state.current?.has_multicam_export;
+  }
+
+  // Append cache-buster so re-opening reflects the latest render
+  iframe.src = `/api/projects/${pid}/composition/index.html?_=${Date.now()}`;
+
+  if (bake) {
+    if (_hfPreview.bakeUrl) {
+      bake.src = _hfPreview.bakeUrl;
+      bake.style.display = "block";
+    } else {
+      bake.removeAttribute("src");
+      bake.load();
+      bake.style.display = "none";
+    }
+  }
+
+  backdrop.classList.remove("hidden");
+  if (window.HFIcons) HFIcons.render(backdrop);
+
+  const scrub = document.getElementById("hf-preview-scrub");
+  if (scrub) scrub.value = "0";
+  const timeEl = document.getElementById("hf-preview-time");
+  if (timeEl) timeEl.textContent = "0:00 / 0:00";
+}
+
+function closeHfPreview() {
+  const backdrop = document.getElementById("hf-preview-backdrop");
+  if (backdrop) backdrop.classList.add("hidden");
+  const iframe = document.getElementById("hf-preview-frame");
+  if (iframe) iframe.src = "about:blank";
+  const bake = document.getElementById("hf-preview-bake");
+  if (bake) {
+    try { bake.pause(); } catch {}
+    bake.removeAttribute("src");
+    bake.load();
+  }
+  cancelAnimationFrame(_hfPreview.raf);
+  _hfPreview.raf = 0;
+  _hfPreview.playing = false;
+  _hfPreview.ready = false;
+}
+
+function sendHfSeek(t) {
+  const iframe = document.getElementById("hf-preview-frame");
+  if (!iframe || !iframe.contentWindow || !_hfPreview.ready) return;
+  try { iframe.contentWindow.postMessage({ type: "seek", time: t }, "*"); } catch {}
+}
+
+function applyHfPreviewTime(t) {
+  const dur = _hfPreview.duration || 0;
+  if (dur > 0) t = Math.max(0, Math.min(dur, t));
+  _hfPreview.currentTime = t;
+  sendHfSeek(t);
+  const bake = document.getElementById("hf-preview-bake");
+  if (bake && _hfPreview.bakeUrl) {
+    try {
+      if (Math.abs(bake.currentTime - t) > 0.08) bake.currentTime = t;
+    } catch {}
+  }
+  const scrub = document.getElementById("hf-preview-scrub");
+  if (scrub && dur > 0) scrub.value = String(Math.round(1000 * (t / dur)));
+  const timeEl = document.getElementById("hf-preview-time");
+  if (timeEl) timeEl.textContent = `${formatTime(t)} / ${formatTime(dur)}`;
+}
+
+function tickHfPreview() {
+  if (!_hfPreview.playing) return;
+  const wallNow = performance.now() / 1000;
+  const t = _hfPreview.startedFrom + (wallNow - _hfPreview.startedAt);
+  if (_hfPreview.duration > 0 && t >= _hfPreview.duration) {
+    applyHfPreviewTime(_hfPreview.duration);
+    _hfPreview.playing = false;
+    const playBtn = document.getElementById("hf-preview-play");
+    if (playBtn) {
+      playBtn.innerHTML = `<span data-icon="rotate-cw" data-icon-size="14"></span> Reiniciar`;
+      if (window.HFIcons) HFIcons.render(playBtn);
+    }
+    return;
+  }
+  applyHfPreviewTime(t);
+  _hfPreview.raf = requestAnimationFrame(tickHfPreview);
+}
+
+function bindHfPreview() {
+  const backdrop = document.getElementById("hf-preview-backdrop");
+  if (!backdrop) return;
+
+  document.getElementById("hf-preview-close")?.addEventListener("click", closeHfPreview);
+  backdrop.addEventListener("click", (e) => { if (e.target === backdrop) closeHfPreview(); });
+  document.addEventListener("keydown", (e) => {
+    if (!backdrop.classList.contains("hidden") && e.key === "Escape") closeHfPreview();
+  });
+
+  const playBtn = document.getElementById("hf-preview-play");
+  function setPlaying(p) {
+    _hfPreview.playing = p;
+    if (playBtn) {
+      playBtn.innerHTML = p
+        ? `<span data-icon="pause" data-icon-size="14"></span> Pause`
+        : `<span data-icon="play" data-icon-size="14"></span> Play`;
+      if (window.HFIcons) HFIcons.render(playBtn);
+    }
+    const bake = document.getElementById("hf-preview-bake");
+    if (p) {
+      _hfPreview.startedAt = performance.now() / 1000;
+      _hfPreview.startedFrom = _hfPreview.currentTime;
+      if (bake && _hfPreview.bakeUrl) {
+        try { bake.currentTime = _hfPreview.currentTime; bake.play().catch(() => {}); } catch {}
+      }
+      tickHfPreview();
+    } else {
+      if (bake) { try { bake.pause(); } catch {} }
+      cancelAnimationFrame(_hfPreview.raf);
+      _hfPreview.raf = 0;
+    }
+  }
+  if (playBtn) playBtn.onclick = () => setPlaying(!_hfPreview.playing);
+
+  const scrub = document.getElementById("hf-preview-scrub");
+  if (scrub) {
+    scrub.addEventListener("input", () => {
+      const dur = _hfPreview.duration || 0;
+      const t = (parseFloat(scrub.value) / 1000) * dur;
+      if (_hfPreview.playing) setPlaying(false);
+      applyHfPreviewTime(t);
+    });
+  }
+
+  const compareBtn = document.getElementById("hf-preview-compare");
+  if (compareBtn) {
+    compareBtn.addEventListener("click", () => {
+      const stageWrap = backdrop.querySelector(".hf-preview");
+      const next = !_hfPreview.bakeUrl;
+      if (next) {
+        const url = _hfPreviewBakeUrl();
+        if (!url) {
+          toast?.("Renderize a multicam (1-click ou multicam-render) para comparar.", "info");
+          return;
+        }
+        _hfPreview.bakeUrl = url;
+        const bake = document.getElementById("hf-preview-bake");
+        if (bake) { bake.src = url; bake.style.display = "block"; }
+      } else {
+        _hfPreview.bakeUrl = null;
+        const bake = document.getElementById("hf-preview-bake");
+        if (bake) {
+          try { bake.pause(); } catch {}
+          bake.removeAttribute("src"); bake.load();
+          bake.style.display = "none";
+        }
+      }
+      if (stageWrap) stageWrap.classList.toggle("compare", !!_hfPreview.bakeUrl);
+      compareBtn.setAttribute("aria-pressed", _hfPreview.bakeUrl ? "true" : "false");
+    });
+  }
+
+  // Composition iframe → parent: ready + duration.
+  window.addEventListener("message", (ev) => {
+    const data = ev.data;
+    if (!data || typeof data !== "object" || data.type !== "hf-ready") return;
+    _hfPreview.ready = true;
+    _hfPreview.duration = parseFloat(data.duration) || _hfPreview.duration || 0;
+    applyHfPreviewTime(0);
+  });
+}
+
+function _hfPreviewBakeUrl() {
+  // Best-effort discovery: pick the latest multicam render from the
+  // current project's history. Falls back to no-bake if none exists yet.
+  const hist = state.current?.renders || [];
+  for (const r of hist.slice().reverse()) {
+    if ((r.kind || "").includes("multicam") && r.url) return r.url;
+  }
+  return null;
+}
+
 async function multicamSync() {
   if (!state.current) return;
   log("<span data-icon=&quot;play&quot;></span> multicam sync");
@@ -4132,6 +4350,7 @@ function bind() {
   $("#multicam-sync-btn").onclick = multicamSync;
   $("#multicam-preview-btn")?.addEventListener("click", openMulticamPreview);
   bindMcPreview();
+  bindHfPreview();
 
   const cpb = $("#media-copy-path");
   if (cpb) cpb.onclick = () => {
@@ -4413,7 +4632,7 @@ function renderPodcast1ClickResult(result) {
       ${outputs.fcpxml ? `<button id="hr-open-fcp" class="btn btn-primary btn-sm" type="button"><span data-icon="film" data-icon-size="14"></span> Abrir no Final Cut Pro</button>` : ""}
       ${outputs.multicam ? `<button id="hr-reveal-mc" class="btn btn-ghost btn-sm" type="button"><span data-icon="arrow-right" data-icon-size="14"></span> Mostrar multicam no Finder</button>` : ""}
       ${state.current?.has_camera_plan ? `<button id="hr-mc-preview" class="btn btn-ghost btn-sm" type="button"><span data-icon="eye" data-icon-size="14"></span> Pré-visualizar plano</button>` : ""}
-      <button id="hr-preview-hf" class="btn btn-ghost btn-sm" type="button" title="Abre a composição Hyperframes renderizada em uma nova aba — captions cinéticas, animações e tudo mais, ao vivo."><span data-icon="play" data-icon-size="14"></span> Preview Hyperframes</button>
+      <button id="hr-preview-hf" class="btn btn-ghost btn-sm" type="button" title="Pré-visualiza a composição Hyperframes (captions cinéticas, animações e vídeo do corpo) com scrub master. Shift+clique abre em nova aba."><span data-icon="play" data-icon-size="14"></span> Preview Hyperframes</button>
       <button id="hr-open-hf" class="btn btn-ghost btn-sm" type="button" title="Mostra a pasta no Finder. Roda 'npm run dev' lá pra editar animações ao vivo."><span data-icon="folder" data-icon-size="14"></span> Editar no Hyperframes</button>
     </div>
     ${warnings.length ? `<details class="hr-warnings"><summary>${warnings.length} avisos</summary><ul>${warnings.map(w => `<li>${escapeHtml(w)}</li>`).join("")}</ul></details>` : ""}
@@ -4466,14 +4685,18 @@ function renderPodcast1ClickResult(result) {
       toast?.(`Composição em ${compPath}. Rode \`npm run dev\` lá pra editar ao vivo.`, "ok", 7000);
     } catch (e) { log(`✗ open hf: ${e.message}`, "err"); }
   });
-  document.getElementById("hr-preview-hf")?.addEventListener("click", () => {
+  document.getElementById("hr-preview-hf")?.addEventListener("click", (e) => {
     if (!state.current) return;
-    // Opens the rendered Hyperframes composition in a new tab. The
-    // composition's index.html runs its own GSAP timeline + the body
-    // video player, so the user sees the final motion without us
-    // baking it into an MP4 first.
-    const url = `/api/projects/${state.current.id}/composition/index.html`;
-    window.open(url, "_blank", "noopener");
+    // Inline preview by default (mounts the composition in an iframe and
+    // drives tl.seek via postMessage). Hold Shift to open in a new tab
+    // — handy when you want it full-screen or side-by-side with the
+    // browser dev tools.
+    if (e.shiftKey) {
+      const url = `/api/projects/${state.current.id}/composition/index.html`;
+      window.open(url, "_blank", "noopener");
+      return;
+    }
+    openHfPreview({ bakeUrl: outputs.multicam?.url || null });
   });
 }
 

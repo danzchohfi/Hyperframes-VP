@@ -929,6 +929,26 @@ def build_composition(
         const t = (ev.detail && typeof ev.detail.time === "number") ? ev.detail.time : 0;
         applyHotAt(t);
       }});
+
+      // Parent-controlled scrub when rendered inside the app's inline
+      // iframe preview. Parent posts {{type:"seek", time}} and we drive
+      // the timeline + hot-toggle so captions, animations and the body
+      // video frame all match the parent's playhead. {{type:"hf-ready"}}
+      // back so the parent can start its RAF only after the iframe has
+      // mounted everything.
+      window.addEventListener("message", (ev) => {{
+        const data = ev.data;
+        if (!data || typeof data !== "object") return;
+        if (data.type === "seek" && typeof data.time === "number") {{
+          try {{ tl.seek(data.time); }} catch (e) {{}}
+          applyHotAt(data.time);
+          window.dispatchEvent(new CustomEvent("hf-seek", {{ detail: {{ time: data.time }} }}));
+        }}
+      }});
+      try {{
+        const tlDur = tl.duration();
+        parent.postMessage({{ type: "hf-ready", duration: tlDur }}, "*");
+      }} catch (e) {{}}
     </script>
   </body>
 </html>

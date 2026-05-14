@@ -940,6 +940,33 @@
       </div>
     </div>
 
+    <!-- Hyperframes inline preview: iframe runs the rendered composition
+         (its own paused timeline + body video) and the parent scrub bar
+         drives tl.seek + the body video's currentTime via postMessage. -->
+    <div id="hf-preview-backdrop" class="confirm-backdrop hidden" aria-hidden="true">
+      <div class="hf-preview" role="dialog" aria-modal="true" aria-label="Pré-visualização Hyperframes">
+        <header class="mc-preview-head">
+          <div>
+            <h2>Pré-visualização Hyperframes</h2>
+            <p class="muted" id="hf-preview-sub">Composição renderizada com captions cinéticas, animações e o vídeo do corpo — tudo ao vivo no mesmo player.</p>
+          </div>
+          <div class="hf-preview-head-actions">
+            <button id="hf-preview-compare" class="btn btn-ghost btn-sm" type="button" aria-pressed="false" title="Mostra o render bake (multicam.mp4) lado a lado com a composição."><span data-icon="columns" data-icon-size="14"></span> Comparar</button>
+            <button id="hf-preview-close" class="btn-ghost btn-sm" type="button" aria-label="Fechar">✕</button>
+          </div>
+        </header>
+        <div id="hf-preview-stage" class="hf-preview-stage">
+          <iframe id="hf-preview-frame" class="hf-preview-frame" title="Hyperframes composition"></iframe>
+          <video id="hf-preview-bake" class="hf-preview-bake" preload="auto" muted playsinline></video>
+        </div>
+        <div class="mc-preview-controls">
+          <button id="hf-preview-play" class="btn btn-primary btn-sm" type="button"><span data-icon="play" data-icon-size="14"></span> Play</button>
+          <span id="hf-preview-time" class="muted">0:00 / 0:00</span>
+          <input id="hf-preview-scrub" type="range" min="0" max="1000" value="0" step="1" />
+        </div>
+      </div>
+    </div>
+
     <script src="/app.js" type="module"></script>
   </body>
 </html>
