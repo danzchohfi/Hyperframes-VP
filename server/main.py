@@ -25,6 +25,7 @@ from __future__ import annotations
 import asyncio
 import shutil
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -1093,6 +1094,127 @@ async def set_extra_blocks(pid: str, body: ExtraBlocksIn) -> dict[str, Any]:
         })
     storage.write_json(pid, "extra_blocks.json", {"blocks": cleaned})
     return {"blocks": cleaned, "count": len(cleaned)}
+
+
+# Cross-project copy/paste for the registry library setup. Lets the user
+# build a "house style" on one project (installed blocks + timeline
+# schedule) and apply it to a new project in one click.
+
+@app.get("/api/projects/{pid}/registry/export")
+async def registry_export(pid: str) -> dict[str, Any]:
+    """Bundle the current project's library state into a portable JSON.
+    Includes the names of installed blocks (so the target project can
+    re-install them from the registry) and the timeline schedule. Does
+    not include the block FILES themselves — those get re-fetched from
+    the registry on import, which keeps the payload tiny and ensures
+    the target uses fresh upstream versions."""
+    _load(pid)
+    pdir = storage.project_dir(pid)
+    installed = registry_svc.list_installed(pdir / "composition")
+    schedule: list[dict[str, Any]] = []
+    if (pdir / "extra_blocks.json").exists():
+        try:
+            schedule = (storage.read_json(pid, "extra_blocks.json") or {}).get("blocks") or []
+        except Exception:
+            schedule = []
+    return {
+        "version": 1,
+        "exported_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "source_project_id": pid,
+        "installed": [
+            {"name": it["name"], "kind": it.get("kind") or it.get("type") or "block"}
+            for it in installed
+        ],
+        "schedule": schedule,
+    }
+
+
+class RegistryImportIn(BaseModel):
+    payload: dict[str, Any]
+    replace_schedule: bool = True
+
+
+@app.post("/api/projects/{pid}/registry/import")
+async def registry_import(pid: str, body: RegistryImportIn) -> dict[str, Any]:
+    """Apply an exported library bundle to this project.
+
+    - For each installed block in the payload, run `hyperframes add` if
+      it's not already installed locally. Skips silently on failure
+      (the target may not have npx, or the block may have been removed
+      from the registry); the import returns a list of which ones
+      succeeded vs. were skipped.
+    - Replace (default) or merge the timeline schedule.
+    - Rebuild the composition so the next preview reflects everything.
+    """
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    payload = body.payload or {}
+    if payload.get("version") != 1:
+        raise HTTPException(400, "payload version desconhecida — re-exporte do projeto-fonte")
+
+    # Make sure the composition dir exists (and has hyperframes.json) so
+    # `hyperframes add` will run. /composition is idempotent.
+    if not (pdir / "composition" / "hyperframes.json").exists():
+        await build_composition_only(pid, None)  # type: ignore[arg-type]
+
+    already_installed = {it["name"] for it in registry_svc.list_installed(pdir / "composition")}
+    installed_ok: list[str] = []
+    install_skipped: list[dict[str, Any]] = []
+    for entry in payload.get("installed") or []:
+        name = (entry.get("name") or "").strip()
+        if not name or name in already_installed:
+            continue
+        if not registry_svc.npx_available():
+            install_skipped.append({"name": name, "reason": "npx indisponível"})
+            continue
+        try:
+            await registry_svc.install_block(name, composition_dir=pdir / "composition")
+            installed_ok.append(name)
+        except registry_svc.RegistryError as e:
+            install_skipped.append({"name": name, "reason": str(e)})
+
+    # Apply the schedule. Resolve natural durations from the (now-)
+    # installed metadata so per-block durations stay correct even if
+    # the upstream block changed since the export.
+    installed_by_name = {
+        it["name"]: it for it in registry_svc.list_installed(pdir / "composition")
+    }
+    incoming = payload.get("schedule") or []
+    cleaned: list[dict[str, Any]] = []
+    for b in incoming:
+        name = (b.get("name") or "").strip()
+        if not name or name not in installed_by_name:
+            continue  # drop schedule entries for blocks that failed to install
+        natural_dur = float(installed_by_name[name].get("duration") or 5.0)
+        cleaned.append({
+            "name": name,
+            "start": max(0.0, float(b.get("start") or 0.0)),
+            "duration": float(b.get("duration") if b.get("duration") is not None else natural_dur),
+            "opacity": max(0.0, min(1.0, float(b.get("opacity") if b.get("opacity") is not None else 1.0))),
+        })
+    if not body.replace_schedule:
+        existing = []
+        if (pdir / "extra_blocks.json").exists():
+            try:
+                existing = (storage.read_json(pid, "extra_blocks.json") or {}).get("blocks") or []
+            except Exception:
+                existing = []
+        cleaned = list(existing) + cleaned
+    storage.write_json(pid, "extra_blocks.json", {"blocks": cleaned})
+
+    # Rebuild composition so the iframes materialize for the next preview.
+    try:
+        await build_composition_only(pid, None)  # type: ignore[arg-type]
+    except Exception:
+        pass
+
+    _stage(state, "registry_import", "done",
+           f"{len(installed_ok)} novos · {len(install_skipped)} skip · {len(cleaned)} no timeline")
+    return {
+        "installed": installed_ok,
+        "skipped": install_skipped,
+        "schedule_count": len(cleaned),
+    }
 
 
 @app.post("/api/projects/{pid}/render")

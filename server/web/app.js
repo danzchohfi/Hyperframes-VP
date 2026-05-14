@@ -5262,15 +5262,18 @@ const _hfLib = {
   installed: [],   // [{name, kind, type, title, ...}, ...]
   schedule: [],    // [{name, start, duration, opacity}, ...] from extra_blocks.json
   savedSchedule: [],   // baseline for revert (deep-clone of last loaded schedule)
+  markers: [],     // [{time, label, kind}, ...] — chapters + soundbites for snap targets
   filter: { search: "", type: "", tag: "" },
   // Timeline editor state
   selectedIdx: -1,
   dirty: false,
   drag: null,      // {idx, mode: "move"|"resize", originX, rect, originStart, originDuration}
+  snapTarget: null,  // most-recently-snapped marker (for visual feedback)
 };
 
 const HF_TL_SNAP = 0.1;
 const HF_TL_MIN_DUR = 0.4;
+const HF_TL_SNAP_PX = 12;    // distance in pixels before snap kicks in
 
 async function loadHfCatalog(force = false) {
   if (!force && _hfLib.catalog) return _hfLib.catalog;
@@ -5320,9 +5323,58 @@ async function loadHfInstalled() {
     _hfLib.schedule = [];
     _hfLib.savedSchedule = [];
   }
+  // Build the snap-target list from project chapters + soundbites so
+  // dragging a band over a key beat clicks it into place (Final-Cut-
+  // style sticky markers). The data already lives on disk from earlier
+  // pipeline steps — we just read the JSON sidecars.
+  _hfLib.markers = [];
+  for (const [file, kind, labelKey] of [
+    ["chapters.json", "chapter", "title"],
+    ["soundbites.json", "soundbite", "topic"],
+  ]) {
+    try {
+      const data = await api(`/api/projects/${state.current.id}/files/${file}`);
+      const arr = data?.chapters || data?.soundbites || [];
+      for (const it of arr) {
+        const t = parseFloat(it.start);
+        if (!isFinite(t)) continue;
+        _hfLib.markers.push({
+          time: t,
+          label: (it[labelKey] || it.name || it.text || kind).toString().slice(0, 24),
+          kind,
+        });
+        // Also snap to chapter / soundbite END so resizing aligns.
+        const e = parseFloat(it.end);
+        if (isFinite(e) && e > t) {
+          _hfLib.markers.push({
+            time: e,
+            label: (it[labelKey] || kind) + " (fim)",
+            kind: kind + "-end",
+          });
+        }
+      }
+    } catch {
+      // 404 / parse error — fine, project just doesn't have that file.
+    }
+  }
+  _hfLib.markers.sort((a, b) => a.time - b.time);
   _hfLib.dirty = false;
   _hfLib.selectedIdx = -1;
   return _hfLib.installed;
+}
+
+function _hfNearestMarker(timeSec, toleranceSec) {
+  if (!_hfLib.markers.length) return null;
+  let best = null;
+  let bestDelta = toleranceSec;
+  for (const m of _hfLib.markers) {
+    const d = Math.abs(m.time - timeSec);
+    if (d <= bestDelta) {
+      best = m;
+      bestDelta = d;
+    }
+  }
+  return best;
 }
 
 function _hfLibSourceDuration() {
@@ -5406,8 +5458,18 @@ function renderHfTimeline() {
     const t = (i / tickCount) * dur;
     return `<div class="hf-tl-tick" style="left:${pct}%"><span>${t.toFixed(1)}s</span></div>`;
   }).join("");
+  // Chapter / soundbite snap markers. Rendered as faint vertical lines
+  // behind the bands. Active snap target glows so the user gets visual
+  // confirmation that the drag is locked to that beat.
+  const markerLines = (_hfLib.markers || []).map(m => {
+    if (m.time < 0 || m.time > dur) return "";
+    const pct = (m.time / dur) * 100;
+    const isActive = _hfLib.snapTarget && Math.abs(_hfLib.snapTarget.time - m.time) < 0.01;
+    return `<div class="hf-tl-marker hf-tl-marker-${m.kind.startsWith('chapter') ? 'chapter' : 'soundbite'}${isActive ? ' active' : ''}"
+      style="left:${pct}%" title="${escapeHtml(m.label)} @ ${m.time.toFixed(1)}s"></div>`;
+  }).join("");
   strip.style.setProperty("--rows", String(totalRows));
-  strip.innerHTML = ticks + bands;
+  strip.innerHTML = ticks + markerLines + bands;
   renderHfTimelineInspector();
 }
 
@@ -5430,6 +5492,7 @@ function renderHfTimelineInspector() {
       <strong>${escapeHtml(title)}</strong>
       <span class="muted">${escapeHtml(b.name)}</span>
       <span style="flex:1"></span>
+      <button class="btn btn-ghost btn-sm" id="hf-tl-insp-duplicate" type="button" title="Cria outra aparição do mesmo bloco logo após esta — mesmo arquivo, duas posições"><span data-icon="copy" data-icon-size="13"></span> Duplicar</button>
       <button class="btn btn-ghost btn-sm" id="hf-tl-insp-natural" type="button" title="Volta pra duração natural do bloco (${naturalDur}s)">Duração natural</button>
       <button class="btn btn-ghost btn-sm" id="hf-tl-insp-remove" type="button"><span data-icon="trash-2" data-icon-size="13"></span> Tirar do timeline</button>
     </div>
@@ -5460,6 +5523,23 @@ function renderHfTimelineInspector() {
   });
   document.getElementById("hf-tl-insp-natural")?.addEventListener("click", () => {
     _hfLib.schedule[idx].duration = naturalDur;
+    _hfLibSetDirty(true);
+    renderHfTimeline();
+  });
+  document.getElementById("hf-tl-insp-duplicate")?.addEventListener("click", () => {
+    // Place the copy right after the original. If that overflows the
+    // timeline, push it to the start instead (user can drag it around).
+    const src = _hfLib.schedule[idx];
+    const maxStart = _hfLibSourceDuration() - src.duration;
+    const proposedStart = src.start + src.duration;
+    const copy = {
+      name: src.name,
+      start: proposedStart > maxStart ? 0.0 : proposedStart,
+      duration: src.duration,
+      opacity: src.opacity ?? 1.0,
+    };
+    _hfLib.schedule.push(copy);
+    _hfLib.selectedIdx = _hfLib.schedule.length - 1;
     _hfLibSetDirty(true);
     renderHfTimeline();
   });
@@ -5498,15 +5578,30 @@ function onHfTlDragMove(e) {
   const dxSec = (dxPx / drag.rect.width) * drag.timelineDuration;
   const b = _hfLib.schedule[drag.idx];
   if (!b) return;
+  // Snap tolerance in seconds = HF_TL_SNAP_PX expressed as seconds
+  // at the current timeline scale. Smaller timelines (short source)
+  // therefore have a tighter snap radius — feels consistent.
+  const snapToleranceSec = (HF_TL_SNAP_PX / drag.rect.width) * drag.timelineDuration;
+
   if (drag.mode === "move") {
     let newStart = drag.originStart + dxSec;
     newStart = Math.round(newStart / HF_TL_SNAP) * HF_TL_SNAP;
     newStart = Math.max(0, Math.min(drag.timelineDuration - HF_TL_MIN_DUR, newStart));
+    // Snap to nearest chapter / soundbite marker within tolerance.
+    const m = _hfNearestMarker(newStart, snapToleranceSec);
+    _hfLib.snapTarget = m;
+    if (m) newStart = m.time;
     b.start = newStart;
   } else if (drag.mode === "resize") {
     let newDur = drag.originDuration + dxSec;
     newDur = Math.round(newDur / HF_TL_SNAP) * HF_TL_SNAP;
     newDur = Math.max(HF_TL_MIN_DUR, Math.min(drag.timelineDuration - b.start, newDur));
+    // Snap the END of the band to a marker (so a soundbite-aligned
+    // start naturally extends to the soundbite's end).
+    const endSec = b.start + newDur;
+    const m = _hfNearestMarker(endSec, snapToleranceSec);
+    _hfLib.snapTarget = m;
+    if (m) newDur = Math.max(HF_TL_MIN_DUR, m.time - b.start);
     b.duration = newDur;
   }
   _hfLibSetDirty(true);
@@ -5516,7 +5611,9 @@ function onHfTlDragMove(e) {
 function endHfTlDrag() {
   if (!_hfLib.drag) return;
   _hfLib.drag = null;
+  _hfLib.snapTarget = null;
   document.body.style.cursor = "";
+  renderHfTimeline();
 }
 
 async function saveHfTimeline() {
@@ -5560,6 +5657,92 @@ function revertHfTimeline() {
   _hfLibSetDirty(false);
   renderHfTimeline();
   renderHfInstalled();
+}
+
+// Cross-project copy/paste — pull the current project's library setup
+// into the clipboard as a portable JSON, then paste it into a different
+// project's timeline. Useful for building a "house style" once and
+// reapplying across episodes.
+
+async function exportHfLibrary() {
+  if (!state.current) return;
+  try {
+    const data = await api(`/api/projects/${state.current.id}/registry/export`);
+    const text = JSON.stringify(data, null, 2);
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(text);
+      toast?.(
+        `Setup copiado (${data.installed?.length || 0} bloco(s), ${data.schedule?.length || 0} no timeline). Cole em outro projeto via "Colar setup".`,
+        "ok", 7000
+      );
+    } else {
+      // Fallback: show in a prompt so the user can copy manually.
+      window.prompt("Copie este JSON e cole no outro projeto:", text);
+    }
+  } catch (e) {
+    toast?.(`Falha ao exportar: ${e.message}`, "err");
+  }
+}
+
+async function importHfLibrary() {
+  if (!state.current) return;
+  let raw = "";
+  try {
+    if (navigator.clipboard) {
+      raw = await navigator.clipboard.readText();
+    } else {
+      raw = window.prompt("Cole aqui o JSON exportado do outro projeto:") || "";
+    }
+  } catch {
+    raw = window.prompt("Cole aqui o JSON exportado do outro projeto:") || "";
+  }
+  raw = (raw || "").trim();
+  if (!raw) return;
+  let payload;
+  try {
+    payload = JSON.parse(raw);
+  } catch (e) {
+    toast?.(`Conteúdo não é JSON válido: ${e.message}`, "err");
+    return;
+  }
+  if (payload.version !== 1) {
+    toast?.("JSON exportado é de uma versão incompatível.", "err");
+    return;
+  }
+  if (_hfLib.dirty) {
+    if (!confirm("Você tem mudanças não salvas no timeline. Continuar com a importação descarta?")) return;
+  }
+  const status = document.getElementById("hf-lib-status");
+  if (status) {
+    status.textContent = `importando ${payload.installed?.length || 0} bloco(s)…`;
+    status.className = "status running";
+  }
+  try {
+    const res = await api(`/api/projects/${state.current.id}/registry/import`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ payload, replace_schedule: true }),
+    });
+    await loadHfInstalled();
+    renderHfInstalled();
+    renderHfGrid();
+    renderHfTimeline();
+    if (status) {
+      setBtnHTML(status, `<span data-icon=&quot;check&quot;></span> ${res.installed.length} instalados · ${res.schedule_count} no timeline`);
+      status.className = "status done";
+    }
+    let msg = `Setup importado: ${res.installed.length} novo(s) bloco(s), ${res.schedule_count} entrada(s) no timeline.`;
+    if (res.skipped?.length) {
+      msg += ` ${res.skipped.length} pulado(s) (npx / registry).`;
+    }
+    toast?.(msg, "ok", 8000);
+  } catch (e) {
+    if (status) {
+      status.textContent = `✗ ${e.message}`;
+      status.className = "status error";
+    }
+    toast?.(`Falha ao importar: ${e.message}`, "err");
+  }
 }
 
 function renderHfTagFilter() {
@@ -5805,6 +5988,8 @@ function bindHfLibrary() {
 
   document.getElementById("hf-lib-timeline-save")?.addEventListener("click", saveHfTimeline);
   document.getElementById("hf-lib-timeline-revert")?.addEventListener("click", revertHfTimeline);
+  document.getElementById("hf-lib-timeline-export")?.addEventListener("click", exportHfLibrary);
+  document.getElementById("hf-lib-timeline-import")?.addEventListener("click", importHfLibrary);
 }
 
 // REELS_STATE.preview_mode: "html" (live iframe) or "mp4" (quick MP4)

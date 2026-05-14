@@ -2505,6 +2505,27 @@ a { color: inherit; text-decoration: none; }
   border-radius: 0 4px 4px 0;
 }
 .hf-tl-band-resizer:hover { background: rgba(0,0,0,0.45); }
+.hf-tl-marker {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 1px;
+  pointer-events: none;
+  z-index: 1;
+}
+.hf-tl-marker-chapter {
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 0 2px rgba(255, 255, 255, 0.18);
+}
+.hf-tl-marker-soundbite {
+  background: rgba(255, 217, 0, 0.22);
+  box-shadow: 0 0 2px rgba(255, 217, 0, 0.22);
+}
+.hf-tl-marker.active {
+  background: #ffd900;
+  box-shadow: 0 0 6px #ffd900, 0 0 12px rgba(255, 217, 0, 0.5);
+  width: 2px;
+  z-index: 5;
+}
 .hf-lib-timeline-hint {
   margin: 0;
   font-size: 10px;
