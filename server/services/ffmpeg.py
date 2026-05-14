@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import contextvars
 import json
 import shlex
 from pathlib import Path
@@ -10,6 +12,40 @@ from pathlib import Path
 
 class FFmpegError(RuntimeError):
     pass
+
+
+# Quality preset → (libx264 -preset, -crf). The dial is set per-render via
+# the `use_quality` context manager and read by `_x264_args` whenever an
+# encode happens. ContextVar propagates through async tasks, so a render
+# job started under "best" stays "best" all the way down even when the
+# encode call is several `await`s deep.
+QUALITY_PRESETS: dict[str, tuple[str, str]] = {
+    "fast":     ("veryfast", "20"),  # social spec (default, ~1× ETA)
+    "balanced": ("fast",     "18"),  # ~2× ETA
+    "best":     ("slow",     "16"),  # ~4× ETA, broadcast-ish
+}
+_current_quality: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "hfvp_quality", default="fast"
+)
+
+
+@contextlib.contextmanager
+def use_quality(name: str | None):
+    """Sets the active x264 preset for the duration of this `with` block.
+    Unknown / None values fall back to "fast" so callers can pass through
+    unvalidated user input safely."""
+    if name not in QUALITY_PRESETS:
+        name = "fast"
+    tok = _current_quality.set(name)
+    try:
+        yield name
+    finally:
+        _current_quality.reset(tok)
+
+
+def _x264_args() -> list[str]:
+    preset, crf = QUALITY_PRESETS[_current_quality.get()]
+    return ["-c:v", "libx264", "-preset", preset, "-crf", crf]
 
 
 async def run(cmd: list[str], *, timeout: float | None = None) -> str:
@@ -117,12 +153,7 @@ async def normalize(src: Path, dst: Path) -> None:
             "0:v:0?",
             "-map",
             "0:a:0?",
-            "-c:v",
-            "libx264",
-            "-preset",
-            "veryfast",
-            "-crf",
-            "20",
+            *_x264_args(),
             "-pix_fmt",
             "yuv420p",
             "-c:a",
@@ -221,7 +252,7 @@ async def cut_segments(
 
     cmd = ["ffmpeg", "-y", *inputs, "-filter_complex", full,
            "-map", "[v]", "-map", audio_map,
-           "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+           *_x264_args(),
            "-pix_fmt", "yuv420p",
            "-c:a", "aac", "-b:a", "192k",
            "-movflags", "+faststart",
@@ -238,12 +269,7 @@ async def apply_lut(src: Path, dst: Path, lut: Path) -> None:
             str(src),
             "-vf",
             f"lut3d={lut}",
-            "-c:v",
-            "libx264",
-            "-preset",
-            "veryfast",
-            "-crf",
-            "20",
+            *_x264_args(),
             "-pix_fmt",
             "yuv420p",
             "-c:a",
@@ -328,7 +354,7 @@ async def concat_segments_from_multiple(
         "ffmpeg", "-y", *inputs,
         "-filter_complex", full,
         "-map", "[v]", "-map", audio_map,
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        *_x264_args(),
         "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "192k",
         "-movflags", "+faststart",
@@ -410,7 +436,7 @@ async def burn_subtitles(src: Path, dst: Path, ass_path: Path) -> None:
         await run([
             "ffmpeg", "-y", "-i", str(src),
             "-vf", f"subtitles={ass_arg}",
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+            *_x264_args(),
             "-pix_fmt", "yuv420p",
             "-c:a", "copy",
             "-movflags", "+faststart",
@@ -520,7 +546,7 @@ async def to_aspect(src: Path, dst: Path, target: str) -> None:
     await run([
         "ffmpeg", "-y", "-i", str(src),
         "-vf", vf,
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        *_x264_args(),
         "-pix_fmt", "yuv420p", "-c:a", "copy",
         "-movflags", "+faststart",
         str(dst),
@@ -551,7 +577,7 @@ async def to_aspect_smart(src: Path, dst: Path, target: str, *, anchor_x: float 
     await run([
         "ffmpeg", "-y", "-i", str(src),
         "-vf", vf,
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        *_x264_args(),
         "-pix_fmt", "yuv420p", "-c:a", "copy",
         "-movflags", "+faststart",
         str(dst),

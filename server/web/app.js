@@ -451,6 +451,11 @@ async function loadProject(id) {
   renderMulticamChecklist(p);
   const etaEl = document.getElementById("podcast-1click-eta");
   if (etaEl) etaEl.textContent = podcastEtaHint(p);
+  // Hydrate render-quality dropdown from the persisted state so the user
+  // sees what's currently configured (and any change they make above
+  // sticks across refreshes via the saved render_preset).
+  const qEl = document.getElementById("podcast-1click-quality");
+  if (qEl && p.render_preset) qEl.value = p.render_preset;
   applyModeFiltering();  // updates topbar kind pill + section visibility
 
   const preview = $("#preview");
@@ -4485,6 +4490,7 @@ async function startPodcast1Click() {
   // matches the server-side default.
   const autoAnimEl = document.getElementById("podcast-1click-auto-animations");
   const autoAnimations = autoAnimEl ? !!autoAnimEl.checked : true;
+  const quality = document.getElementById("podcast-1click-quality")?.value || "";
   try {
     const body = {};
     if (lang) body.language = lang;
@@ -4494,6 +4500,7 @@ async function startPodcast1Click() {
     else if (skipSilence) body.cut_strategy = "none";
     if (enhanceAudio) body.enhance_audio = true;
     if (!autoAnimations) body.auto_animations = false;
+    if (quality && quality !== "fast") body.render_preset = quality;
     const res = await api(`/api/projects/${state.current.id}/podcast-multicam-pipeline`, {
       method: "POST",
       headers: { "content-type": "application/json" },

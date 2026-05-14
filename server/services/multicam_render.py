@@ -154,7 +154,7 @@ async def render(
         "ffmpeg", "-y", *inputs,
         "-filter_complex", filter_complex,
         "-map", "[vout]", "-map", "[aout]",
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        *ff._x264_args(),
         "-pix_fmt", "yuv420p",
         "-r", str(TARGET_FPS),
         "-c:a", "aac", "-b:a", "192k",

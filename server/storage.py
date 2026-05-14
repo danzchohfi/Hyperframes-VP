@@ -85,6 +85,11 @@ class ProjectState(BaseModel):
     # apply in Final Cut.
     source_color_profile: str = "rec709"  # rec709 | slog3 | clog3 | vlog | applelog | logc | custom
     color_profile_locked: bool = False    # user picked manually — don't auto-detect on next upload
+    # x264 quality preset for renders. "fast" matches the legacy social
+    # spec (~1× ETA), "balanced" trades 2× for visibly cleaner output,
+    # "best" is broadcast-ish (~4×). Read by ffmpeg.use_quality() at the
+    # start of each render path.
+    render_preset: str = "fast"     # "fast" | "balanced" | "best"
     stages: dict[str, Stage] = Field(default_factory=dict)
 
     def stage(self, name: str) -> Stage:

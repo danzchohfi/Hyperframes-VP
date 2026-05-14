@@ -491,6 +491,20 @@ async def set_color_profile(pid: str, body: ColorProfileIn) -> dict[str, Any]:
     return {"profile": state.source_color_profile, "locked": True}
 
 
+class RenderPresetIn(BaseModel):
+    preset: str  # fast | balanced | best
+
+
+@app.put("/api/projects/{pid}/render-preset")
+async def set_render_preset(pid: str, body: RenderPresetIn) -> dict[str, Any]:
+    state = _load(pid)
+    if body.preset not in ff.QUALITY_PRESETS:
+        raise HTTPException(400, f"preset must be one of {sorted(ff.QUALITY_PRESETS)}")
+    state.render_preset = body.preset
+    storage.save(state)
+    return {"preset": state.render_preset}
+
+
 # ---- transcribe --------------------------------------------------------------
 
 class TranscribeIn(BaseModel):
@@ -2085,12 +2099,13 @@ async def roughcut(pid: str, body: RoughCutIn) -> dict[str, Any]:
     lut = pdir / "lut.cube" if (state.has_lut and body.apply_lut) else None
     out_path = pdir / "roughcut.mp4"
 
-    _stage(state, "roughcut", "running", f"{len(ranges)} segments")
+    _stage(state, "roughcut", "running", f"{len(ranges)} segments · {state.render_preset}")
     try:
-        await ff.cut_segments(
-            src, out_path, ranges,
-            lut=lut, loudnorm=body.loudnorm, denoise=body.denoise,
-        )
+        with ff.use_quality(state.render_preset):
+            await ff.cut_segments(
+                src, out_path, ranges,
+                lut=lut, loudnorm=body.loudnorm, denoise=body.denoise,
+            )
         out_dur = await ff.duration(out_path)
     except Exception as e:
         _stage(state, "roughcut", "error", str(e))
@@ -2115,7 +2130,8 @@ async def roughcut(pid: str, body: RoughCutIn) -> dict[str, Any]:
         try:
             reframed = pdir / "exports" / f"roughcut-{body.aspect.replace(':', 'x')}.mp4"
             reframed.parent.mkdir(exist_ok=True)
-            await ff.to_aspect(out_path, reframed, body.aspect)
+            with ff.use_quality(state.render_preset):
+                await ff.to_aspect(out_path, reframed, body.aspect)
             result["reframed_url"] = f"/api/projects/{pid}/exports/{reframed.name}"
         except Exception as e:
             result["reframe_error"] = str(e)
@@ -2156,9 +2172,10 @@ async def highlights(pid: str, body: HighlightsIn) -> dict[str, Any]:
             pass
     lut = pdir / "lut.cube" if (state.has_lut and body.apply_lut) else None
     out = pdir / "highlights.mp4"
-    _stage(state, "highlights", "running", f"{len(ranges)} segments")
+    _stage(state, "highlights", "running", f"{len(ranges)} segments · {state.render_preset}")
     try:
-        await ff.cut_segments(src, out, ranges, lut=lut)
+        with ff.use_quality(state.render_preset):
+            await ff.cut_segments(src, out, ranges, lut=lut)
         dur = await ff.duration(out)
     except Exception as e:
         _stage(state, "highlights", "error", str(e))
@@ -2179,7 +2196,8 @@ async def highlights(pid: str, body: HighlightsIn) -> dict[str, Any]:
         out_re = pdir / "exports" / f"highlights-{body.aspect.replace(':', 'x')}.mp4"
         out_re.parent.mkdir(exist_ok=True)
         try:
-            await ff.to_aspect(out, out_re, body.aspect)
+            with ff.use_quality(state.render_preset):
+                await ff.to_aspect(out, out_re, body.aspect)
             result["reframed_url"] = f"/api/projects/{pid}/exports/{out_re.name}"
         except Exception as e:
             result["reframe_error"] = str(e)
@@ -3455,18 +3473,19 @@ async def multicam_render_endpoint(pid: str) -> dict[str, Any]:
 
     out = pdir / "exports" / f"{state.name.replace(' ', '_')}-multicam.mp4"
     out.parent.mkdir(exist_ok=True)
-    _stage(state, "multicam_render", "running", f"{len(plan['cuts'])} cuts")
+    _stage(state, "multicam_render", "running", f"{len(plan['cuts'])} cuts · {state.render_preset}")
     try:
         lut_path = pdir / "lut.cube" if state.has_lut else None
-        await mc_render_svc.render(
-            project_dir=pdir,
-            source=src,
-            angle_paths=angle_paths,
-            angle_offsets=angle_offsets,
-            plan=plan["cuts"],
-            out=out,
-            lut=lut_path,
-        )
+        with ff.use_quality(state.render_preset):
+            await mc_render_svc.render(
+                project_dir=pdir,
+                source=src,
+                angle_paths=angle_paths,
+                angle_offsets=angle_offsets,
+                plan=plan["cuts"],
+                out=out,
+                lut=lut_path,
+            )
     except Exception as e:
         _stage(state, "multicam_render", "error", str(e))
         raise HTTPException(500, str(e))
@@ -4137,6 +4156,7 @@ class PodcastPipelineIn(BaseModel):
     cut_strategy: str = "silence"  # "silence" | "primary_speaker" | "none"
     enhance_audio: bool = False    # run audio_enhance step after level_speakers
     auto_animations: bool = True   # auto-generate the reels_animations layer
+    render_preset: str | None = None  # "fast" | "balanced" | "best" — overrides state.render_preset
 
 
 @app.post("/api/projects/{pid}/podcast-pipeline")
@@ -4164,14 +4184,23 @@ async def podcast_multicam_pipeline_endpoint(pid: str, body: PodcastPipelineIn) 
     if not state.source_filename:
         raise HTTPException(400, "Suba o vídeo de origem antes de rodar o pipeline.")
 
+    # Persist the render preset on the project so single-step endpoints
+    # (multicam-render, roughcut, highlights, burn-captions) pick it up
+    # next time the user reruns one of them.
+    if body.render_preset and body.render_preset in ff.QUALITY_PRESETS:
+        state.render_preset = body.render_preset
+        storage.save(state)
+    preset = state.render_preset
+
     async def _run(ctx: jobs_svc.JobContext) -> dict[str, Any]:
-        return await podcast_mc_pipeline_svc.run(
-            ctx,
-            language=body.language,
-            cut_strategy=body.cut_strategy,
-            enhance_audio=body.enhance_audio,
-            auto_animations=body.auto_animations,
-        )
+        with ff.use_quality(preset):
+            return await podcast_mc_pipeline_svc.run(
+                ctx,
+                language=body.language,
+                cut_strategy=body.cut_strategy,
+                enhance_audio=body.enhance_audio,
+                auto_animations=body.auto_animations,
+            )
 
     job_id = await jobs_svc.manager.submit(pid, "podcast_multicam_pipeline", _run)
     return {"job_id": job_id, "status": "pending"}
@@ -4878,9 +4907,10 @@ async def burn_captions(pid: str, body: BurnIn) -> dict[str, Any]:
 
     out = pdir / "exports" / f"{state.name.replace(' ', '_')}-burned-{body.source}.mp4"
     out.parent.mkdir(exist_ok=True)
-    _stage(state, "burn_captions", "running", f"{body.source} · {body.style}")
+    _stage(state, "burn_captions", "running", f"{body.source} · {body.style} · {state.render_preset}")
     try:
-        await ff.burn_subtitles(src, out, ass_path)
+        with ff.use_quality(state.render_preset):
+            await ff.burn_subtitles(src, out, ass_path)
     except Exception as e:
         _stage(state, "burn_captions", "error", str(e))
         raise HTTPException(500, str(e))
