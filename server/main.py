@@ -3484,6 +3484,82 @@ async def multicam_render_endpoint(pid: str) -> dict[str, Any]:
     }
 
 
+# ---- camera plan manual edit ------------------------------------------------
+#
+# The multicam preview shows camera_plan.json so the editor can verify the
+# pick before paying for the multicam render. PUT lets them tweak it
+# inline (drag boundaries, cycle angles) without re-running multicam-pick
+# (which is non-deterministic and may swing other intervals). The original
+# plan is snapshotted to camera_plan.json.bak on first save so /revert can
+# restore it.
+
+class CameraPlanCut(BaseModel):
+    start: float
+    end: float
+    angle_index: int
+
+
+class CameraPlanIn(BaseModel):
+    cuts: list[CameraPlanCut]
+
+
+@app.put("/api/projects/{pid}/camera-plan")
+async def update_camera_plan(pid: str, body: CameraPlanIn) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    plan_path = pdir / "camera_plan.json"
+    if not plan_path.exists():
+        raise HTTPException(400, "run /multicam-pick first")
+    existing = storage.read_json(pid, "camera_plan.json") or {}
+    angles = existing.get("angles") or []
+    n_angles = len(angles) or (len(state.angles) + 1)  # source + user angles
+    if not body.cuts:
+        raise HTTPException(400, "cuts is empty")
+    # Validate: start<end, monotonic, angle in range
+    cuts: list[dict] = []
+    prev_end = -1e-9
+    for i, c in enumerate(body.cuts):
+        if c.end <= c.start:
+            raise HTTPException(400, f"cut {i}: end ({c.end}) must be > start ({c.start})")
+        if c.start + 1e-3 < prev_end:
+            raise HTTPException(400, f"cut {i}: overlaps previous cut (start {c.start} < prev end {prev_end})")
+        if not (0 <= c.angle_index < n_angles):
+            raise HTTPException(400, f"cut {i}: angle_index {c.angle_index} out of range (0..{n_angles - 1})")
+        cuts.append({
+            "start": round(float(c.start), 3),
+            "end": round(float(c.end), 3),
+            "angle_index": int(c.angle_index),
+        })
+        prev_end = c.end
+    # Snapshot original (only on first manual edit — preserves the pick output)
+    bak_path = pdir / "camera_plan.json.bak"
+    if not bak_path.exists():
+        try:
+            bak_path.write_text(plan_path.read_text(), encoding="utf-8")
+        except Exception:
+            pass
+    new_plan = {**existing, "cuts": cuts, "manual_edit": True}
+    storage.write_json(pid, "camera_plan.json", new_plan)
+    _stage(state, "camera_pick", "done",
+           f"plano editado · {len(cuts)} cortes (manual)")
+    return {"cuts": cuts, "angles": angles, "reverted": False}
+
+
+@app.post("/api/projects/{pid}/camera-plan/revert")
+async def revert_camera_plan(pid: str) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    plan_path = pdir / "camera_plan.json"
+    bak_path = pdir / "camera_plan.json.bak"
+    if not bak_path.exists():
+        raise HTTPException(400, "no backup to revert to")
+    plan_path.write_text(bak_path.read_text(), encoding="utf-8")
+    plan = storage.read_json(pid, "camera_plan.json") or {}
+    _stage(state, "camera_pick", "done",
+           f"plano revertido · {len(plan.get('cuts') or [])} cortes")
+    return {"cuts": plan.get("cuts") or [], "angles": plan.get("angles") or [], "reverted": True}
+
+
 # ---- Vlog mode --------------------------------------------------------------
 
 class VlogModeIn(BaseModel):

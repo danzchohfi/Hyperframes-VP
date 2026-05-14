@@ -2457,6 +2457,7 @@ async function buildSourceSubjectTimeline() {
 
 const _mcPreview = {
   cuts: [],
+  savedCuts: [],         // last successfully-saved (or initially-loaded) plan; revert target
   angles: [],            // [{name, idx, src, offset, video, loaded, error}]
   duration: 0,
   raf: 0,
@@ -2464,7 +2465,29 @@ const _mcPreview = {
   currentTime: 0,
   startedAt: 0,          // wall-clock anchor for the play loop
   startedFrom: 0,        // currentTime at play start
+  dirty: false,          // unsaved edits → enables Save/Revert
+  selectedCutIdx: -1,
+  drag: null,            // { boundaryIdx, originX, stripRect, originalStart, originalEnd }
 };
+
+const MC_MIN_CUT_DUR = 0.2;   // shortest cut, seconds
+const MC_SNAP = 0.1;          // drag boundaries snap to this resolution
+
+function cloneMcCuts(cuts) {
+  return cuts.map(c => ({
+    start: parseFloat(c.start) || 0,
+    end: parseFloat(c.end) || 0,
+    angle_index: parseInt(c.angle_index || 0),
+  }));
+}
+
+function setMcDirty(dirty) {
+  _mcPreview.dirty = !!dirty;
+  const save = document.getElementById("mc-preview-save");
+  const rev = document.getElementById("mc-preview-revert");
+  if (save) save.disabled = !dirty;
+  if (rev) rev.disabled = !dirty;
+}
 
 async function openMulticamPreview() {
   if (!state.current) return;
@@ -2503,11 +2526,14 @@ async function openMulticamPreview() {
 
   // Total preview duration = end of the last cut.
   const duration = cuts.reduce((m, c) => Math.max(m, parseFloat(c.end) || 0), 0);
-  _mcPreview.cuts = cuts;
+  _mcPreview.cuts = cloneMcCuts(cuts);
+  _mcPreview.savedCuts = cloneMcCuts(cuts);
   _mcPreview.angles = angles.map(a => ({ ...a, video: null, loaded: false, error: null }));
   _mcPreview.duration = duration;
   _mcPreview.currentTime = 0;
   _mcPreview.playing = false;
+  _mcPreview.selectedCutIdx = -1;
+  setMcDirty(false);
 
   // Render the stage: one absolutely-positioned <video> per angle.
   const stage = document.getElementById("mc-preview-stage");
@@ -2540,12 +2566,17 @@ async function openMulticamPreview() {
 }
 
 function closeMulticamPreview() {
+  if (_mcPreview.dirty) {
+    if (!confirm("Você tem mudanças não salvas no plano de câmera. Descartar?")) return;
+  }
   const backdrop = document.getElementById("mc-preview-backdrop");
   if (backdrop) backdrop.classList.add("hidden");
   // Stop the RAF loop + release video elements
   cancelAnimationFrame(_mcPreview.raf);
   _mcPreview.raf = 0;
   _mcPreview.playing = false;
+  _mcPreview.drag = null;
+  setMcDirty(false);
   for (const a of _mcPreview.angles) {
     if (a.video) {
       try { a.video.pause(); } catch {}
@@ -2621,17 +2652,119 @@ function renderMcStrip() {
   // Color palette per angle index — recycle the brand-ish accent set.
   const palette = ["#a78bfa", "#3b82f6", "#f472b6", "#22c55e", "#f59e0b", "#ef4444"];
   const cuts = _mcPreview.cuts;
-  const bands = cuts.map(c => {
+  const sel = _mcPreview.selectedCutIdx;
+  const bands = cuts.map((c, i) => {
     const start = parseFloat(c.start) || 0;
     const end = parseFloat(c.end) || start;
     const ai = parseInt(c.angle_index || 0);
     const left = (start / dur) * 100;
-    const width = ((end - start) / dur) * 100;
+    const width = Math.max(0.05, ((end - start) / dur) * 100);
     const color = palette[ai % palette.length];
     const label = (_mcPreview.angles[ai]?.name || `A${ai}`);
-    return `<div class="mc-strip-band" style="left:${left}%;width:${width}%;background:${color}" title="${escapeHtml(label)} · ${formatTime(start)}-${formatTime(end)}"></div>`;
+    const cls = i === sel ? "mc-strip-band selected" : "mc-strip-band";
+    return `<div class="${cls}" data-cut-idx="${i}" style="left:${left}%;width:${width}%;background:${color}" title="${escapeHtml(label)} · ${formatTime(start)}-${formatTime(end)} · clique para alternar ângulo">${escapeHtml(label)}</div>`;
   }).join("");
-  strip.innerHTML = `${bands}<div class="mc-strip-cursor"></div>`;
+  // Handles sit at each internal boundary (between cuts[i-1].end and cuts[i].start).
+  // We render them only where cuts[i-1].end == cuts[i].start (true after merge_adjacent);
+  // they drive a synchronized edit of both sides so the boundary stays a boundary.
+  const handles = cuts.slice(1).map((c, i) => {
+    const t = parseFloat(c.start) || 0;
+    const pct = (t / dur) * 100;
+    return `<div class="mc-strip-handle" data-boundary-idx="${i + 1}" style="left:calc(${pct}% - 3px)" title="Arraste para ajustar o ponto de corte"></div>`;
+  }).join("");
+  strip.innerHTML = `${bands}${handles}<div class="mc-strip-cursor"></div>`;
+}
+
+function cycleMcCutAngle(cutIdx) {
+  const cut = _mcPreview.cuts[cutIdx];
+  if (!cut) return;
+  const n = _mcPreview.angles.length;
+  if (n < 2) return;
+  cut.angle_index = (parseInt(cut.angle_index || 0) + 1) % n;
+  _mcPreview.selectedCutIdx = cutIdx;
+  setMcDirty(true);
+  renderMcStrip();
+  applyMcPreviewTime(_mcPreview.currentTime);
+}
+
+function startMcBoundaryDrag(e, boundaryIdx) {
+  const strip = document.getElementById("mc-preview-strip");
+  if (!strip) return;
+  const cuts = _mcPreview.cuts;
+  const left = cuts[boundaryIdx - 1];
+  const right = cuts[boundaryIdx];
+  if (!left || !right) return;
+  const rect = strip.getBoundingClientRect();
+  _mcPreview.drag = {
+    boundaryIdx,
+    rect,
+    minT: (parseFloat(left.start) || 0) + MC_MIN_CUT_DUR,
+    maxT: (parseFloat(right.end) || _mcPreview.duration) - MC_MIN_CUT_DUR,
+  };
+  document.body.style.cursor = "ew-resize";
+  e.preventDefault();
+}
+
+function onMcDragMove(e) {
+  const drag = _mcPreview.drag;
+  if (!drag) return;
+  const dur = _mcPreview.duration || 1;
+  const x = (e.clientX - drag.rect.left) / drag.rect.width;
+  let t = Math.max(0, Math.min(1, x)) * dur;
+  t = Math.round(t / MC_SNAP) * MC_SNAP;
+  t = Math.max(drag.minT, Math.min(drag.maxT, t));
+  const cuts = _mcPreview.cuts;
+  cuts[drag.boundaryIdx - 1].end = t;
+  cuts[drag.boundaryIdx].start = t;
+  setMcDirty(true);
+  renderMcStrip();
+  applyMcPreviewTime(_mcPreview.currentTime);
+}
+
+function endMcDrag() {
+  if (!_mcPreview.drag) return;
+  _mcPreview.drag = null;
+  document.body.style.cursor = "";
+}
+
+async function saveMcPlan() {
+  if (!state.current || !_mcPreview.dirty) return;
+  const pid = state.current.id;
+  const btn = document.getElementById("mc-preview-save");
+  if (btn) btn.disabled = true;
+  try {
+    const cuts = _mcPreview.cuts.map(c => ({
+      start: parseFloat(c.start),
+      end: parseFloat(c.end),
+      angle_index: parseInt(c.angle_index || 0),
+    }));
+    await api(`/api/projects/${pid}/camera-plan`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ cuts }),
+    });
+    _mcPreview.savedCuts = cloneMcCuts(_mcPreview.cuts);
+    setMcDirty(false);
+    toast?.("Plano de câmera salvo. Re-renderize para gerar o vídeo atualizado.", "ok");
+    log?.(`<span data-icon="check"></span> camera_plan.json atualizado · ${cuts.length} cortes`, "ok");
+    // Refresh the project state so badges (has_camera_plan) reflect the save.
+    if (typeof loadProject === "function") {
+      try { await loadProject(pid); } catch {}
+    }
+  } catch (e) {
+    toast?.(`Falha ao salvar: ${e.message}`, "err");
+    if (btn) btn.disabled = false;
+  }
+}
+
+function revertMcPlan() {
+  if (!_mcPreview.dirty) return;
+  _mcPreview.cuts = cloneMcCuts(_mcPreview.savedCuts);
+  _mcPreview.selectedCutIdx = -1;
+  setMcDirty(false);
+  renderMcStrip();
+  applyMcPreviewTime(_mcPreview.currentTime);
+  toast?.("Mudanças descartadas.", "info");
 }
 
 function bindMcPreview() {
@@ -2681,6 +2814,31 @@ function bindMcPreview() {
       applyMcPreviewTime(t);
     });
   }
+
+  // Interactive strip: cycle angle on band click, drag boundaries on handle.
+  // We use event delegation so the listener survives re-renders of the
+  // strip's innerHTML (which we do on every edit).
+  const strip = document.getElementById("mc-preview-strip");
+  if (strip) {
+    strip.addEventListener("mousedown", (e) => {
+      const handle = e.target.closest(".mc-strip-handle");
+      if (handle) {
+        const idx = parseInt(handle.dataset.boundaryIdx || "0");
+        if (idx > 0) startMcBoundaryDrag(e, idx);
+        return;
+      }
+      const band = e.target.closest(".mc-strip-band");
+      if (band) {
+        const idx = parseInt(band.dataset.cutIdx || "-1");
+        if (idx >= 0) cycleMcCutAngle(idx);
+      }
+    });
+  }
+  document.addEventListener("mousemove", onMcDragMove);
+  document.addEventListener("mouseup", endMcDrag);
+
+  document.getElementById("mc-preview-save")?.addEventListener("click", saveMcPlan);
+  document.getElementById("mc-preview-revert")?.addEventListener("click", revertMcPlan);
 }
 
 function tickMcPreview() {
