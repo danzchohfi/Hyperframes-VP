@@ -5260,6 +5260,7 @@ async function applyAnimPlanFromPrompt() {
 const _hfLib = {
   catalog: null,   // [{name,type,title,description,tags,dimensions?,duration?}, ...] | null
   installed: [],   // [{name, kind, type, title, ...}, ...]
+  schedule: [],    // [{name, start, duration, opacity}, ...] from extra_blocks.json
   filter: { search: "", type: "", tag: "" },
 };
 
@@ -5292,6 +5293,7 @@ async function loadHfCatalog(force = false) {
 async function loadHfInstalled() {
   if (!state.current) {
     _hfLib.installed = [];
+    _hfLib.schedule = [];
     return _hfLib.installed;
   }
   try {
@@ -5299,6 +5301,14 @@ async function loadHfInstalled() {
     _hfLib.installed = res.items || [];
   } catch {
     _hfLib.installed = [];
+  }
+  // Also pull the timeline schedule (sidecar extra_blocks.json) so the
+  // installed pills can show each block's start/duration.
+  try {
+    const sch = await api(`/api/projects/${state.current.id}/extra-blocks`);
+    _hfLib.schedule = sch.blocks || [];
+  } catch {
+    _hfLib.schedule = [];
   }
   return _hfLib.installed;
 }
@@ -5373,10 +5383,18 @@ function renderHfInstalled() {
     root.innerHTML = "";
     return;
   }
+  // Cross-reference with the per-project schedule so blocks placed on
+  // the timeline show their start/duration. Components don't appear
+  // here — they're paste-in snippets, not timed blocks.
+  const scheduleByName = new Map((_hfLib.schedule || []).map(b => [b.name, b]));
   const items = _hfLib.installed.map(it => {
     const title = it.title || it.name;
+    const sched = scheduleByName.get(it.name);
+    const timing = sched
+      ? `<span class="hf-lib-pill-time">@${parseFloat(sched.start).toFixed(1)}s · ${parseFloat(sched.duration).toFixed(1)}s</span>`
+      : (it.kind === "component" ? `<span class="hf-lib-pill-time" style="opacity:0.6">snippet</span>` : "");
     return `<span class="hf-lib-installed-pill" data-name="${escapeHtml(it.name)}" title="${escapeHtml(it.path || it.name)}">
-      <span data-icon="check" data-icon-size="11"></span> ${escapeHtml(title)}
+      <span data-icon="check" data-icon-size="11"></span> ${escapeHtml(title)} ${timing}
     </span>`;
   }).join("");
   root.innerHTML = `<div class="muted" style="font-size:11px;margin-bottom:4px">Instalados neste projeto:</div>${items}`;
@@ -5400,9 +5418,20 @@ async function installHfBlock(name) {
       setBtnHTML(status, `<span data-icon=&quot;check&quot;></span> ${name} instalado`);
       status.className = "status done";
     }
+    // Rebuild the composition so the new iframe slot is materialized in
+    // pdir/composition/index.html. Without this, the user has to click
+    // "Preview Hyperframes" twice (first opens stale composition, second
+    // shows the block) — confusing UX.
+    try {
+      await api(`/api/projects/${state.current.id}/composition`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+    } catch {}
     toast?.(
-      `${name} instalado. Veja em "Preview Hyperframes" ou "Editar no Hyperframes". Snippet copiável: ${res.snippet || ""}`,
-      "ok", 8000
+      `${name} instalado e adicionado ao timeline. Abra "Preview Hyperframes" pra ver.`,
+      "ok", 6000
     );
     await loadHfInstalled();
     renderHfInstalled();
@@ -5423,10 +5452,18 @@ async function uninstallHfBlock(name) {
     await api(`/api/projects/${state.current.id}/registry/installed/${encodeURIComponent(name)}`, {
       method: "DELETE",
     });
+    // Rebuild composition so the iframe is gone from index.html too.
+    try {
+      await api(`/api/projects/${state.current.id}/composition`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+    } catch {}
     await loadHfInstalled();
     renderHfInstalled();
     renderHfGrid();
-    toast?.(`${name} removido.`, "ok");
+    toast?.(`${name} removido do projeto.`, "ok");
   } catch (e) {
     toast?.(`Falha ao remover: ${e.message}`, "err");
   }

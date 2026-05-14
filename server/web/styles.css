@@ -2418,6 +2418,14 @@ a { color: inherit; text-decoration: none; }
   color: var(--ok, #22c55e);
   border: 1px solid color-mix(in srgb, var(--ok, #22c55e) 35%, transparent);
 }
+.hf-lib-pill-time {
+  font-size: 10px;
+  opacity: 0.85;
+  font-variant-numeric: tabular-nums;
+  margin-left: 2px;
+  padding-left: 4px;
+  border-left: 1px solid color-mix(in srgb, var(--ok, #22c55e) 30%, transparent);
+}
 .hf-library-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));

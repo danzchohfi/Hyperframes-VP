@@ -157,6 +157,24 @@ app.add_middleware(BasicAuthMiddleware)
 
 # ---- request models ----------------------------------------------------------
 
+
+def _load_extra_blocks(pid: str) -> list[dict[str, Any]] | None:
+    """Read pdir/extra_blocks.json — the scheduling sidecar for registry-
+    installed blocks (filled by /extra-blocks endpoints below). Returns
+    None if the file doesn't exist, so the composer keeps its default
+    behaviour for projects that never used the library."""
+    pdir = storage.project_dir(pid)
+    path = pdir / "extra_blocks.json"
+    if not path.exists():
+        return None
+    try:
+        data = storage.read_json(pid, "extra_blocks.json") or {}
+        items = data.get("blocks") if isinstance(data, dict) else None
+        return items or None
+    except Exception:
+        return None
+
+
 VALID_KINDS = {"podcast", "multicam_podcast", "reels", "vlog", "general"}
 
 
@@ -895,6 +913,7 @@ async def build_composition_only(pid: str, body: RenderIn | None = None) -> dict
                 animations = storage.read_json(pid, "reels_animations.json").get("animations") or None
             except Exception:
                 animations = None
+        extra_blocks = _load_extra_blocks(pid)
         composer.build_composition(
             project_dir=pdir,
             video_path=edited,
@@ -905,6 +924,7 @@ async def build_composition_only(pid: str, body: RenderIn | None = None) -> dict
             chapters=chapters_for_render,
             speaker_turns=speaker_turns,
             animations=animations,
+            extra_blocks=extra_blocks,
         )
     except Exception as e:
         raise HTTPException(500, f"compose: {e}")
@@ -963,6 +983,38 @@ async def registry_install(pid: str, body: RegistryInstallIn) -> dict[str, Any]:
     except registry_svc.RegistryError as e:
         _stage(state, "registry_install", "error", str(e))
         raise HTTPException(502, str(e))
+    # Auto-schedule the new block at t=0 with its natural duration so it
+    # shows up in the preview immediately. The user can re-arrange via
+    # PUT /extra-blocks; an entry already there for the same name keeps
+    # its existing position (no clobber on re-install). Components are
+    # paste-in snippets (not standalone HTML docs), so we don't iframe-
+    # mount them — they have to be hand-integrated via Studio.
+    try:
+        meta: dict[str, Any] | None = None
+        for it in await registry_svc.fetch_catalog():
+            if it.get("name") == body.name:
+                meta = it
+                break
+        if meta and meta.get("type") == "block":
+            natural_dur = meta.get("duration") or 5.0
+            existing: list[dict[str, Any]] = []
+            if (pdir / "extra_blocks.json").exists():
+                try:
+                    existing = (storage.read_json(pid, "extra_blocks.json") or {}).get("blocks") or []
+                except Exception:
+                    existing = []
+            if not any(b.get("name") == body.name for b in existing):
+                existing.append({
+                    "name": body.name,
+                    "start": 0.0,
+                    "duration": float(natural_dur),
+                    "opacity": 1.0,
+                })
+                storage.write_json(pid, "extra_blocks.json", {"blocks": existing})
+    except Exception:
+        # Auto-scheduling is a nice-to-have; if it fails, the block is
+        # still installed (and editable via PUT /extra-blocks).
+        pass
     _stage(state, "registry_install", "done",
            f"{body.name} · {len(result.get('written') or [])} arquivo(s)")
     return result
@@ -986,8 +1038,61 @@ async def registry_uninstall(pid: str, name: str) -> dict[str, Any]:
         raise HTTPException(400, str(e))
     if not removed:
         raise HTTPException(404, f"{name} não está instalado")
+    # Also remove the timeline schedule entry for this block, if any.
+    if (pdir / "extra_blocks.json").exists():
+        try:
+            data = storage.read_json(pid, "extra_blocks.json") or {}
+            blocks = [b for b in (data.get("blocks") or []) if b.get("name") != name]
+            storage.write_json(pid, "extra_blocks.json", {"blocks": blocks})
+        except Exception:
+            pass
     _stage(state, "registry_install", "done", f"removido {name}")
     return {"removed": True, "name": name}
+
+
+# Timeline schedule for installed blocks. composer.py reads this and emits
+# an <iframe> per entry positioned by data-start / data-duration, so the
+# block animates as soon as its slot opens in the master timeline.
+
+class ExtraBlockIn(BaseModel):
+    name: str
+    start: float = 0.0
+    duration: float | None = None  # None → use the block's natural duration
+    opacity: float = 1.0
+
+
+class ExtraBlocksIn(BaseModel):
+    blocks: list[ExtraBlockIn]
+
+
+@app.get("/api/projects/{pid}/extra-blocks")
+async def get_extra_blocks(pid: str) -> dict[str, Any]:
+    _load(pid)
+    items = _load_extra_blocks(pid) or []
+    return {"blocks": items}
+
+
+@app.put("/api/projects/{pid}/extra-blocks")
+async def set_extra_blocks(pid: str, body: ExtraBlocksIn) -> dict[str, Any]:
+    _load(pid)
+    pdir = storage.project_dir(pid)
+    # Resolve natural durations from the installed blocks' file metadata
+    # so the user can omit `duration` and still get the right window.
+    installed_by_name = {
+        it["name"]: it for it in registry_svc.list_installed(pdir / "composition")
+    }
+    cleaned: list[dict[str, Any]] = []
+    for b in body.blocks:
+        meta = installed_by_name.get(b.name) or {}
+        natural_dur = float(meta.get("duration") or 5.0)
+        cleaned.append({
+            "name": b.name,
+            "start": max(0.0, float(b.start)),
+            "duration": float(b.duration if b.duration is not None else natural_dur),
+            "opacity": max(0.0, min(1.0, float(b.opacity))),
+        })
+    storage.write_json(pid, "extra_blocks.json", {"blocks": cleaned})
+    return {"blocks": cleaned, "count": len(cleaned)}
 
 
 @app.post("/api/projects/{pid}/render")
@@ -1079,6 +1184,7 @@ async def do_render(pid: str, body: RenderIn) -> dict[str, Any]:
                 await tts_svc.synthesize_for_animations(normalized_anims, pdir)
             except Exception:
                 _stage(state, "render", "running", "tts synth partial")
+        extra_blocks_for_render = _load_extra_blocks(pid)
         comp_dir = composer.build_composition(
             project_dir=pdir,
             video_path=edited,
@@ -1089,6 +1195,7 @@ async def do_render(pid: str, body: RenderIn) -> dict[str, Any]:
             chapters=chapters_for_render,
             speaker_turns=speaker_turns,
             animations=animations_for_render,
+            extra_blocks=extra_blocks_for_render,
         )
     except Exception as e:
         _stage(state, "render", "error", f"compose: {e}")

@@ -105,6 +105,7 @@ def build_composition(
     chapters: list[dict] | None = None,  # if set → "Eddie cut" mode
     speaker_turns: list[dict] | None = None,  # [{speaker, start, end}, ...]
     animations: list[dict] | None = None,  # reels animations to overlay
+    extra_blocks: list[dict] | None = None,  # registry-installed blocks scheduled on the timeline
 ) -> Path:
     """Materialize a Hyperframes project at project_dir/composition. Returns path."""
     comp_dir = project_dir / "composition"
@@ -367,6 +368,44 @@ def build_composition(
           <h2 class="card-outro">{outro_text}</h2>
         </div>
       </div>"""
+
+    # Registry-installed blocks scheduled on the timeline. Each block is
+    # a full HTML composition (compositions/<name>.html written by
+    # `hyperframes add`). We mount them as iframes positioned absolutely
+    # so the framework's `class="clip"` + data-start/data-duration drives
+    # visibility from the master timeline. Iframe content runs its own
+    # internal GSAP timeline (auto-plays on load), so the block animates
+    # as soon as it becomes visible. Not frame-accurate under scrubbing,
+    # but fine for linear playback (the preview's primary mode).
+    extra_blocks_html = ""
+    if extra_blocks:
+        parts: list[str] = []
+        for i, eb in enumerate(extra_blocks):
+            name = (eb.get("name") or "").strip()
+            if not name:
+                continue
+            # Block file is written by `hyperframes add` to compositions/<name>.html.
+            # If it's missing (uninstalled / never installed), skip silently —
+            # the rest of the composition still renders.
+            block_path = comp_dir / "compositions" / f"{name}.html"
+            if not block_path.exists():
+                continue
+            start = max(0.0, float(eb.get("start") or 0.0))
+            dur = max(0.5, float(eb.get("duration") or 5.0))
+            # Each block has natural dimensions; we scale to fill the
+            # composition (object-fit-like via iframe sizing). Allow per-
+            # block opacity / blend so transitions feel less like a paste.
+            opacity = max(0.0, min(1.0, float(eb.get("opacity") if eb.get("opacity") is not None else 1.0)))
+            parts.append(
+                f'<iframe class="clip extra-block" '
+                f'data-start="{start:.3f}" data-duration="{dur:.3f}" '
+                f'data-track-index="{60 + i}" '
+                f'data-block-name="{html.escape(name)}" '
+                f'src="compositions/{html.escape(name)}.html" '
+                f'style="position:absolute;inset:0;width:100%;height:100%;'
+                f'border:0;opacity:{opacity};pointer-events:none;background:transparent"></iframe>'
+            )
+        extra_blocks_html = "\n      ".join(parts)
 
     # Reels animations — overlays that fire at user-chosen / AI-chosen moments.
     animations_css = ""
@@ -760,6 +799,7 @@ def build_composition(
       {lower_thirds_html}
       {cta_html}
       {logo_html}
+      {extra_blocks_html}
       {animations_html}
       {animations_audio_html}
       {outro_html}
