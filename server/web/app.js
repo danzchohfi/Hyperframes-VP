@@ -4255,7 +4255,8 @@ function renderPodcast1ClickResult(result) {
       ${outputs.fcpxml ? `<button id="hr-open-fcp" class="btn btn-primary btn-sm" type="button"><span data-icon="film" data-icon-size="14"></span> Abrir no Final Cut Pro</button>` : ""}
       ${outputs.multicam ? `<button id="hr-reveal-mc" class="btn btn-ghost btn-sm" type="button"><span data-icon="arrow-right" data-icon-size="14"></span> Mostrar multicam no Finder</button>` : ""}
       ${state.current?.has_camera_plan ? `<button id="hr-mc-preview" class="btn btn-ghost btn-sm" type="button"><span data-icon="eye" data-icon-size="14"></span> Pré-visualizar plano</button>` : ""}
-      <button id="hr-open-hf" class="btn btn-ghost btn-sm" type="button" title="Abre a composição Hyperframes no editor. Roda 'npm run dev' na pasta composition pra ver/ajustar animações ao vivo."><span data-icon="sparkles" data-icon-size="14"></span> Editar no Hyperframes</button>
+      <button id="hr-preview-hf" class="btn btn-ghost btn-sm" type="button" title="Abre a composição Hyperframes renderizada em uma nova aba — captions cinéticas, animações e tudo mais, ao vivo."><span data-icon="play" data-icon-size="14"></span> Preview Hyperframes</button>
+      <button id="hr-open-hf" class="btn btn-ghost btn-sm" type="button" title="Mostra a pasta no Finder. Roda 'npm run dev' lá pra editar animações ao vivo."><span data-icon="folder" data-icon-size="14"></span> Editar no Hyperframes</button>
     </div>
     ${warnings.length ? `<details class="hr-warnings"><summary>${warnings.length} avisos</summary><ul>${warnings.map(w => `<li>${escapeHtml(w)}</li>`).join("")}</ul></details>` : ""}
   `;
@@ -4306,6 +4307,15 @@ function renderPodcast1ClickResult(result) {
       });
       toast?.(`Composição em ${compPath}. Rode \`npm run dev\` lá pra editar ao vivo.`, "ok", 7000);
     } catch (e) { log(`✗ open hf: ${e.message}`, "err"); }
+  });
+  document.getElementById("hr-preview-hf")?.addEventListener("click", () => {
+    if (!state.current) return;
+    // Opens the rendered Hyperframes composition in a new tab. The
+    // composition's index.html runs its own GSAP timeline + the body
+    // video player, so the user sees the final motion without us
+    // baking it into an MP4 first.
+    const url = `/api/projects/${state.current.id}/composition/index.html`;
+    window.open(url, "_blank", "noopener");
   });
 }
 

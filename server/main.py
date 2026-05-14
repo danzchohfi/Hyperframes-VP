@@ -4894,6 +4894,20 @@ async def serve_angle(pid: str, filename: str):
     return FileResponse(fp, media_type="video/mp4", filename=filename)
 
 
+@app.get("/api/projects/{pid}/composition/{path:path}")
+async def serve_composition_file(pid: str, path: str):
+    """Serve any file from a project's Hyperframes composition directory
+    so the rendered index.html (with its relative refs to gsap, body.mp4,
+    meta.json, etc) can run live in an iframe / new tab. Path-traversal
+    guarded against `pdir/composition`."""
+    pdir = storage.project_dir(pid)
+    comp_dir = (pdir / "composition").resolve()
+    fp = (comp_dir / path).resolve()
+    if not fp.exists() or comp_dir not in fp.parents:
+        raise HTTPException(404)
+    return FileResponse(fp)
+
+
 @app.get("/api/projects/{pid}/files/thumbs/{name}")
 async def serve_thumb(pid: str, name: str):
     pdir = storage.project_dir(pid)
