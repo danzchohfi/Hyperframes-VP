@@ -210,51 +210,55 @@
 
           <section class="card" data-cat="brand">
             <header class="section-head"><span class="eyebrow">Identidade</span><h2>Brand book</h2></header>
+            <p class="card-help">Só preenche o que você quer ver no vídeo final. Tudo é opcional — se ficar vazio, nada aparece.</p>
             <div class="grid-2">
-              <label>Nome
+              <label>Nome da marca
                 <input id="brand-name" type="text" placeholder="Marca" />
               </label>
-              <label>Tagline
-                <input id="brand-tagline" type="text" placeholder="Subtítulo curto" />
+              <label>Estilo de legenda
+                <select id="brand-cap-style">
+                  <option value="minimal">Minimal</option>
+                  <option value="tiktok">TikTok (uppercase, pop)</option>
+                  <option value="podcast">Podcast (chip + light)</option>
+                </select>
               </label>
               <label>Título do intro <span class="muted">(opt-in)</span>
                 <input id="brand-intro-title" type="text" placeholder="Vazio = sem intro card" />
               </label>
-              <label>Subtítulo do intro
-                <input id="brand-intro-sub" type="text" placeholder="Opcional" />
-              </label>
               <label>Texto do outro <span class="muted">(opt-in)</span>
                 <input id="brand-outro" type="text" placeholder="Vazio = sem outro card" />
               </label>
-              <label>Posição da legenda
-                <select id="brand-cap-pos">
-                  <option value="bottom">Inferior</option>
-                  <option value="center">Centro</option>
-                </select>
-              </label>
             </div>
-            <div class="palette">
-              <div class="swatch-group">
-                <span>Paleta</span>
-                <label class="sw"><input id="c-primary" type="color" value="#a78bfa" /><em>Principal</em></label>
-                <label class="sw"><input id="c-secondary" type="color" value="#3b82f6" /><em>Secundária</em></label>
-                <label class="sw"><input id="c-accent" type="color" value="#f472b6" /><em>Destaque</em></label>
-                <label class="sw"><input id="c-bg" type="color" value="#06060a" /><em>Fundo</em></label>
-                <label class="sw"><input id="c-fg" type="color" value="#ffffff" /><em>Texto</em></label>
+            <details class="brand-advanced">
+              <summary>Avançado: cores, tagline, posição da legenda, presets</summary>
+              <div class="grid-2">
+                <label>Tagline
+                  <input id="brand-tagline" type="text" placeholder="Subtítulo curto" />
+                </label>
+                <label>Subtítulo do intro
+                  <input id="brand-intro-sub" type="text" placeholder="Opcional" />
+                </label>
+                <label>Posição da legenda
+                  <select id="brand-cap-pos">
+                    <option value="bottom">Inferior</option>
+                    <option value="center">Centro</option>
+                  </select>
+                </label>
+                <label>Preset de marca
+                  <select id="brand-preset-pick"><option value="">— escolher —</option></select>
+                </label>
               </div>
-            </div>
-            <div class="grid-2">
-              <label>Estilo de legenda
-                <select id="brand-cap-style">
-                  <option value="minimal">Minimal</option>
-                  <option value="tiktok">TikTok (uppercase, scale on hot)</option>
-                  <option value="podcast">Podcast (chip + light)</option>
-                </select>
-              </label>
-              <label>Preset de marca
-                <select id="brand-preset-pick"><option value="">— escolher —</option></select>
-              </label>
-            </div>
+              <div class="palette">
+                <div class="swatch-group">
+                  <span>Paleta</span>
+                  <label class="sw"><input id="c-primary" type="color" value="#a78bfa" /><em>Principal</em></label>
+                  <label class="sw"><input id="c-secondary" type="color" value="#3b82f6" /><em>Secundária</em></label>
+                  <label class="sw"><input id="c-accent" type="color" value="#f472b6" /><em>Destaque</em></label>
+                  <label class="sw"><input id="c-bg" type="color" value="#06060a" /><em>Fundo</em></label>
+                  <label class="sw"><input id="c-fg" type="color" value="#ffffff" /><em>Texto</em></label>
+                </div>
+              </div>
+            </details>
             <div class="actions">
               <button id="save-brand" class="btn-primary">Salvar brand</button>
               <button id="save-preset-btn" class="btn-ghost"><span data-icon="sparkles"></span> Salvar como preset</button>
@@ -495,22 +499,25 @@
                   <option value="es">Espanhol</option>
                 </select>
               </div>
-              <label class="hero-cta-opt" title="Em vez de cortar silêncios pelo volume, mantém só os trechos do host. Útil quando tem conversa de fundo de outras pessoas que o detector de silêncio não pega.">
-                <input type="checkbox" id="podcast-1click-host-only" />
-                <span>Cortar conversa de fundo (manter só o host)</span>
-              </label>
-              <label class="hero-cta-opt" title="Mantém o ritmo natural — não corta silêncios entre frases. Bom pra podcasts onde quase sempre alguém está falando.">
-                <input type="checkbox" id="podcast-1click-skip-silence" />
-                <span>Não cortar silêncios (manter ritmo natural)</span>
-              </label>
-              <label class="hero-cta-opt" title="Filtro ffmpeg de denoise + compressor + loudnorm. Útil quando a gravação tem hiss de AC ou voz fraca.">
-                <input type="checkbox" id="podcast-1click-enhance-audio" />
-                <span>Tratar áudio (denoise + compressor)</span>
-              </label>
-              <label class="hero-cta-opt" title="Adiciona hook card no início, callouts nos capítulos, zoom nos soundbites e CTA no fim. Default ligado.">
-                <input type="checkbox" id="podcast-1click-auto-animations" checked />
-                <span>Animações automáticas (hook + callouts + CTA)</span>
-              </label>
+              <details class="hero-cta-opts-group">
+                <summary>Opções avançadas</summary>
+                <label class="hero-cta-opt" title="Em vez de cortar silêncios pelo volume, mantém só os trechos do host. Útil quando tem conversa de fundo de outras pessoas que o detector de silêncio não pega.">
+                  <input type="checkbox" id="podcast-1click-host-only" />
+                  <span>Cortar conversa de fundo (manter só o host)</span>
+                </label>
+                <label class="hero-cta-opt" title="Mantém o ritmo natural — não corta silêncios entre frases. Bom pra podcasts onde quase sempre alguém está falando.">
+                  <input type="checkbox" id="podcast-1click-skip-silence" />
+                  <span>Não cortar silêncios (manter ritmo natural)</span>
+                </label>
+                <label class="hero-cta-opt" title="Filtro ffmpeg de denoise + compressor + loudnorm. Útil quando a gravação tem hiss de AC ou voz fraca.">
+                  <input type="checkbox" id="podcast-1click-enhance-audio" />
+                  <span>Tratar áudio (denoise + compressor)</span>
+                </label>
+                <label class="hero-cta-opt" title="Adiciona hook card no início, callouts nos capítulos, zoom nos soundbites e CTA no fim. Default ligado.">
+                  <input type="checkbox" id="podcast-1click-auto-animations" checked />
+                  <span>Animações automáticas (hook + callouts + CTA)</span>
+                </label>
+              </details>
               <div id="podcast-1click-progress" class="hero-progress hidden">
                 <div class="hp-bar"><div class="hp-bar-fill" id="hp-fill"></div></div>
                 <div class="hp-label">
@@ -528,22 +535,26 @@
           </section>
 
           <section class="card" data-cat="multicam">
-            <header class="section-head"><span class="eyebrow">Multicam</span><h2>Multicam (avançado)</h2></header>
-            <p class="card-help">Botões individuais de cada etapa. <strong>Use só se quiser controlar passo a passo.</strong> Normalmente o botão "Editar com 1 clique" acima faz tudo sozinho.</p>
+            <header class="section-head"><span class="eyebrow">Multicam</span><h2>Multicam</h2></header>
+            <p class="card-help">A pipeline 1-clique acima faz tudo sozinho. Use este painel só pra verificar o resultado ou pra rodar etapas individualmente.</p>
             <div class="actions multicam-actions">
-              <strong class="actions-group-label">Pipeline multicam podcast</strong>
-              <button id="multicam-sync-btn" class="btn-ghost"><span data-icon="rotate-cw"></span> 1. Sincronizar áudio</button>
-              <button id="multicam-pick-btn" class="btn-primary" data-prereq="multicam_pick"><span data-icon="film"></span> 2. Escolher câmera por turno</button>
-              <button id="multicam-preview-btn" class="btn-ghost" data-prereq="multicam_render" title="Pré-visualiza o plano de câmera sem renderizar (instantâneo)"><span data-icon="eye"></span> Pré-visualizar (sem render)</button>
-              <button id="multicam-render-btn" class="btn-ghost" data-prereq="multicam_render"><span data-icon="play"></span> 3. Renderizar multicam</button>
+              <button id="multicam-preview-btn" class="btn btn-primary" data-prereq="multicam_render" title="Pré-visualiza o plano de câmera sem renderizar (instantâneo)"><span data-icon="eye"></span> Pré-visualizar plano de câmera</button>
               <a id="multicam-link" class="btn-ghost" href="#" download style="display:none"><span data-icon="download"></span> multicam.mp4</a>
             </div>
-            <div class="actions multicam-actions">
-              <strong class="actions-group-label">B-roll (overlay opcional)</strong>
-              <button id="place-broll-btn" class="btn-ghost" data-prereq="story"><span data-icon="target"></span> Inserir B-roll nos soundbites</button>
-              <button id="subject-tl-btn" class="btn-ghost"><span data-icon="users"></span> Linha de tempo do sujeito</button>
-              <span id="broll-place-status" class="status muted"></span>
-            </div>
+            <details class="multicam-advanced">
+              <summary>Etapas individuais (avançado)</summary>
+              <div class="actions multicam-actions">
+                <button id="multicam-sync-btn" class="btn-ghost"><span data-icon="rotate-cw"></span> 1. Sincronizar áudio</button>
+                <button id="multicam-pick-btn" class="btn-ghost" data-prereq="multicam_pick"><span data-icon="film"></span> 2. Escolher câmera por turno</button>
+                <button id="multicam-render-btn" class="btn-ghost" data-prereq="multicam_render"><span data-icon="play"></span> 3. Renderizar multicam</button>
+              </div>
+              <div class="actions multicam-actions">
+                <strong class="actions-group-label">B-roll (overlay opcional)</strong>
+                <button id="place-broll-btn" class="btn-ghost" data-prereq="story"><span data-icon="target"></span> Inserir B-roll nos soundbites</button>
+                <button id="subject-tl-btn" class="btn-ghost"><span data-icon="users"></span> Linha de tempo do sujeito</button>
+                <span id="broll-place-status" class="status muted"></span>
+              </div>
+            </details>
           </section>
 
           <section class="card" data-cat="reels" id="reels-card">
@@ -657,21 +668,21 @@
 
           <section class="card" id="export-card" data-cat="export">
             <header class="section-head"><span class="eyebrow">Saída</span><h2>Exportar</h2></header>
-            <div class="roughcut-bar">
-              <button id="roughcut-btn" class="btn-primary" data-prereq="roughcut"><span data-icon="zap"></span> Gerar rough cut do roteiro</button>
-              <label class="cb"><input id="rc-loudnorm" type="checkbox" /> loudnorm</label>
-              <label class="cb"><input id="rc-denoise" type="checkbox" /> denoise</label>
-              <span id="roughcut-status" class="status muted"></span>
-            </div>
-            <video id="roughcut-video" controls playsinline class="preview wide hidden"></video>
-            <div class="export-divider"></div>
+
+            <!-- The big preview is the focus: the user wants to confirm
+                 the latest render before downloading or sending to FCP. -->
             <video id="result" controls playsinline class="preview wide"></video>
             <div id="result-empty" class="result-empty">
               <div class="re-icon">🎞</div>
               <div class="re-title">Nada exportado ainda</div>
               <div class="re-sub">Renderize, queime legendas, monte um rough cut ou um vlog — o resultado mais recente aparece aqui.</div>
             </div>
+
+            <!-- Primary CTA row: download the rendered MP4. Everything
+                 else (caption files, NLE export, audio-only, reframe)
+                 is gated behind disclosure groups below. -->
             <div class="actions">
+              <a id="download-link" class="btn-primary" href="#" download><span data-icon="download"></span> Baixar MP4</a>
               <select id="export-aspect" class="inline-select">
                 <option value="9:16">9:16 (Reels)</option>
                 <option value="16:9">16:9 (YouTube)</option>
@@ -679,98 +690,121 @@
               </select>
               <button id="do-export" class="btn-ghost">Reframar (letterbox)</button>
               <button id="smart-reframe-btn" class="btn-ghost"><span data-icon="sparkles"></span> Smart crop (IA)</button>
-              <a id="download-link" class="btn-primary" href="#" download><span data-icon="download"></span> Baixar MP4</a>
             </div>
-            <div class="export-divider"></div>
-            <div class="actions">
-              <button id="srt-btn" class="btn-ghost">📝 SRT</button>
-              <button id="vtt-btn" class="btn-ghost">📝 VTT</button>
-              <button id="ass-btn" class="btn-ghost">📝 ASS (karaoke)</button>
-              <select id="ass-style" class="inline-select">
-                <option value="minimal">Minimal</option>
-                <option value="tiktok">TikTok</option>
-                <option value="podcast">Podcast</option>
-              </select>
-              <label class="cb"><input id="caps-roughcut" type="checkbox" /> usar rough cut</label>
-              <label class="cb"><input id="caps-speakers" type="checkbox" /> labels de speaker</label>
-              <a id="caps-link" class="btn-primary" href="#" download style="display:none"><span data-icon="download"></span> Baixar legenda</a>
-            </div>
-            <div class="actions">
-              <button id="burn-btn" class="btn-primary" data-prereq="burn_caps"><span data-icon="flame"></span> Queimar legenda no MP4</button>
-              <select id="burn-source" class="inline-select">
-                <option value="graded">graded</option>
-                <option value="roughcut">roughcut</option>
-                <option value="source">source</option>
-                <option value="highlights">highlights</option>
-              </select>
-              <select id="burn-style" class="inline-select">
-                <option value="tiktok">TikTok</option>
-                <option value="minimal">Minimal</option>
-                <option value="podcast">Podcast</option>
-              </select>
-              <a id="burn-link" class="btn-ghost" href="#" download style="display:none"><span data-icon="download"></span> MP4 com legenda</a>
-            </div>
-            <div class="export-divider"></div>
-            <div class="nle-card" id="nle-card">
-              <div class="nle-head">
-                <h4>Exportar pro Final Cut / Premiere / Resolve</h4>
-                <div id="nle-pills" class="nle-pills"></div>
+
+            <details class="export-group">
+              <summary><span data-icon="file-text"></span> Legendas (SRT, VTT, ASS, queimar)</summary>
+              <div class="actions">
+                <button id="srt-btn" class="btn-ghost">📝 SRT</button>
+                <button id="vtt-btn" class="btn-ghost">📝 VTT</button>
+                <button id="ass-btn" class="btn-ghost">📝 ASS (karaoke)</button>
+                <select id="ass-style" class="inline-select">
+                  <option value="minimal">Minimal</option>
+                  <option value="tiktok">TikTok</option>
+                  <option value="podcast">Podcast</option>
+                </select>
+                <label class="cb"><input id="caps-roughcut" type="checkbox" /> usar rough cut</label>
+                <label class="cb"><input id="caps-speakers" type="checkbox" /> labels de speaker</label>
+                <a id="caps-link" class="btn-primary" href="#" download style="display:none"><span data-icon="download"></span> Baixar legenda</a>
               </div>
-              <div id="nle-warnings" class="nle-warnings"></div>
-              <div class="nle-options">
-                <label class="cb"><input id="fcpxml-multicam" type="checkbox" /> Multicam</label>
-                <label class="cb"><input id="fcpxml-plan" type="checkbox" checked /> Aplicar plano de câmera (auto switching)</label>
-                <label class="cb"><input id="fcpxml-cuts" type="checkbox" checked /> Aplicar cortes de silêncio</label>
-                <label class="cb"><input id="fcpxml-roughcut" type="checkbox" /> Usar rough cut</label>
-                <label class="cb"><input id="fcpxml-broll" type="checkbox" /> Inserir B-roll (V2)</label>
-                <label class="cb"><input id="fcpxml-chapters" type="checkbox" checked /> Capítulos</label>
-                <label class="cb"><input id="fcpxml-bites" type="checkbox" checked /> Soundbites</label>
-                <label class="cb"><input id="fcpxml-questions" type="checkbox" checked /> Perguntas</label>
-                <label class="cb"><input id="fcpxml-speakers" type="checkbox" checked /> Speakers</label>
-                <label class="cb" title="Cuidado: gera 1 marker por palavra falada — flooda o timeline."><input id="fcpxml-markers" type="checkbox" /> Marcadores por palavra (debug)</label>
+              <div class="actions">
+                <button id="burn-btn" class="btn-primary" data-prereq="burn_caps"><span data-icon="flame"></span> Queimar legenda no MP4</button>
+                <select id="burn-source" class="inline-select">
+                  <option value="graded">graded</option>
+                  <option value="roughcut">roughcut</option>
+                  <option value="source">source</option>
+                  <option value="highlights">highlights</option>
+                </select>
+                <select id="burn-style" class="inline-select">
+                  <option value="tiktok">TikTok</option>
+                  <option value="minimal">Minimal</option>
+                  <option value="podcast">Podcast</option>
+                </select>
+                <a id="burn-link" class="btn-ghost" href="#" download style="display:none"><span data-icon="download"></span> MP4 com legenda</a>
               </div>
-              <details id="nle-edl" class="nle-edl">
-                <summary>Preview dos cortes (<span id="nle-edl-count">0</span>)</summary>
-                <div id="nle-edl-body" class="nle-edl-body"></div>
-              </details>
-              <div class="nle-actions">
-                <button id="fcpxml-btn" class="btn-primary" data-prereq="fcpxml"><span data-icon="file-text"></span> Exportar FCPXML</button>
-                <a id="fcpxml-link" class="btn-ghost" href="#" download style="display:none"><span data-icon="download"></span> Último FCPXML</a>
-                <button id="premiere-btn" class="btn-ghost" data-prereq="fcpxml"><span data-icon="file-text"></span> Premiere / Resolve XML</button>
-                <a id="premiere-link" class="btn-ghost" href="#" download style="display:none"><span data-icon="download"></span> Último Premiere XML</a>
-                <label class="cb"><input id="premiere-roughcut" type="checkbox" /> usar rough cut</label>
-                <label class="cb"><input id="premiere-broll" type="checkbox" /> incluir B-roll</label>
+            </details>
+
+            <details class="export-group">
+              <summary><span data-icon="zap"></span> Rough cut (montagem do roteiro)</summary>
+              <div class="roughcut-bar">
+                <button id="roughcut-btn" class="btn-primary" data-prereq="roughcut"><span data-icon="zap"></span> Gerar rough cut do roteiro</button>
+                <label class="cb"><input id="rc-loudnorm" type="checkbox" /> loudnorm</label>
+                <label class="cb"><input id="rc-denoise" type="checkbox" /> denoise</label>
+                <span id="roughcut-status" class="status muted"></span>
               </div>
-              <p class="card-help">Importe em FCP → <em>Arquivo → Importar → XML</em>. Os cortes vêm aplicados — é só ajustar.</p>
-            </div>
-            <div class="export-divider"></div>
-            <div class="actions">
-              <select id="audio-format" class="inline-select">
-                <option value="mp3">MP3</option>
-                <option value="m4a">M4A</option>
-                <option value="wav">WAV</option>
-              </select>
-              <select id="audio-source" class="inline-select" title="vídeo de origem">
-                <option value="graded">graded</option>
-                <option value="roughcut">roughcut</option>
-                <option value="source">source</option>
-                <option value="highlights">highlights</option>
-              </select>
-              <button id="audio-btn" class="btn-ghost"><span data-icon="music"></span> Áudio</button>
-              <a id="audio-link" class="btn-primary" href="#" download style="display:none"><span data-icon="download"></span> áudio</a>
-              <button id="bundle-btn" class="btn-ghost"><span data-icon="package"></span> Bundle (.zip)</button>
-              <a id="bundle-link" class="btn-primary" href="#" download style="display:none"><span data-icon="download"></span> Baixar bundle</a>
-              <button id="dup-btn" class="btn-ghost"><span data-icon="copy"></span> Duplicar projeto</button>
-              <button id="speakers-btn" class="btn-ghost">🎤 Detectar falas (auto)</button>
-              <button id="speakers-level-btn" class="btn-ghost"><span data-icon="sliders"></span> Nivelar speakers</button>
-              <button id="chapters-btn" class="btn-ghost"><span data-icon="list"></span> Capítulos do podcast</button>
-              <button id="multicam-sync-btn" class="btn-ghost">🔗 Sync multicam (áudio)</button>
-              <button id="thumbs-btn" class="btn-ghost"><span data-icon="image"></span> Thumbnails de capítulos</button>
-              <button id="peak-thumb-btn" class="btn-ghost"><span data-icon="sparkles"></span> Thumb do peak</button>
-              <button id="hook-btn" class="btn-ghost"><span data-icon="wand"></span> Gerar hook 4s</button>
-              <button id="emojify-btn" class="btn-ghost">😄 Decorar legendas com emoji</button>
-            </div>
-            <div id="thumbs-grid" class="thumbs-grid"></div>
+              <video id="roughcut-video" controls playsinline class="preview wide hidden"></video>
+            </details>
+            <details class="export-group" open>
+              <summary><span data-icon="film"></span> Pro Final Cut Pro / Premiere / Resolve (FCPXML / XML)</summary>
+              <div class="nle-card" id="nle-card">
+                <div class="nle-head">
+                  <div id="nle-pills" class="nle-pills"></div>
+                </div>
+                <div id="nle-warnings" class="nle-warnings"></div>
+                <div class="nle-options">
+                  <label class="cb"><input id="fcpxml-multicam" type="checkbox" /> Multicam</label>
+                  <label class="cb"><input id="fcpxml-plan" type="checkbox" checked /> Aplicar plano de câmera</label>
+                  <label class="cb"><input id="fcpxml-cuts" type="checkbox" checked /> Aplicar cortes de silêncio</label>
+                  <label class="cb"><input id="fcpxml-roughcut" type="checkbox" /> Usar rough cut</label>
+                  <label class="cb"><input id="fcpxml-broll" type="checkbox" /> Inserir B-roll (V2)</label>
+                  <label class="cb"><input id="fcpxml-chapters" type="checkbox" checked /> Capítulos</label>
+                  <label class="cb"><input id="fcpxml-bites" type="checkbox" checked /> Soundbites</label>
+                  <label class="cb"><input id="fcpxml-questions" type="checkbox" checked /> Perguntas</label>
+                  <label class="cb"><input id="fcpxml-speakers" type="checkbox" checked /> Speakers</label>
+                  <label class="cb" title="Cuidado: gera 1 marker por palavra falada — flooda o timeline."><input id="fcpxml-markers" type="checkbox" /> Marcadores por palavra (debug)</label>
+                </div>
+                <details id="nle-edl" class="nle-edl">
+                  <summary>Preview dos cortes (<span id="nle-edl-count">0</span>)</summary>
+                  <div id="nle-edl-body" class="nle-edl-body"></div>
+                </details>
+                <div class="nle-actions">
+                  <button id="fcpxml-btn" class="btn-primary" data-prereq="fcpxml"><span data-icon="file-text"></span> Exportar FCPXML</button>
+                  <a id="fcpxml-link" class="btn-ghost" href="#" download style="display:none"><span data-icon="download"></span> Último FCPXML</a>
+                  <button id="premiere-btn" class="btn-ghost" data-prereq="fcpxml"><span data-icon="file-text"></span> Premiere / Resolve XML</button>
+                  <a id="premiere-link" class="btn-ghost" href="#" download style="display:none"><span data-icon="download"></span> Último Premiere XML</a>
+                  <label class="cb"><input id="premiere-roughcut" type="checkbox" /> usar rough cut</label>
+                  <label class="cb"><input id="premiere-broll" type="checkbox" /> incluir B-roll</label>
+                </div>
+                <p class="card-help">Importe em FCP → <em>Arquivo → Importar → XML</em>. Os cortes vêm aplicados — é só ajustar.</p>
+              </div>
+            </details>
+
+            <details class="export-group">
+              <summary><span data-icon="music"></span> Áudio puro (MP3 / M4A / WAV)</summary>
+              <div class="actions">
+                <select id="audio-format" class="inline-select">
+                  <option value="mp3">MP3</option>
+                  <option value="m4a">M4A</option>
+                  <option value="wav">WAV</option>
+                </select>
+                <select id="audio-source" class="inline-select" title="vídeo de origem">
+                  <option value="graded">graded</option>
+                  <option value="roughcut">roughcut</option>
+                  <option value="source">source</option>
+                  <option value="highlights">highlights</option>
+                </select>
+                <button id="audio-btn" class="btn-ghost"><span data-icon="music"></span> Exportar áudio</button>
+                <a id="audio-link" class="btn-primary" href="#" download style="display:none"><span data-icon="download"></span> áudio</a>
+              </div>
+            </details>
+
+            <details class="export-group">
+              <summary><span data-icon="settings"></span> Mais ações (bundle, duplicar, utilitários)</summary>
+              <div class="actions">
+                <button id="bundle-btn" class="btn-ghost"><span data-icon="package"></span> Bundle (.zip)</button>
+                <a id="bundle-link" class="btn-primary" href="#" download style="display:none"><span data-icon="download"></span> Baixar bundle</a>
+                <button id="dup-btn" class="btn-ghost"><span data-icon="copy"></span> Duplicar projeto</button>
+                <button id="speakers-btn" class="btn-ghost">🎤 Detectar falas (avulso)</button>
+                <button id="speakers-level-btn" class="btn-ghost"><span data-icon="sliders"></span> Nivelar speakers</button>
+                <button id="chapters-btn" class="btn-ghost"><span data-icon="list"></span> Capítulos do podcast</button>
+                <button id="thumbs-btn" class="btn-ghost"><span data-icon="image"></span> Thumbnails de capítulos</button>
+                <button id="peak-thumb-btn" class="btn-ghost"><span data-icon="sparkles"></span> Thumb do peak</button>
+                <button id="hook-btn" class="btn-ghost"><span data-icon="wand"></span> Gerar hook 4s</button>
+                <button id="emojify-btn" class="btn-ghost">😄 Decorar legendas com emoji</button>
+              </div>
+              <div id="thumbs-grid" class="thumbs-grid"></div>
+            </details>
+
             <div class="export-divider"></div>
             <h4 class="history-title">Histórico de renders</h4>
             <ul id="history-list" class="history-list"></ul>

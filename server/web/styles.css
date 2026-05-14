@@ -1778,6 +1778,63 @@ a { color: inherit; text-decoration: none; }
 .hero-cta .btn-lg {
   padding: 11px 18px; font-size: 14px; font-weight: 600;
 }
+.hero-cta-opts-group {
+  margin-top: 8px;
+  font-size: 13px;
+}
+.hero-cta-opts-group > summary {
+  cursor: pointer;
+  color: var(--text-dim);
+  padding: 4px 0;
+  user-select: none;
+}
+.hero-cta-opts-group > summary:hover { color: var(--text); }
+.hero-cta-opts-group[open] > summary { color: var(--text); margin-bottom: 4px; }
+.hero-cta-opt {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 0;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.hero-cta-opt input[type="checkbox"] { accent-color: var(--accent, #a78bfa); }
+
+/* Same disclosure pattern reused by brand + multicam + export cards */
+.brand-advanced > summary,
+.multicam-advanced > summary,
+.export-group > summary {
+  cursor: pointer;
+  color: var(--text-dim);
+  padding: 8px 12px;
+  margin: 6px 0 4px;
+  user-select: none;
+  font-size: 13px;
+  font-weight: 500;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex; align-items: center; gap: 8px;
+}
+.brand-advanced > summary:hover,
+.multicam-advanced > summary:hover,
+.export-group > summary:hover {
+  color: var(--text);
+  background: rgba(255,255,255,0.05);
+}
+.brand-advanced[open] > summary,
+.multicam-advanced[open] > summary,
+.export-group[open] > summary {
+  color: var(--text);
+  background: rgba(255,255,255,0.06);
+}
+.export-group {
+  margin: 8px 0;
+}
+.export-group[open] > .actions,
+.export-group[open] > .roughcut-bar,
+.export-group[open] > .nle-card {
+  margin-top: 8px;
+}
 
 /* Live progress block while the pipeline is running */
 .hero-progress {

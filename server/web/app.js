@@ -4255,6 +4255,7 @@ function renderPodcast1ClickResult(result) {
       ${outputs.fcpxml ? `<button id="hr-open-fcp" class="btn btn-primary btn-sm" type="button"><span data-icon="film" data-icon-size="14"></span> Abrir no Final Cut Pro</button>` : ""}
       ${outputs.multicam ? `<button id="hr-reveal-mc" class="btn btn-ghost btn-sm" type="button"><span data-icon="arrow-right" data-icon-size="14"></span> Mostrar multicam no Finder</button>` : ""}
       ${state.current?.has_camera_plan ? `<button id="hr-mc-preview" class="btn btn-ghost btn-sm" type="button"><span data-icon="eye" data-icon-size="14"></span> Pré-visualizar plano</button>` : ""}
+      <button id="hr-open-hf" class="btn btn-ghost btn-sm" type="button" title="Abre a composição Hyperframes no editor. Roda 'npm run dev' na pasta composition pra ver/ajustar animações ao vivo."><span data-icon="sparkles" data-icon-size="14"></span> Editar no Hyperframes</button>
     </div>
     ${warnings.length ? `<details class="hr-warnings"><summary>${warnings.length} avisos</summary><ul>${warnings.map(w => `<li>${escapeHtml(w)}</li>`).join("")}</ul></details>` : ""}
   `;
@@ -4294,6 +4295,18 @@ function renderPodcast1ClickResult(result) {
     };
   }
   document.getElementById("hr-mc-preview")?.addEventListener("click", openMulticamPreview);
+  document.getElementById("hr-open-hf")?.addEventListener("click", async () => {
+    if (!state.current) return;
+    const compPath = `${pdirAbs(state.media)}/composition`;
+    try {
+      await api(`/api/projects/${state.current.id}/reveal`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ path: compPath, mode: "reveal" }),
+      });
+      toast?.(`Composição em ${compPath}. Rode \`npm run dev\` lá pra editar ao vivo.`, "ok", 7000);
+    } catch (e) { log(`✗ open hf: ${e.message}`, "err"); }
+  });
 }
 
 // Returns the absolute project dir cached on state.media (populated by
