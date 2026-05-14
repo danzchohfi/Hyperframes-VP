@@ -232,8 +232,11 @@ async def cut_segments(
     if denoise:
         audio_chain.append("afftdn=nf=-25[a1]")
     if loudnorm:
-        # Single-pass online loudnorm targeting -14 LUFS (social-media spec).
-        audio_chain.append(("loudnorm=I=-14:LRA=11:TP=-1.5") + "[a2]")
+        # Single-pass online loudnorm targeting -16 LUFS (Apple/Spotify
+        # podcast spec). -14 (the social-video target) sounds aggressive
+        # on long-form dialog — pumping on dynamic speech, no headroom
+        # for soft consonants. -16 leaves the natural dynamics intact.
+        audio_chain.append(("loudnorm=I=-16:LRA=11:TP=-1.5") + "[a2]")
     if len(audio_chain) > 1:
         # rebuild as filter chain after concat
         chain_filters: list[str] = []
@@ -347,7 +350,7 @@ async def concat_segments_from_multiple(
 
     audio_map = "[a]"
     if loudnorm:
-        full += ";[a]loudnorm=I=-14:LRA=11:TP=-1.5[al]"
+        full += ";[a]loudnorm=I=-16:LRA=11:TP=-1.5[al]"
         audio_map = "[al]"
 
     cmd = [

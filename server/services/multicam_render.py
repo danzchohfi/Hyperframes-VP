@@ -134,18 +134,39 @@ async def render(
     # aresample/aformat dance is left to the AAC encoder at the output
     # stage — adding it inside the filter graph caused certain ffmpeg
     # builds to emit MP4s that QuickTime refused to open.
+    #
+    # Bordas de corte sem fade produzem cliques audíveis ("audio horrível"
+    # reportado pelo usuário). Aplicamos afade 8ms in/out em cada segmento
+    # — curto o suficiente pra ser inaudível como fade, longo o suficiente
+    # pra anular a descontinuidade da onda. asetpts é obrigatório ANTES do
+    # afade pra que `t` reset; senão o afade-out fica no meio do segmento.
+    AFADE_MS = 8
     audio_labels: list[str] = []
     for k, c in enumerate(plan):
         s = float(c["start"])
         e = float(c["end"])
+        seg_dur = max(0.04, e - s)
+        # Cap the fade at 1/3 of the segment so very short cuts still
+        # leave a usable middle.
+        fade = min(AFADE_MS / 1000.0, seg_dur / 3.0)
         a_label = f"a{k}"
         filter_parts.append(
             f"[0:a]atrim=start={s:.3f}:end={e:.3f},"
-            f"asetpts=PTS-STARTPTS[{a_label}]"
+            f"asetpts=PTS-STARTPTS,"
+            f"afade=t=in:st=0:d={fade:.3f},"
+            f"afade=t=out:st={max(0.0, seg_dur - fade):.3f}:d={fade:.3f}"
+            f"[{a_label}]"
         )
         audio_labels.append(f"[{a_label}]")
+    # Concat the faded segments, then apply a single-pass loudnorm to even
+    # out level across the whole episode. -16 LUFS is the Apple/Spotify
+    # podcast spec — quieter than the -14 social-video target but much
+    # easier on the ears for long-form dialog (less pumping, more headroom
+    # for soft consonants). TP=-1.5 keeps a true-peak ceiling that AAC
+    # encoding won't overshoot.
     filter_parts.append(
-        "".join(audio_labels) + f"concat=n={len(plan)}:v=0:a=1[aout]"
+        "".join(audio_labels) + f"concat=n={len(plan)}:v=0:a=1[aconcat];"
+        "[aconcat]loudnorm=I=-16:LRA=11:TP=-1.5[aout]"
     )
 
     filter_complex = ";".join(filter_parts)

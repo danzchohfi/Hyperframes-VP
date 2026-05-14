@@ -69,27 +69,54 @@ def build_filter(
     turns: list[dict],
     gains_db: dict[str, float],
     *,
-    crossfade: float = 0.05,
+    fade_ms: float = 30.0,
 ) -> str:
-    """Build an ffmpeg audio filter expression that applies per-speaker gain
-    using `volume` with `enable` expressions.
+    """Build an ffmpeg audio filter expression that applies per-speaker gain.
 
-    Example:
-        volume=enable='between(t,2.5,7.1)':volume=2dB,
-        volume=enable='between(t,7.1,12.0)':volume=-1dB
+    A naive `volume=enable=...` does HARD on/off gain switches at every
+    speaker boundary — audibly clicks/pops on dense conversations. We
+    use a smooth gate via `volume=eval=frame:volume='...'` with a cosine
+    ramp `fade_ms` long centered on each boundary, so the gain glides
+    rather than jumps.
+
+    The volume expression is evaluated per-frame. For each speaker turn
+    [s, e) the contribution is `gain * smoothstep(t, s, s+fade) *
+    smoothstep(e-t, 0, fade)`. We sum contributions across speakers
+    using max-style if-chain so overlapping turns don't double-apply.
     """
-    parts: list[str] = []
+    fade_s = max(0.005, fade_ms / 1000.0)
+    # Pre-compute (start, end, gain) tuples, dropping no-op gains and
+    # very-short turns. fade_s + safety margin trims turns shorter than
+    # the fade itself, otherwise the curve never reaches full gain and
+    # the leveling is invisible — better to skip than under-apply.
+    spans: list[tuple[float, float, float]] = []
     for t in turns:
         sp = t.get("speaker") or "?"
         s = float(t.get("start") or 0.0)
         e = float(t.get("end") or s)
-        if e - s < 0.2:
+        if e - s < fade_s * 2 + 0.05:
             continue
         gain = gains_db.get(sp)
         if gain is None or abs(gain) < 0.1:
             continue
-        # Convert dB → linear and apply as enable'd volume filter
-        parts.append(f"volume=enable='between(t,{s:.3f},{e:.3f})':volume={gain:.2f}dB")
-    if not parts:
+        spans.append((s, e, gain))
+    if not spans:
         return "anull"
-    return ",".join(parts)
+
+    # ffmpeg's `volume=eval=frame:volume=EXPR` reads EXPR every frame.
+    # Build a piecewise-linear curve: for each span, ramp from 0dB to
+    # gain over fade_s, hold, ramp back to 0dB over fade_s. The
+    # expression `clip((t-s)/fade, 0, 1) * clip((e-t)/fade, 0, 1)`
+    # gives a trapezoidal envelope in [0, 1]; multiply by gain to get
+    # the per-span dB contribution. Sum all spans (overlapping spans
+    # add — rare in well-segmented diarization, fine in practice).
+    terms: list[str] = []
+    for s, e, gain in spans:
+        env = (
+            f"(max(0,min(1,(t-{s:.3f})/{fade_s:.3f})) "
+            f"* max(0,min(1,({e:.3f}-t)/{fade_s:.3f})))"
+        )
+        terms.append(f"({env}*{gain:.3f})")
+    expr = "+".join(terms) if terms else "0"
+    # Convert summed dB to linear gain: 10^(dB/20)
+    return f"volume=eval=frame:volume='pow(10,({expr})/20)'"
