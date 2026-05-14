@@ -107,6 +107,24 @@ def normalize_animation(anim: dict, source_duration: float | None = None) -> dic
     # don't have to set it explicitly. The composer/preview drops it when
     # there's no brand logo, so it's safe to leave on.
     a["show_logo"] = bool(a.get("show_logo", True)) if t in ("hook_card", "cta_end") else False
+    # Custom HTML / CSS only on hook_card / cta_end, sanitized aggressively.
+    # The composer reads these to replace the templated card body when
+    # present; everything else stays the same (entrance/exit tween,
+    # positioning, optional logo).
+    if t in ("hook_card", "cta_end"):
+        from . import html_sanitize as _hs
+        raw_html = (a.get("custom_html") or "").strip()
+        raw_css = (a.get("custom_css") or "").strip()
+        a["custom_html"] = _hs.sanitize_html(raw_html, max_chars=4000) if raw_html else None
+        a["custom_css"] = _hs.sanitize_css(raw_css, max_chars=1500) if raw_css else None
+        # If sanitization stripped everything (e.g. the LLM emitted only a
+        # <script>), drop the field rather than emit an empty card body.
+        if not a["custom_html"]:
+            a["custom_html"] = None
+            a["custom_css"] = None
+    else:
+        a["custom_html"] = None
+        a["custom_css"] = None
     # Sound: when the user (or the type's default) provides an SFX preset
     # name, render passes will mix it at the animation's start time.
     # `sfx` of None or "" silences this animation; "default" picks the
@@ -214,6 +232,27 @@ def shared_css(brand: BrandBook, width: int) -> str:
         background: transparent;
         text-shadow: 0 4px 28px rgba(0,0,0,0.7), 0 2px 6px rgba(0,0,0,0.5);
       }}
+      /* Custom-HTML hook/CTA cards: strip the templated container styling
+         so the LLM's CSS is the source of truth. The OUTER positioning
+         (anchor-*) and entrance/exit tween still apply, but everything
+         inside .ra-custom-body is the LLM's canvas. */
+      .reels-anim .ra-card.ra-card-custom {{
+        padding: 0;
+        gap: 0;
+        background: transparent;
+        border: 0;
+        box-shadow: none;
+        backdrop-filter: none;
+        align-items: stretch;
+        justify-content: stretch;
+      }}
+      .reels-anim .ra-card.ra-card-custom.variant-gradient {{
+        position: absolute; inset: 0;
+      }}
+      .reels-anim .ra-card-custom .ra-custom-body {{
+        color: {p.foreground};
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      }}
       .reels-anim .ra-card .ra-title {{
         font-size: {med}px;
         font-weight: 800;
@@ -307,6 +346,26 @@ def build_animation_html(anim: dict, index: int, logo_src: str | None = None) ->
             f'<img class="ra-logo" src="{_safe(logo_src)}" alt="" />'
             if show_logo else ""
         )
+        # Custom body: sanitized HTML + scoped CSS replace the templated
+        # .ra-title / .ra-sub structure. The logo (if any) still floats
+        # at the top of the card so brand presence is preserved across
+        # custom looks — pull it out of the custom area.
+        custom_html = anim.get("custom_html")
+        custom_css = anim.get("custom_css")
+        if custom_html:
+            style_block = ""
+            if custom_css:
+                from . import html_sanitize as _hs
+                scoped = _hs.scope_css(custom_css, aid)
+                if scoped:
+                    style_block = f'<style>{scoped}</style>'
+            body = f'<div class="ra-card ra-card-custom variant-{_safe(variant)}">'
+            body += style_block
+            if logo_html:
+                body += logo_html
+            body += f'<div class="ra-custom-body">{custom_html}</div>'
+            body += "</div>"
+            return f'<div {common}>{body}</div>'
         body = f'<div class="ra-card variant-{_safe(variant)}">'
         if logo_html:
             body += logo_html

@@ -53,7 +53,15 @@ def _client() -> anthropic.Anthropic:
 
 def _animation_tool() -> dict[str, Any]:
     """Tool schema the model is forced to fill. Mirrors the shape that
-    reels_animations.normalize_animation will accept."""
+    reels_animations.normalize_animation will accept.
+
+    Hook and CTA items can carry `custom_html` + `custom_css` for fully
+    bespoke visual treatments (the body of the card). The server runs
+    both through a strict sanitizer (whitelist tags / attrs, no scripts,
+    no remote URLs, CSS auto-scoped to the item's container) before
+    persisting, so even a maliciously-prompted plan can't escape the
+    composition sandbox.
+    """
     types = sorted(ra.ANIMATION_TYPES.keys())
     # Collect every variant across types into one enum — the model will
     # pick one per item; normalize_animation later clamps it to the
@@ -66,7 +74,8 @@ def _animation_tool() -> dict[str, Any]:
             "tuned to the user's stylistic prompt. Each animation is a "
             "self-contained overlay clip — pick the right type, place it at "
             "a meaningful moment, keep text short (under 6 words for "
-            "callouts / hooks)."
+            "callouts / hooks). For hook_card and cta_end you can optionally "
+            "design a fully custom card via custom_html + custom_css."
         ),
         "input_schema": {
             "type": "object",
@@ -100,6 +109,36 @@ def _animation_tool() -> dict[str, Any]:
                             "variant": {"type": "string", "enum": all_variants or ["default"]},
                             "show_logo": {"type": "boolean"},
                             "rationale": {"type": "string", "description": "Why this animation here (1 line)."},
+                            # Free-form HTML for hook_card / cta_end only. The
+                            # server sanitizes (whitelist tags, no scripts,
+                            # relative URLs only) and the CSS gets auto-
+                            # scoped, so think of this as "everything inside
+                            # the card body". Container, entrance/exit motion,
+                            # and positioning come from the existing variant
+                            # system — you don't need to (and can't) write
+                            # those yourself.
+                            "custom_html": {
+                                "type": "string",
+                                "description": (
+                                    "Optional. ONLY for hook_card / cta_end. "
+                                    "HTML fragment that REPLACES the templated "
+                                    "card body. No <script>, no remote URLs, no "
+                                    "event handlers. Use SVG freely for decoration. "
+                                    "Keep under 3000 chars."
+                                ),
+                                "maxLength": 4000,
+                            },
+                            "custom_css": {
+                                "type": "string",
+                                "description": (
+                                    "Optional. Companion CSS for custom_html. "
+                                    "Auto-scoped to this card's container, so "
+                                    "selectors like '.title' only apply inside "
+                                    "this card. No @import, no remote url(). "
+                                    "Keep under 1500 chars."
+                                ),
+                                "maxLength": 1500,
+                            },
                         },
                         "required": ["type", "start", "duration", "text"],
                     },
@@ -131,10 +170,30 @@ Design rules:
   name+role; never invent a name.
 - The user's stylistic prompt is the boss: if they say "minimal", lean
   on word_zoom + text_callout pill. If they say "energetic", more
-  emoji_burst + number_pop bold. If they specify colors, mention them
-  in rationale (the renderer reads brand colors separately).
+  emoji_burst + number_pop bold. If they specify colors, USE them — see
+  custom_html below.
 - Times must be inside the source duration. If you don't know the
   duration, stay before the last soundbite or chapter end you saw.
+
+Custom hook / CTA design (advanced):
+- For hook_card and cta_end items ONLY, you can emit custom_html +
+  custom_css to design the card body from scratch. This is the right
+  call when the user asks for a distinctive look ("retro 80s neon",
+  "ransom-note", "newspaper headline", "VHS glitch", etc).
+- DO NOT include: <script>, <iframe>, <link>, <style>, on* attributes,
+  remote URLs (http://, https://), @import, @font-face. The sanitizer
+  will strip them silently.
+- DO use: inline SVG for decoration (gradients, blur filters, shapes),
+  gradient/glow effects via CSS, custom typography via font-family
+  (system fonts only — no @import / Google Fonts), CSS keyframes for
+  internal micro-motion (the OUTER entrance/exit is handled for you).
+- Selectors in custom_css are auto-prefixed with the item's container
+  ID, so a rule like `.title { color: red }` only affects this card.
+- Keep custom_html <= 3000 chars and custom_css <= 1500 chars. Less is
+  more — three well-chosen elements beat a maximalist nightmare.
+- The standard `text` / `sub` fields are still required (used as
+  fallback if sanitization strips everything, and for screen readers /
+  exports).
 
 Output is structured via the tool — fill it directly, no prose."""
 

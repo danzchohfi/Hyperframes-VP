@@ -5113,7 +5113,13 @@ function renderAnimPromptPreview(staged) {
   const items = staged.animations.map(a => {
     const text = (a.text || "").slice(0, 60);
     const sub = a.sub ? ` · <span class="muted">${escapeHtml(a.sub.slice(0, 40))}</span>` : "";
-    return `<li><span class="anim-type">${escapeHtml(a.type)}</span> @ ${parseFloat(a.start).toFixed(1)}s · "${escapeHtml(text)}"${sub}</li>`;
+    // Flag items that ship a bespoke HTML body so the user knows the LLM
+    // designed a custom card (the safe, structured variants don't get a
+    // badge — they look the same as any manual hook_card).
+    const customBadge = a.custom_html
+      ? ' <span class="anim-custom-badge" title="HTML/CSS customizado (sanitizado)">custom</span>'
+      : "";
+    return `<li><span class="anim-type">${escapeHtml(a.type)}</span> @ ${parseFloat(a.start).toFixed(1)}s · "${escapeHtml(text)}"${sub}${customBadge}</li>`;
   }).join("");
   root.innerHTML = `
     ${staged.rationale ? `<p class="rationale">${escapeHtml(staged.rationale)}</p>` : ""}
