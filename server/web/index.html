@@ -534,6 +534,7 @@
               <strong class="actions-group-label">Pipeline multicam podcast</strong>
               <button id="multicam-sync-btn" class="btn-ghost"><span data-icon="rotate-cw"></span> 1. Sincronizar áudio</button>
               <button id="multicam-pick-btn" class="btn-primary" data-prereq="multicam_pick"><span data-icon="film"></span> 2. Escolher câmera por turno</button>
+              <button id="multicam-preview-btn" class="btn-ghost" data-prereq="multicam_render" title="Pré-visualiza o plano de câmera sem renderizar (instantâneo)"><span data-icon="eye"></span> Pré-visualizar (sem render)</button>
               <button id="multicam-render-btn" class="btn-ghost" data-prereq="multicam_render"><span data-icon="play"></span> 3. Renderizar multicam</button>
               <a id="multicam-link" class="btn-ghost" href="#" download style="display:none"><span data-icon="download"></span> multicam.mp4</a>
             </div>
@@ -876,6 +877,29 @@
           <span><kbd>enter</kbd> executar</span>
           <span><kbd>⌘ K</kbd> abrir/fechar</span>
         </div>
+      </div>
+    </div>
+
+    <!-- Multicam preview: stack of <video> elements, JS swaps which is
+         visible based on camera_plan.json. Lets the editor verify the
+         camera pick before paying for the multicam render. -->
+    <div id="mc-preview-backdrop" class="confirm-backdrop hidden" aria-hidden="true">
+      <div class="mc-preview" role="dialog" aria-modal="true" aria-label="Pré-visualização multicam">
+        <header class="mc-preview-head">
+          <div>
+            <h2>Pré-visualização multicam</h2>
+            <p class="muted" id="mc-preview-sub">Verifica como o plano de câmera vai ficar antes de renderizar.</p>
+          </div>
+          <button id="mc-preview-close" class="btn-ghost btn-sm" type="button" aria-label="Fechar">✕</button>
+        </header>
+        <div id="mc-preview-stage" class="mc-preview-stage"></div>
+        <div class="mc-preview-controls">
+          <button id="mc-preview-play" class="btn btn-primary btn-sm" type="button"><span data-icon="play" data-icon-size="14"></span> Play</button>
+          <span id="mc-preview-time" class="muted">0:00 / 0:00</span>
+          <input id="mc-preview-scrub" type="range" min="0" max="1000" value="0" step="1" />
+          <span id="mc-preview-angle" class="tag">—</span>
+        </div>
+        <div id="mc-preview-strip" class="mc-preview-strip" aria-label="Timeline das câmeras"></div>
       </div>
     </div>
 

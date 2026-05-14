@@ -4880,6 +4880,20 @@ async def serve_file(pid: str, name: str):
     return FileResponse(fp)
 
 
+@app.get("/api/projects/{pid}/angles/{filename}")
+async def serve_angle(pid: str, filename: str):
+    """Stream the normalized angle MP4 so the browser-side multicam
+    preview can mount it in a <video> element without paying for a
+    server-side render. Path-traversal-safe (must resolve inside
+    pdir/angles)."""
+    pdir = storage.project_dir(pid)
+    angles_dir = (pdir / "angles").resolve()
+    fp = (angles_dir / filename).resolve()
+    if not fp.exists() or angles_dir not in fp.parents:
+        raise HTTPException(404)
+    return FileResponse(fp, media_type="video/mp4", filename=filename)
+
+
 @app.get("/api/projects/{pid}/files/thumbs/{name}")
 async def serve_thumb(pid: str, name: str):
     pdir = storage.project_dir(pid)

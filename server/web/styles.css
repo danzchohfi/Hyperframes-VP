@@ -1215,6 +1215,64 @@ a { color: inherit; text-decoration: none; }
   animation: fade-in 160ms var(--ease);
 }
 .confirm-backdrop.hidden { display: none; }
+
+/* Multicam preview modal — fills most of the viewport so the editor
+   can really see what the camera plan will do. Reuses .confirm-backdrop
+   for backdrop + dismiss-on-outside-click behavior. */
+.mc-preview {
+  width: min(960px, 96vw);
+  max-height: 92vh;
+  display: flex; flex-direction: column;
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg, 14px);
+  box-shadow: 0 24px 70px rgba(0,0,0,0.55);
+  overflow: hidden;
+}
+.mc-preview-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.mc-preview-head h2 { margin: 0; font-size: 16px; }
+.mc-preview-head .muted { font-size: 12px; margin: 2px 0 0; }
+.mc-preview-stage {
+  position: relative;
+  aspect-ratio: 9 / 16;
+  max-height: 64vh;
+  width: auto;
+  align-self: center;
+  background: #000;
+}
+.mc-preview-controls {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+}
+.mc-preview-controls input[type="range"] { flex: 1; }
+.mc-preview-strip {
+  position: relative;
+  height: 26px;
+  margin: 0 14px 14px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.mc-strip-band {
+  position: absolute;
+  top: 4px; bottom: 4px;
+  border-radius: 3px;
+  opacity: 0.85;
+}
+.mc-strip-cursor {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 2px;
+  background: #fff;
+  box-shadow: 0 0 4px rgba(255,255,255,0.8);
+  pointer-events: none;
+}
+
 .confirm-dialog {
   width: min(440px, 92vw);
   background: var(--bg-elevated);

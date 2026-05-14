@@ -2445,6 +2445,262 @@ async function buildSourceSubjectTimeline() {
   }
 }
 
+// ── Multicam preview ──────────────────────────────────────────────────────
+//
+// Reads camera_plan.json and mounts a stack of <video> elements (source +
+// each angle). A requestAnimationFrame loop reads the master playhead and
+// (a) sets every video's currentTime to T - angleOffset[i] so they stay in
+// sync, (b) shows only the angle the plan says is active at T. Lets the
+// user verify the edit before paying for the multicam render (~minutes on
+// libx264). Falls back gracefully if any video fails to load — that angle
+// is grayed out in the timeline strip.
+
+const _mcPreview = {
+  cuts: [],
+  angles: [],            // [{name, idx, src, offset, video, loaded, error}]
+  duration: 0,
+  raf: 0,
+  playing: false,
+  currentTime: 0,
+  startedAt: 0,          // wall-clock anchor for the play loop
+  startedFrom: 0,        // currentTime at play start
+};
+
+async function openMulticamPreview() {
+  if (!state.current) return;
+  const pid = state.current.id;
+  const backdrop = document.getElementById("mc-preview-backdrop");
+  if (!backdrop) return;
+
+  // Fetch the camera plan + angles meta
+  let plan;
+  try {
+    plan = await api(`/api/projects/${pid}/files/camera_plan.json`);
+  } catch (e) {
+    toast?.("Rode o passo 'escolher câmera por turno' antes de pré-visualizar.", "err");
+    return;
+  }
+  const cuts = plan?.cuts || [];
+  if (!cuts.length) {
+    toast?.("camera_plan.json está vazio — re-rode o pick.", "err");
+    return;
+  }
+
+  // Angle pool: index 0 = source.mp4, rest follow state.angles order
+  const angleStateEntries = state.current.angles || [];
+  const angles = [
+    { name: "Source (A)", idx: 0, src: `/api/projects/${pid}/files/source.mp4`, offset: 0.0 },
+  ];
+  for (let i = 0; i < angleStateEntries.length; i++) {
+    const a = angleStateEntries[i];
+    angles.push({
+      name: a.name || `Angle ${i + 1}`,
+      idx: i + 1,
+      src: `/api/projects/${pid}/angles/${a.filename}`,
+      offset: parseFloat(a.audio_offset || 0),
+    });
+  }
+
+  // Total preview duration = end of the last cut.
+  const duration = cuts.reduce((m, c) => Math.max(m, parseFloat(c.end) || 0), 0);
+  _mcPreview.cuts = cuts;
+  _mcPreview.angles = angles.map(a => ({ ...a, video: null, loaded: false, error: null }));
+  _mcPreview.duration = duration;
+  _mcPreview.currentTime = 0;
+  _mcPreview.playing = false;
+
+  // Render the stage: one absolutely-positioned <video> per angle.
+  const stage = document.getElementById("mc-preview-stage");
+  stage.innerHTML = "";
+  for (const a of _mcPreview.angles) {
+    const v = document.createElement("video");
+    v.src = a.src;
+    v.muted = true;        // master audio comes from one of them (we'll unmute the active one)
+    v.playsInline = true;
+    v.preload = "auto";
+    v.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;display:none";
+    v.addEventListener("loadedmetadata", () => { a.loaded = true; renderMcStrip(); });
+    v.addEventListener("error", () => { a.error = true; renderMcStrip(); });
+    a.video = v;
+    stage.appendChild(v);
+  }
+
+  // Show first angle so the stage isn't a black void while videos load
+  if (_mcPreview.angles[0]?.video) _mcPreview.angles[0].video.style.display = "block";
+
+  document.getElementById("mc-preview-sub").textContent =
+    `${cuts.length} cortes · ${angles.length} câmera(s) · ${formatTime(duration)}`;
+
+  renderMcStrip();
+  backdrop.classList.remove("hidden");
+  if (window.HFIcons) HFIcons.render(backdrop);
+
+  // Initial render at t=0
+  applyMcPreviewTime(0);
+}
+
+function closeMulticamPreview() {
+  const backdrop = document.getElementById("mc-preview-backdrop");
+  if (backdrop) backdrop.classList.add("hidden");
+  // Stop the RAF loop + release video elements
+  cancelAnimationFrame(_mcPreview.raf);
+  _mcPreview.raf = 0;
+  _mcPreview.playing = false;
+  for (const a of _mcPreview.angles) {
+    if (a.video) {
+      try { a.video.pause(); } catch {}
+      a.video.removeAttribute("src");
+      a.video.load();
+    }
+  }
+}
+
+function formatTime(secs) {
+  if (!isFinite(secs) || secs < 0) secs = 0;
+  const m = Math.floor(secs / 60);
+  const s = Math.floor(secs % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function activeAngleAt(t) {
+  // Linear scan — typical plan has <100 cuts, so O(n) is fine.
+  const cuts = _mcPreview.cuts;
+  for (const c of cuts) {
+    if (t >= parseFloat(c.start) && t < parseFloat(c.end)) {
+      return parseInt(c.angle_index || 0);
+    }
+  }
+  // Past the last cut: stay on whatever was last shown.
+  if (cuts.length && t >= parseFloat(cuts[cuts.length - 1].end)) {
+    return parseInt(cuts[cuts.length - 1].angle_index || 0);
+  }
+  return 0;
+}
+
+function applyMcPreviewTime(t) {
+  _mcPreview.currentTime = t;
+  const aIdx = activeAngleAt(t);
+
+  // Sync all videos' currentTime (source-timecode minus their offset).
+  // Audio always comes from angle[0] (source) — switching audio per cut
+  // would produce a glitch on every camera change, defeating the
+  // purpose of a "smooth preview". The other angles play muted just
+  // to drive their video frames.
+  for (const a of _mcPreview.angles) {
+    if (!a.video || a.error) continue;
+    const angleT = Math.max(0, t - (a.offset || 0));
+    // Only seek if drift > 60 ms — avoids stuttering in tight RAF loops.
+    try {
+      if (Math.abs(a.video.currentTime - angleT) > 0.06) {
+        a.video.currentTime = angleT;
+      }
+    } catch {}
+    a.video.style.display = (a.idx === aIdx) ? "block" : "none";
+    a.video.muted = (a.idx !== 0);  // only source carries audio
+  }
+
+  // UI elements
+  const dur = _mcPreview.duration;
+  const scrub = document.getElementById("mc-preview-scrub");
+  if (scrub && dur > 0) scrub.value = String(Math.round(1000 * (t / dur)));
+  const timeEl = document.getElementById("mc-preview-time");
+  if (timeEl) timeEl.textContent = `${formatTime(t)} / ${formatTime(dur)}`;
+  const angleTag = document.getElementById("mc-preview-angle");
+  if (angleTag) angleTag.textContent = (_mcPreview.angles[aIdx]?.name) || `Angle ${aIdx}`;
+
+  // Update strip cursor
+  const strip = document.getElementById("mc-preview-strip");
+  const cursor = strip?.querySelector(".mc-strip-cursor");
+  if (cursor && dur > 0) cursor.style.left = `${(t / dur) * 100}%`;
+}
+
+function renderMcStrip() {
+  const strip = document.getElementById("mc-preview-strip");
+  if (!strip) return;
+  const dur = _mcPreview.duration || 1;
+  // Color palette per angle index — recycle the brand-ish accent set.
+  const palette = ["#a78bfa", "#3b82f6", "#f472b6", "#22c55e", "#f59e0b", "#ef4444"];
+  const cuts = _mcPreview.cuts;
+  const bands = cuts.map(c => {
+    const start = parseFloat(c.start) || 0;
+    const end = parseFloat(c.end) || start;
+    const ai = parseInt(c.angle_index || 0);
+    const left = (start / dur) * 100;
+    const width = ((end - start) / dur) * 100;
+    const color = palette[ai % palette.length];
+    const label = (_mcPreview.angles[ai]?.name || `A${ai}`);
+    return `<div class="mc-strip-band" style="left:${left}%;width:${width}%;background:${color}" title="${escapeHtml(label)} · ${formatTime(start)}-${formatTime(end)}"></div>`;
+  }).join("");
+  strip.innerHTML = `${bands}<div class="mc-strip-cursor"></div>`;
+}
+
+function bindMcPreview() {
+  const backdrop = document.getElementById("mc-preview-backdrop");
+  if (!backdrop) return;
+  document.getElementById("mc-preview-close")?.addEventListener("click", closeMulticamPreview);
+  backdrop.addEventListener("click", (e) => { if (e.target === backdrop) closeMulticamPreview(); });
+  document.addEventListener("keydown", (e) => {
+    if (!backdrop.classList.contains("hidden") && e.key === "Escape") closeMulticamPreview();
+  });
+
+  const playBtn = document.getElementById("mc-preview-play");
+  const scrub = document.getElementById("mc-preview-scrub");
+  function setPlaying(p) {
+    _mcPreview.playing = p;
+    if (playBtn) {
+      playBtn.innerHTML = p
+        ? `<span data-icon="pause" data-icon-size="14"></span> Pause`
+        : `<span data-icon="play" data-icon-size="14"></span> Play`;
+      if (window.HFIcons) HFIcons.render(playBtn);
+    }
+    if (p) {
+      _mcPreview.startedAt = performance.now() / 1000;
+      _mcPreview.startedFrom = _mcPreview.currentTime;
+      // Start ALL videos so they all advance in sync — applyMcPreviewTime
+      // re-syncs every frame. Audio comes from angle 0 (source).
+      for (const a of _mcPreview.angles) {
+        if (!a.video || a.error) continue;
+        a.video.muted = (a.idx !== 0);
+        a.video.play().catch(() => {});
+      }
+      tickMcPreview();
+    } else {
+      for (const a of _mcPreview.angles) {
+        if (a.video && !a.error) { try { a.video.pause(); } catch {} }
+      }
+      cancelAnimationFrame(_mcPreview.raf);
+      _mcPreview.raf = 0;
+    }
+  }
+  if (playBtn) playBtn.onclick = () => setPlaying(!_mcPreview.playing);
+
+  if (scrub) {
+    scrub.addEventListener("input", () => {
+      const t = (parseFloat(scrub.value) / 1000) * _mcPreview.duration;
+      if (_mcPreview.playing) setPlaying(false);
+      applyMcPreviewTime(t);
+    });
+  }
+}
+
+function tickMcPreview() {
+  if (!_mcPreview.playing) return;
+  const wallNow = performance.now() / 1000;
+  const t = _mcPreview.startedFrom + (wallNow - _mcPreview.startedAt);
+  if (t >= _mcPreview.duration) {
+    applyMcPreviewTime(_mcPreview.duration);
+    _mcPreview.playing = false;
+    const playBtn = document.getElementById("mc-preview-play");
+    if (playBtn) {
+      playBtn.innerHTML = `<span data-icon="rotate-cw" data-icon-size="14"></span> Reiniciar`;
+      if (window.HFIcons) HFIcons.render(playBtn);
+    }
+    return;
+  }
+  applyMcPreviewTime(t);
+  _mcPreview.raf = requestAnimationFrame(tickMcPreview);
+}
+
 async function multicamSync() {
   if (!state.current) return;
   log("<span data-icon=&quot;play&quot;></span> multicam sync");
@@ -3716,6 +3972,8 @@ function bind() {
   $("#speakers-level-btn").onclick = levelSpeakers;
   $("#chapters-btn").onclick = detectChapters;
   $("#multicam-sync-btn").onclick = multicamSync;
+  $("#multicam-preview-btn")?.addEventListener("click", openMulticamPreview);
+  bindMcPreview();
 
   const cpb = $("#media-copy-path");
   if (cpb) cpb.onclick = () => {
@@ -3996,6 +4254,7 @@ function renderPodcast1ClickResult(result) {
     <div class="hr-cta">
       ${outputs.fcpxml ? `<button id="hr-open-fcp" class="btn btn-primary btn-sm" type="button"><span data-icon="film" data-icon-size="14"></span> Abrir no Final Cut Pro</button>` : ""}
       ${outputs.multicam ? `<button id="hr-reveal-mc" class="btn btn-ghost btn-sm" type="button"><span data-icon="arrow-right" data-icon-size="14"></span> Mostrar multicam no Finder</button>` : ""}
+      ${state.current?.has_camera_plan ? `<button id="hr-mc-preview" class="btn btn-ghost btn-sm" type="button"><span data-icon="eye" data-icon-size="14"></span> Pré-visualizar plano</button>` : ""}
     </div>
     ${warnings.length ? `<details class="hr-warnings"><summary>${warnings.length} avisos</summary><ul>${warnings.map(w => `<li>${escapeHtml(w)}</li>`).join("")}</ul></details>` : ""}
   `;
@@ -4034,6 +4293,7 @@ function renderPodcast1ClickResult(result) {
       } catch (e) { log(`✗ reveal: ${e.message}`, "err"); }
     };
   }
+  document.getElementById("hr-mc-preview")?.addEventListener("click", openMulticamPreview);
 }
 
 // Returns the absolute project dir cached on state.media (populated by
