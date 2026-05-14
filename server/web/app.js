@@ -336,9 +336,15 @@ async function refreshList() {
   for (const p of list) {
     const btn = document.createElement("button");
     btn.className = "project-item" + (state.current?.id === p.id ? " active" : "");
+    const thumb = p.poster_url
+      ? `<img class="pi-thumb" src="${p.poster_url}" alt="" loading="lazy" />`
+      : `<div class="pi-thumb pi-thumb-placeholder"></div>`;
     btn.innerHTML = `
-      <div class="pi-name">${escapeHtml(p.name)}</div>
-      <div class="pi-meta"><span class="dot ${p.has_render ? "ok" : ""}"></span>${new Date(p.updated_at).toLocaleString()}</div>
+      ${thumb}
+      <div class="pi-body">
+        <div class="pi-name">${escapeHtml(p.name)}</div>
+        <div class="pi-meta"><span class="dot ${p.has_render ? "ok" : ""}"></span>${new Date(p.updated_at).toLocaleString()}</div>
+      </div>
     `;
     btn.onclick = () => loadProject(p.id);
     root.appendChild(btn);
@@ -354,22 +360,38 @@ function renderEmptyRecents(list) {
     root.innerHTML = "";
     return;
   }
-  const recent = list.slice(0, 6);
+  const recent = list.slice(0, 8);
+  function fmtDur(s) {
+    if (!s || !isFinite(s)) return "";
+    const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+    return `${m}:${String(sec).padStart(2, "0")}`;
+  }
   root.innerHTML = `
     <div class="empty-recents-head">
       <span class="eyebrow">Projetos recentes</span>
       <span class="muted">${list.length} no total</span>
     </div>
     <div class="empty-recents-grid">
-      ${recent.map(p => `
-        <button class="recent-card" data-pid="${p.id}">
-          <div class="recent-card-name">${escapeHtml(p.name)}</div>
-          <div class="recent-card-meta">
-            <span class="pill" data-tone="${p.has_render ? "success" : "neutral"}">${p.has_render ? "render" : "draft"}</span>
-            <span class="muted">${new Date(p.updated_at).toLocaleDateString()}</span>
+      ${recent.map(p => {
+        // Initials placeholder when no poster (legacy projects mid-backfill,
+        // or projects without a source yet) — beats showing a black hole.
+        const initials = (p.name || "?").split(/\s+/).slice(0, 2).map(w => w[0] || "").join("").toUpperCase();
+        const poster = p.poster_url
+          ? `<img class="recent-card-poster" src="${p.poster_url}" alt="" loading="lazy" />`
+          : `<div class="recent-card-poster recent-card-placeholder"><span>${escapeHtml(initials || "·")}</span></div>`;
+        const dur = p.source_duration ? `<span class="recent-card-dur">${fmtDur(p.source_duration)}</span>` : "";
+        return `
+        <button class="recent-card recent-card-grid" data-pid="${p.id}">
+          <div class="recent-card-thumb">${poster}${dur}</div>
+          <div class="recent-card-body">
+            <div class="recent-card-name">${escapeHtml(p.name)}</div>
+            <div class="recent-card-meta">
+              <span class="pill" data-tone="${p.has_render ? "success" : "neutral"}">${p.has_render ? "render" : "draft"}</span>
+              <span class="muted">${new Date(p.updated_at).toLocaleDateString()}</span>
+            </div>
           </div>
-        </button>
-      `).join("")}
+        </button>`;
+      }).join("")}
     </div>`;
   for (const btn of root.querySelectorAll(".recent-card")) {
     btn.addEventListener("click", () => loadProject(btn.dataset.pid));

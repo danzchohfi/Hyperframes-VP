@@ -388,6 +388,25 @@ async def set_project_kind(pid: str, body: KindIn) -> dict[str, Any]:
 
 @app.get("/api/projects")
 async def list_projects() -> list[dict[str, Any]]:
+    # Backfill posters for legacy projects that pre-date the grid view.
+    # One-time per project: subsequent calls hit the existing poster.jpg.
+    # Capped at 4 generations per request so a fresh /api/projects on a
+    # huge directory doesn't stall while we encode 50 thumbnails.
+    backfill_budget = 4
+    for child in sorted(storage.PROJECTS_DIR.iterdir(), reverse=True):
+        if backfill_budget <= 0:
+            break
+        poster = child / "poster.jpg"
+        src = child / "source.mp4"
+        if poster.exists() or not src.exists():
+            continue
+        try:
+            dur = await ff.duration(src)
+            at = min(0.5, max(0.0, (dur or 1.0) / 2))
+            await ff.grab_thumbnail(src, poster, at=at, width=480)
+            backfill_budget -= 1
+        except Exception:
+            continue
     return storage.list_projects()
 
 
@@ -471,6 +490,12 @@ async def upload_source(pid: str, file: UploadFile = File(...)) -> dict[str, Any
         except Exception:
             pass
     storage.save(state)
+    # Poster frame at ~0.5s so the project list grid has a visual anchor.
+    # Best-effort: silently skip if grab fails (e.g. file shorter than 0.5s).
+    try:
+        await ff.grab_thumbnail(norm_path, pdir / "poster.jpg", at=min(0.5, max(0.0, dur / 2)), width=480)
+    except Exception:
+        pass
     _stage(state, "upload", "done", f"{dur:.2f}s · {state.source_color_profile}")
     return state.model_dump()
 

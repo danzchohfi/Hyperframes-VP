@@ -142,12 +142,20 @@ def list_projects() -> list[dict[str, Any]]:
         if sp.exists():
             try:
                 s = ProjectState.model_validate_json(sp.read_text())
+                poster = child / "poster.jpg"
                 out.append(
                     {
                         "id": s.id,
                         "name": s.name,
                         "updated_at": s.updated_at,
                         "has_render": s.has_render,
+                        "has_source": bool(s.source_filename),
+                        "source_duration": s.source_duration,
+                        "kind": s.kind,
+                        "poster_url": (
+                            f"/api/projects/{s.id}/files/poster.jpg?t={int(poster.stat().st_mtime)}"
+                            if poster.exists() else None
+                        ),
                     }
                 )
             except Exception:
