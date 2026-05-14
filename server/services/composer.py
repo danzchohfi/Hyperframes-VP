@@ -955,4 +955,19 @@ def build_composition(
 """
 
     (comp_dir / "index.html").write_text(html_doc)
+    # Drop a hyperframes.json so the composition dir is a valid Hyperframes
+    # project — required by `hyperframes add` / `lint` / `preview`. Mirrors
+    # what `hyperframes init` writes; the `paths` keys tell the CLI where
+    # community-installed blocks and components land relative to this dir.
+    (comp_dir / "hyperframes.json").write_text(
+        '{\n'
+        '  "$schema": "https://hyperframes.heygen.com/schema/hyperframes.json",\n'
+        '  "registry": "https://raw.githubusercontent.com/heygen-com/hyperframes/main/registry",\n'
+        '  "paths": {\n'
+        '    "blocks": "compositions",\n'
+        '    "components": "compositions/components",\n'
+        '    "assets": "assets"\n'
+        '  }\n'
+        '}\n'
+    )
     return comp_dir

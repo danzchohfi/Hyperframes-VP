@@ -4445,6 +4445,7 @@ function bind() {
   $("#multicam-preview-btn")?.addEventListener("click", openMulticamPreview);
   bindMcPreview();
   bindHfPreview();
+  bindHfLibrary();
 
   const cpb = $("#media-copy-path");
   if (cpb) cpb.onclick = () => {
@@ -5247,6 +5248,233 @@ async function applyAnimPlanFromPrompt() {
     status.className = "status error";
     if (applyBtn) applyBtn.disabled = false;
   }
+}
+
+// ── Hyperframes registry library ──────────────────────────────────────────
+//
+// Browses /api/registry/catalog and lets the user install community blocks
+// and components into the current project's composition dir. Catalog is
+// loaded lazily on first disclosure-open (saves the 5-15 second cold-start
+// of `npx hyperframes catalog` for users who never open this section).
+
+const _hfLib = {
+  catalog: null,   // [{name,type,title,description,tags,dimensions?,duration?}, ...] | null
+  installed: [],   // [{name, kind, type, title, ...}, ...]
+  filter: { search: "", type: "", tag: "" },
+};
+
+async function loadHfCatalog(force = false) {
+  if (!force && _hfLib.catalog) return _hfLib.catalog;
+  const status = document.getElementById("hf-lib-status");
+  if (status) {
+    status.textContent = "carregando catálogo…";
+    status.className = "status running";
+  }
+  try {
+    const url = `/api/registry/catalog${force ? "?force=true" : ""}`;
+    const res = await api(url);
+    _hfLib.catalog = res.items || [];
+    if (status) {
+      status.textContent = `${_hfLib.catalog.length} item(ns) no catálogo`;
+      status.className = "status muted";
+    }
+    return _hfLib.catalog;
+  } catch (e) {
+    _hfLib.catalog = [];
+    if (status) {
+      status.textContent = `✗ ${e.message}`;
+      status.className = "status error";
+    }
+    return [];
+  }
+}
+
+async function loadHfInstalled() {
+  if (!state.current) {
+    _hfLib.installed = [];
+    return _hfLib.installed;
+  }
+  try {
+    const res = await api(`/api/projects/${state.current.id}/registry/installed`);
+    _hfLib.installed = res.items || [];
+  } catch {
+    _hfLib.installed = [];
+  }
+  return _hfLib.installed;
+}
+
+function renderHfTagFilter() {
+  const sel = document.getElementById("hf-lib-tag");
+  if (!sel || !_hfLib.catalog) return;
+  const tags = new Map();
+  for (const it of _hfLib.catalog) {
+    for (const t of (it.tags || [])) tags.set(t, (tags.get(t) || 0) + 1);
+  }
+  const sorted = [...tags.entries()].sort((a, b) => b[1] - a[1]);
+  const current = sel.value;
+  sel.innerHTML = `<option value="">Todas as tags</option>` +
+    sorted.map(([t, n]) => `<option value="${escapeHtml(t)}">${escapeHtml(t)} (${n})</option>`).join("");
+  if (current) sel.value = current;
+}
+
+function renderHfGrid() {
+  const root = document.getElementById("hf-lib-grid");
+  if (!root) return;
+  if (!_hfLib.catalog) {
+    root.innerHTML = `<div class="muted" style="padding:12px;text-align:center">Carregando…</div>`;
+    return;
+  }
+  const installedNames = new Set(_hfLib.installed.map(x => x.name));
+  const { search, type, tag } = _hfLib.filter;
+  const q = (search || "").trim().toLowerCase();
+  const items = _hfLib.catalog.filter(it => {
+    if (type && it.type !== type) return false;
+    if (tag && !(it.tags || []).includes(tag)) return false;
+    if (q) {
+      const hay = `${it.name} ${it.title || ""} ${it.description || ""} ${(it.tags || []).join(" ")}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+  if (!items.length) {
+    root.innerHTML = `<div class="muted" style="padding:12px;text-align:center">Nenhum item bate com os filtros.</div>`;
+    return;
+  }
+  root.innerHTML = items.map(it => {
+    const isInstalled = installedNames.has(it.name);
+    const dims = it.dimensions ? `${it.dimensions.width}×${it.dimensions.height}` : "";
+    const dur = it.duration ? `${it.duration}s` : "";
+    const meta = [it.type, dims, dur].filter(Boolean).join(" · ");
+    const tags = (it.tags || []).slice(0, 4).map(t => `<span class="hf-lib-tag-chip">${escapeHtml(t)}</span>`).join("");
+    return `
+      <div class="hf-lib-card${isInstalled ? " installed" : ""}" data-name="${escapeHtml(it.name)}">
+        <div class="hf-lib-card-head">
+          <strong>${escapeHtml(it.title || it.name)}</strong>
+          <span class="hf-lib-card-meta">${escapeHtml(meta)}</span>
+        </div>
+        <p class="hf-lib-card-desc">${escapeHtml(it.description || "")}</p>
+        <div class="hf-lib-card-tags">${tags}</div>
+        <div class="hf-lib-card-actions">
+          ${isInstalled
+            ? `<button class="btn btn-ghost btn-sm hf-lib-uninstall" type="button"><span data-icon="trash-2" data-icon-size="12"></span> Remover</button>
+               <span class="hf-lib-installed-badge">instalado</span>`
+            : `<button class="btn btn-primary btn-sm hf-lib-install" type="button"><span data-icon="download" data-icon-size="12"></span> Instalar</button>`
+          }
+        </div>
+      </div>`;
+  }).join("");
+  if (window.HFIcons) HFIcons.render(root);
+}
+
+function renderHfInstalled() {
+  const root = document.getElementById("hf-lib-installed");
+  if (!root) return;
+  if (!_hfLib.installed.length) {
+    root.innerHTML = "";
+    return;
+  }
+  const items = _hfLib.installed.map(it => {
+    const title = it.title || it.name;
+    return `<span class="hf-lib-installed-pill" data-name="${escapeHtml(it.name)}" title="${escapeHtml(it.path || it.name)}">
+      <span data-icon="check" data-icon-size="11"></span> ${escapeHtml(title)}
+    </span>`;
+  }).join("");
+  root.innerHTML = `<div class="muted" style="font-size:11px;margin-bottom:4px">Instalados neste projeto:</div>${items}`;
+  if (window.HFIcons) HFIcons.render(root);
+}
+
+async function installHfBlock(name) {
+  if (!state.current || !name) return;
+  const status = document.getElementById("hf-lib-status");
+  if (status) {
+    status.textContent = `instalando ${name}…`;
+    status.className = "status running";
+  }
+  try {
+    const res = await api(`/api/projects/${state.current.id}/registry/install`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (status) {
+      setBtnHTML(status, `<span data-icon=&quot;check&quot;></span> ${name} instalado`);
+      status.className = "status done";
+    }
+    toast?.(
+      `${name} instalado. Veja em "Preview Hyperframes" ou "Editar no Hyperframes". Snippet copiável: ${res.snippet || ""}`,
+      "ok", 8000
+    );
+    await loadHfInstalled();
+    renderHfInstalled();
+    renderHfGrid();
+  } catch (e) {
+    if (status) {
+      status.textContent = `✗ ${e.message}`;
+      status.className = "status error";
+    }
+    toast?.(`Falha ao instalar ${name}: ${e.message}`, "err", 7000);
+  }
+}
+
+async function uninstallHfBlock(name) {
+  if (!state.current || !name) return;
+  if (!confirm(`Remover ${name} da composição?`)) return;
+  try {
+    await api(`/api/projects/${state.current.id}/registry/installed/${encodeURIComponent(name)}`, {
+      method: "DELETE",
+    });
+    await loadHfInstalled();
+    renderHfInstalled();
+    renderHfGrid();
+    toast?.(`${name} removido.`, "ok");
+  } catch (e) {
+    toast?.(`Falha ao remover: ${e.message}`, "err");
+  }
+}
+
+function bindHfLibrary() {
+  const details = document.getElementById("hf-library-block");
+  if (!details) return;
+
+  // Lazy-load catalog on first open. Subsequent opens use cached data
+  // (the catalog endpoint also caches server-side for 5 min).
+  details.addEventListener("toggle", async () => {
+    if (!details.open || !state.current) return;
+    if (!_hfLib.catalog) {
+      await loadHfCatalog(false);
+    }
+    await loadHfInstalled();
+    renderHfTagFilter();
+    renderHfInstalled();
+    renderHfGrid();
+  });
+
+  document.getElementById("hf-lib-search")?.addEventListener("input", (e) => {
+    _hfLib.filter.search = e.target.value || "";
+    renderHfGrid();
+  });
+  document.getElementById("hf-lib-type")?.addEventListener("change", (e) => {
+    _hfLib.filter.type = e.target.value || "";
+    renderHfGrid();
+  });
+  document.getElementById("hf-lib-tag")?.addEventListener("change", (e) => {
+    _hfLib.filter.tag = e.target.value || "";
+    renderHfGrid();
+  });
+  document.getElementById("hf-lib-refresh")?.addEventListener("click", async () => {
+    await loadHfCatalog(true);
+    renderHfTagFilter();
+    renderHfGrid();
+  });
+
+  // Event delegation for install/uninstall buttons on the grid.
+  document.getElementById("hf-lib-grid")?.addEventListener("click", (e) => {
+    const card = e.target.closest(".hf-lib-card");
+    if (!card) return;
+    const name = card.dataset.name;
+    if (e.target.closest(".hf-lib-install")) installHfBlock(name);
+    else if (e.target.closest(".hf-lib-uninstall")) uninstallHfBlock(name);
+  });
 }
 
 // REELS_STATE.preview_mode: "html" (live iframe) or "mp4" (quick MP4)

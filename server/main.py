@@ -918,6 +918,78 @@ async def build_composition_only(pid: str, body: RenderIn | None = None) -> dict
     }
 
 
+# ---- Hyperframes community registry -----------------------------------------
+#
+# Browse + install community blocks/components into the project's composition
+# dir. Wraps `npx hyperframes catalog` and `npx hyperframes add`. The catalog
+# is cached server-side (5 min) so the UI grid stays snappy; install hits the
+# CLI which materializes files at compositions/<name>.html (or
+# compositions/components/<name>.html). After install, the user can preview
+# via "Preview Hyperframes" (inline iframe) or open in Hyperframes Studio.
+
+from .services import registry as registry_svc
+
+
+@app.get("/api/registry/catalog")
+async def get_registry_catalog(force: bool = False) -> dict[str, Any]:
+    if not registry_svc.npx_available():
+        raise HTTPException(503, "npx não encontrado no servidor — registry indisponível")
+    try:
+        items = await registry_svc.fetch_catalog(force=force)
+    except registry_svc.RegistryError as e:
+        raise HTTPException(502, str(e))
+    return {"items": items, "count": len(items)}
+
+
+class RegistryInstallIn(BaseModel):
+    name: str
+
+
+@app.post("/api/projects/{pid}/registry/install")
+async def registry_install(pid: str, body: RegistryInstallIn) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    comp_dir = pdir / "composition"
+    # The composition dir is built by composer.build_composition (called
+    # by /render or POST /composition). If it doesn't exist yet, build it
+    # so the user can install blocks without having to render an MP4 first.
+    if not (comp_dir / "hyperframes.json").exists():
+        await build_composition_only(pid, None)  # type: ignore[arg-type]
+    if not registry_svc.npx_available():
+        raise HTTPException(503, "npx não encontrado no servidor — registry indisponível")
+    _stage(state, "registry_install", "running", body.name)
+    try:
+        result = await registry_svc.install_block(body.name, composition_dir=comp_dir)
+    except registry_svc.RegistryError as e:
+        _stage(state, "registry_install", "error", str(e))
+        raise HTTPException(502, str(e))
+    _stage(state, "registry_install", "done",
+           f"{body.name} · {len(result.get('written') or [])} arquivo(s)")
+    return result
+
+
+@app.get("/api/projects/{pid}/registry/installed")
+async def registry_installed(pid: str) -> dict[str, Any]:
+    _load(pid)
+    pdir = storage.project_dir(pid)
+    items = registry_svc.list_installed(pdir / "composition")
+    return {"items": items, "count": len(items)}
+
+
+@app.delete("/api/projects/{pid}/registry/installed/{name}")
+async def registry_uninstall(pid: str, name: str) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    try:
+        removed = registry_svc.uninstall(name, composition_dir=pdir / "composition")
+    except registry_svc.RegistryError as e:
+        raise HTTPException(400, str(e))
+    if not removed:
+        raise HTTPException(404, f"{name} não está instalado")
+    _stage(state, "registry_install", "done", f"removido {name}")
+    return {"removed": True, "name": name}
+
+
 @app.post("/api/projects/{pid}/render")
 async def do_render(pid: str, body: RenderIn) -> dict[str, Any]:
     state = _load(pid)

@@ -2387,6 +2387,105 @@ a { color: inherit; text-decoration: none; }
   overflow-x: auto;
   white-space: nowrap;
 }
+/* Hyperframes registry library */
+.hf-library-body {
+  display: flex; flex-direction: column; gap: 10px;
+  margin-top: 10px;
+}
+.hf-library-controls {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+}
+.hf-library-controls input[type="search"] {
+  flex: 1;
+  min-width: 200px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+.hf-library-installed {
+  display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
+}
+.hf-lib-installed-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ok, #22c55e) 18%, transparent);
+  color: var(--ok, #22c55e);
+  border: 1px solid color-mix(in srgb, var(--ok, #22c55e) 35%, transparent);
+}
+.hf-library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+  max-height: 540px;
+  overflow-y: auto;
+  padding: 4px 2px;
+}
+.hf-lib-card {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  transition: border-color var(--t-fast) var(--ease);
+}
+.hf-lib-card:hover { border-color: var(--line-strong); }
+.hf-lib-card.installed {
+  border-color: color-mix(in srgb, var(--ok, #22c55e) 40%, var(--line));
+  background: color-mix(in srgb, var(--ok, #22c55e) 5%, var(--bg-card));
+}
+.hf-lib-card-head {
+  display: flex; flex-direction: column; gap: 2px;
+}
+.hf-lib-card-head strong {
+  font-size: 13px;
+  letter-spacing: -0.01em;
+}
+.hf-lib-card-meta {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.hf-lib-card-desc {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.45;
+  margin: 0;
+  min-height: 2.9em;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.hf-lib-card-tags {
+  display: flex; flex-wrap: wrap; gap: 3px;
+  min-height: 18px;
+}
+.hf-lib-tag-chip {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+}
+.hf-lib-card-actions {
+  display: flex; gap: 6px; align-items: center; justify-content: flex-end;
+  margin-top: auto;
+}
+.hf-lib-installed-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ok, #22c55e);
+}
+
 .anim-custom-badge {
   display: inline-block;
   margin-left: 6px;

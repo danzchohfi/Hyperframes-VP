@@ -596,6 +596,33 @@
                 <div id="anim-prompt-preview" class="reels-prompt-preview hidden"></div>
               </div>
             </details>
+
+            <!-- Biblioteca Hyperframes — catálogo da comunidade.
+                 GET /api/registry/catalog é cacheado por 5min; install
+                 escreve em pdir/composition/compositions/<name>.html. -->
+            <details class="reels-prompt-block" id="hf-library-block">
+              <summary><span data-icon="layers" data-icon-size="14"></span> Biblioteca Hyperframes <span class="muted">— blocos e componentes da comunidade (templates ao vivo)</span></summary>
+              <div class="hf-library-body">
+                <div class="hf-library-controls">
+                  <input id="hf-lib-search" type="search" placeholder="Buscar por nome ou descrição…" />
+                  <select id="hf-lib-type" class="inline-select">
+                    <option value="">Todos os tipos</option>
+                    <option value="block">Blocos</option>
+                    <option value="component">Componentes</option>
+                  </select>
+                  <select id="hf-lib-tag" class="inline-select">
+                    <option value="">Todas as tags</option>
+                  </select>
+                  <button id="hf-lib-refresh" class="btn btn-ghost btn-sm" type="button" title="Re-busca o catálogo do registry (cache de 5min)"><span data-icon="refresh-cw" data-icon-size="14"></span></button>
+                </div>
+                <div id="hf-lib-installed" class="hf-library-installed"></div>
+                <div id="hf-lib-grid" class="hf-library-grid">
+                  <div class="muted" style="padding:12px;text-align:center">Clique no cabeçalho pra carregar o catálogo.</div>
+                </div>
+                <div id="hf-lib-status" class="status muted" style="margin-top:6px"></div>
+              </div>
+            </details>
+
             <div class="reels-templates-row">
               <label class="cp-label">Templates</label>
               <select id="reels-template-select" class="inline-select"></select>
