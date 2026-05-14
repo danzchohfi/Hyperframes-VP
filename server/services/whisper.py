@@ -15,6 +15,8 @@ lists with per-chunk time offsets.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import logging
 import os
 import tempfile
@@ -26,6 +28,34 @@ from openai import AsyncOpenAI
 from . import ffmpeg as ff
 
 log = logging.getLogger(__name__)
+
+
+def _cache_dir() -> Path:
+    """~/.cache/hfvp/whisper — re-uses Whisper output across re-runs of
+    the same source file. Whisper is the priciest step in the pipeline
+    ($/minute), so cache misses only happen on truly new content."""
+    root = Path(os.environ.get("HFVP_CACHE_DIR") or (Path.home() / ".cache" / "hfvp"))
+    d = root / "whisper"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _hash_file(path: Path) -> str:
+    h = hashlib.sha1()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _write_cache(path: Path, data: dict[str, Any]) -> None:
+    try:
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text(json.dumps(data), encoding="utf-8")
+        tmp.replace(path)
+        log.info("whisper: cache wrote %s", path.name)
+    except Exception as e:
+        log.warning("whisper: cache write failed for %s: %s", path, e)
 
 # OpenAI rejects > 26214400 bytes. Keep a margin so MP3 frame-tail rounding
 # can't push us over.
@@ -141,7 +171,22 @@ async def transcribe(audio_path: Path, *, language: str | None = None) -> dict[s
     """Public entry point — handles compact-encode + chunking automatically.
 
     Returns {text, language, duration, words, segments}.
+
+    Results are cached by sha1(source_file) + language under
+    ~/.cache/hfvp/whisper/<sha1>.<lang|auto>.json. Re-running on the
+    same source.mp4 (common when re-rendering or tweaking downstream
+    steps) returns instantly from disk.
     """
+    cache_key = f"{_hash_file(audio_path)}.{language or 'auto'}.json"
+    cache_path = _cache_dir() / cache_key
+    if cache_path.exists():
+        try:
+            data = json.loads(cache_path.read_text())
+            log.info("whisper: cache hit %s", cache_path.name)
+            return data
+        except Exception as e:
+            log.warning("whisper: ignoring corrupt cache %s: %s", cache_path, e)
+
     workdir = Path(tempfile.mkdtemp(prefix="hfvp_whisper_"))
     try:
         compact = workdir / "audio.mp3"
@@ -151,7 +196,9 @@ async def transcribe(audio_path: Path, *, language: str | None = None) -> dict[s
 
         if size <= MAX_BYTES:
             data = await _whisper_call(compact, language)
-            return _normalize_payload(data)
+            result = _normalize_payload(data)
+            _write_cache(cache_path, result)
+            return result
 
         chunks_dir = workdir / "chunks"
         chunks_dir.mkdir()
@@ -182,13 +229,15 @@ async def transcribe(audio_path: Path, *, language: str | None = None) -> dict[s
         segments.sort(key=lambda s: s["start"])
         for i, s in enumerate(segments):
             s["id"] = i
-        return {
+        result = {
             "text": text,
             "language": parts[0].get("language") if parts else None,
             "duration": total_dur if total_dur > 0 else float(CHUNK_SECONDS * len(parts)),
             "words": words,
             "segments": segments,
         }
+        _write_cache(cache_path, result)
+        return result
     finally:
         try:
             for p in workdir.rglob("*"):
