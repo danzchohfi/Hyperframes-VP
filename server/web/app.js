@@ -5061,6 +5061,99 @@ async function suggestReelAnims() {
   }
 }
 
+// Prompt-driven animation planner (Claude Sonnet 4.6 via /from-prompt).
+// Two-step UX: Generate produces a preview list (saved in memory only),
+// Aplicar writes to reels_animations.json so the user can iterate the
+// prompt without paying every time, and abort if the plan looks off.
+
+let _animPromptStaged = null;  // {animations, rationale} between Generate and Aplicar
+
+async function generateAnimPlanFromPrompt() {
+  if (!state.current) return;
+  const promptEl = $("#anim-prompt-input");
+  const prompt = (promptEl?.value || "").trim();
+  const status = $("#anim-prompt-status");
+  const applyBtn = $("#anim-prompt-apply-btn");
+  if (!prompt) {
+    status.textContent = "escreva um prompt primeiro";
+    status.className = "status error";
+    return;
+  }
+  status.textContent = "consultando Claude…";
+  status.className = "status running";
+  if (applyBtn) applyBtn.disabled = true;
+
+  try {
+    const res = await api(`/api/projects/${state.current.id}/animations/from-prompt`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ prompt, apply: false }),
+    });
+    _animPromptStaged = { animations: res.animations || [], rationale: res.rationale || "" };
+    renderAnimPromptPreview(_animPromptStaged);
+    setBtnHTML(status, `<span data-icon=&quot;check&quot;></span> ${res.added} sugestões — revise e clique em Aplicar`);
+    status.className = "status done";
+    if (applyBtn) applyBtn.disabled = false;
+  } catch (e) {
+    _animPromptStaged = null;
+    status.textContent = `✗ ${e.message}`;
+    status.className = "status error";
+    if (applyBtn) applyBtn.disabled = true;
+  }
+}
+
+function renderAnimPromptPreview(staged) {
+  const root = $("#anim-prompt-preview");
+  if (!root) return;
+  if (!staged || !staged.animations?.length) {
+    root.classList.add("hidden");
+    root.innerHTML = "";
+    return;
+  }
+  const items = staged.animations.map(a => {
+    const text = (a.text || "").slice(0, 60);
+    const sub = a.sub ? ` · <span class="muted">${escapeHtml(a.sub.slice(0, 40))}</span>` : "";
+    return `<li><span class="anim-type">${escapeHtml(a.type)}</span> @ ${parseFloat(a.start).toFixed(1)}s · "${escapeHtml(text)}"${sub}</li>`;
+  }).join("");
+  root.innerHTML = `
+    ${staged.rationale ? `<p class="rationale">${escapeHtml(staged.rationale)}</p>` : ""}
+    <ul>${items}</ul>
+  `;
+  root.classList.remove("hidden");
+}
+
+async function applyAnimPlanFromPrompt() {
+  if (!state.current || !_animPromptStaged) return;
+  const replace = !!$("#anim-prompt-replace")?.checked;
+  const promptEl = $("#anim-prompt-input");
+  const prompt = (promptEl?.value || "").trim();
+  const status = $("#anim-prompt-status");
+  const applyBtn = $("#anim-prompt-apply-btn");
+  status.textContent = "aplicando…";
+  status.className = "status running";
+  if (applyBtn) applyBtn.disabled = true;
+  try {
+    // Re-call with apply:true rather than persisting the in-memory staged
+    // list — guarantees the server's view of the plan matches what was
+    // shown (no client-side tampering with the structure).
+    const res = await api(`/api/projects/${state.current.id}/animations/from-prompt`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ prompt, apply: true, replace }),
+    });
+    REELS_STATE.animations = res.animations || [];
+    renderReelsList?.();
+    setBtnHTML(status, `<span data-icon=&quot;check&quot;></span> aplicado · ${res.total} animações no total`);
+    status.className = "status done";
+    _animPromptStaged = null;
+    toast?.("Plano aplicado em reels_animations.json. Use Preview pra ver no vídeo.", "ok");
+  } catch (e) {
+    status.textContent = `✗ ${e.message}`;
+    status.className = "status error";
+    if (applyBtn) applyBtn.disabled = false;
+  }
+}
+
 // REELS_STATE.preview_mode: "html" (live iframe) or "mp4" (quick MP4)
 function openReelsPreview() {
   if (!state.current) return;
@@ -5154,6 +5247,11 @@ function bindReels() {
   if (t3) t3.onclick = saveReelsAsTemplate;
   const t4 = $("#reels-template-delete-btn");
   if (t4) t4.onclick = deleteReelTemplate;
+
+  const ap1 = $("#anim-prompt-gen-btn");
+  if (ap1) ap1.onclick = generateAnimPlanFromPrompt;
+  const ap2 = $("#anim-prompt-apply-btn");
+  if (ap2) ap2.onclick = applyAnimPlanFromPrompt;
 
   const s1 = $("#ra-sfx-preview-btn");
   if (s1) s1.onclick = () => {

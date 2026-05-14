@@ -1376,6 +1376,101 @@ async def put_reels_animations(pid: str, body: ReelsAnimationsIn) -> dict[str, A
     return {"animations": cleaned, "count": len(cleaned)}
 
 
+# ---- prompt-driven animation planning (Claude Sonnet 4.6) -------------------
+#
+# Takes a free-form stylistic prompt + the project's transcript/chapters/
+# soundbites and asks Claude (via forced tool use, for a guaranteed-shape
+# response) to produce a list of reels_animations.json entries. The 1-click
+# pipeline already reads that file when auto_animations is true, so applying
+# the plan = writing it to disk; no composer changes needed.
+
+class AnimFromPromptIn(BaseModel):
+    prompt: str
+    apply: bool = False   # write to reels_animations.json (else return preview only)
+    replace: bool = True  # if apply=true: overwrite any existing animations
+
+
+@app.post("/api/projects/{pid}/animations/from-prompt")
+async def animations_from_prompt(pid: str, body: AnimFromPromptIn) -> dict[str, Any]:
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    prompt = (body.prompt or "").strip()
+    if not prompt:
+        raise HTTPException(400, "prompt vazio")
+    if len(prompt) > 2000:
+        raise HTTPException(400, "prompt longo demais (máx 2000 chars)")
+
+    transcript = None
+    if (pdir / "transcript.json").exists():
+        try:
+            transcript = storage.read_json(pid, "transcript.json")
+        except Exception:
+            pass
+    chapters = None
+    if (pdir / "chapters.json").exists():
+        try:
+            chapters = (storage.read_json(pid, "chapters.json") or {}).get("chapters")
+        except Exception:
+            pass
+    soundbites = None
+    if (pdir / "soundbites.json").exists():
+        try:
+            soundbites = (storage.read_json(pid, "soundbites.json") or {}).get("soundbites")
+        except Exception:
+            pass
+
+    # Lazy import so the rest of the server keeps booting if anthropic
+    # isn't installed yet (fresh checkout before pip install).
+    try:
+        from .services import anim_planner
+    except ImportError as e:
+        raise HTTPException(500, f"anim_planner indisponível: {e}")
+
+    _stage(state, "anim_plan_prompt", "running", prompt[:80])
+    try:
+        plan = anim_planner.plan_from_prompt(
+            user_prompt=prompt,
+            transcript=transcript,
+            chapters=chapters,
+            soundbites=soundbites,
+            duration=state.source_duration,
+        )
+    except RuntimeError as e:
+        _stage(state, "anim_plan_prompt", "error", str(e))
+        raise HTTPException(502, str(e))
+    except ValueError as e:
+        _stage(state, "anim_plan_prompt", "error", str(e))
+        raise HTTPException(400, str(e))
+
+    animations = plan["animations"]
+    if body.apply:
+        existing = []
+        if not body.replace and (pdir / "reels_animations.json").exists():
+            try:
+                existing = storage.read_json(pid, "reels_animations.json").get("animations") or []
+            except Exception:
+                existing = []
+        combined = sorted(existing + animations, key=lambda a: a["start"])
+        storage.write_json(pid, "reels_animations.json", {"animations": combined})
+        _stage(state, "anim_plan_prompt", "done",
+               f"{len(animations)} animações (aplicado · {len(combined)} no total)")
+        return {
+            "animations": combined,
+            "added": len(animations),
+            "total": len(combined),
+            "rationale": plan.get("rationale", ""),
+            "applied": True,
+        }
+
+    _stage(state, "anim_plan_prompt", "done", f"{len(animations)} animações (preview)")
+    return {
+        "animations": animations,
+        "added": len(animations),
+        "rationale": plan.get("rationale", ""),
+        "applied": False,
+    }
+
+
 @app.get("/api/projects/{pid}/reels/preview")
 async def reels_preview(pid: str, source: str = "source") -> Response:
     """Standalone HTML page with the source video + reel animations overlaid,

@@ -577,6 +577,24 @@
               <button id="reels-quick-preview-btn" class="btn-ghost"><span data-icon="zap"></span> Preview MP4 (~10s)</button>
               <span id="reels-status" class="status muted"></span>
             </div>
+
+            <!-- Prompt-driven animation planner (Claude Sonnet 4.6). Generates
+                 a list of overlays from a free-form style brief + project
+                 context (transcript / chapters / soundbites). Generate
+                 shows preview; Aplicar writes to reels_animations.json. -->
+            <details class="reels-prompt-block" id="anim-prompt-block">
+              <summary><span data-icon="sparkles" data-icon-size="14"></span> Descrever o estilo das animações (IA) <span class="muted">— gera o plano direto do seu prompt</span></summary>
+              <div class="reels-prompt-body">
+                <textarea id="anim-prompt-input" rows="3" maxlength="2000" placeholder="ex: 'Estilo retrô anos 80, com flashes nos momentos altos. Hook punchy no começo, callouts curtos em rosa neon. CTA final pedindo pra seguir.'"></textarea>
+                <div class="reels-prompt-controls">
+                  <label class="cb"><input type="checkbox" id="anim-prompt-replace" /> substituir animações atuais</label>
+                  <button id="anim-prompt-gen-btn" class="btn btn-primary btn-sm" type="button"><span data-icon="wand-2" data-icon-size="14"></span> Gerar plano</button>
+                  <button id="anim-prompt-apply-btn" class="btn btn-ghost btn-sm" type="button" disabled><span data-icon="check" data-icon-size="14"></span> Aplicar</button>
+                  <span id="anim-prompt-status" class="status muted"></span>
+                </div>
+                <div id="anim-prompt-preview" class="reels-prompt-preview hidden"></div>
+              </div>
+            </details>
             <div class="reels-templates-row">
               <label class="cp-label">Templates</label>
               <select id="reels-template-select" class="inline-select"></select>
