@@ -158,15 +158,14 @@ async def render(
             f"[{a_label}]"
         )
         audio_labels.append(f"[{a_label}]")
-    # Concat the faded segments, then apply a single-pass loudnorm to even
-    # out level across the whole episode. -16 LUFS is the Apple/Spotify
-    # podcast spec — quieter than the -14 social-video target but much
-    # easier on the ears for long-form dialog (less pumping, more headroom
-    # for soft consonants). TP=-1.5 keeps a true-peak ceiling that AAC
-    # encoding won't overshoot.
+    # Concat the faded segments. Note: an earlier revision applied
+    # loudnorm here too, but loudnorm has algorithmic latency (~400ms
+    # to ~3s for the EBU R128 measurement window) — and since the
+    # video chain has no equivalent delay, the muxer ended up with
+    # audio shifted vs. video. Loudness normalization belongs on a
+    # second pass (or upstream via enhance_audio on the source file).
     filter_parts.append(
-        "".join(audio_labels) + f"concat=n={len(plan)}:v=0:a=1[aconcat];"
-        "[aconcat]loudnorm=I=-16:LRA=11:TP=-1.5[aout]"
+        "".join(audio_labels) + f"concat=n={len(plan)}:v=0:a=1[aout]"
     )
 
     filter_complex = ";".join(filter_parts)
@@ -184,6 +183,30 @@ async def render(
         str(out),
     ]
     await ff.run(cmd)
+
+    # Post-pass loudness normalization: re-encode the completed MP4
+    # with audio passed through loudnorm. Doing this AFTER the main
+    # render avoids the in-pipeline sync problem (loudnorm has ~400ms
+    # of algorithmic latency that desynchronizes audio from video when
+    # only audio goes through it). The video is stream-copied so the
+    # extra pass is fast (only audio is re-encoded).
+    try:
+        normed = out.with_suffix(".normed.mp4")
+        await ff.run([
+            "ffmpeg", "-y", "-i", str(out),
+            "-c:v", "copy",
+            "-af", "loudnorm=I=-16:LRA=11:TP=-1.5",
+            "-c:a", "aac", "-b:a", "192k",
+            "-movflags", "+faststart",
+            str(normed),
+        ])
+        if normed.exists() and normed.stat().st_size > 1024:
+            normed.replace(out)
+    except Exception:
+        # Non-fatal: if loudnorm fails (very short clip, weird codec),
+        # we still have the synced-but-unnormalized multicam.mp4 which
+        # is better than failing the whole render.
+        pass
 
     # Sanity-check the output: ffmpeg occasionally exits 0 on a
     # filter-graph hiccup with a moov-less / truncated MP4 that won't
