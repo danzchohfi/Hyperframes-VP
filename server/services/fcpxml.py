@@ -254,20 +254,20 @@ async def build_single_cam_fcpxml(
                 # overlap with the kept range
                 if se <= s or ss >= e:
                     continue
-                label = _truncate(str(seg.get("text") or ""), 80)
+                full_text = str(seg.get("text") or "").strip()
+                label = _truncate(full_text, 80)
                 if not label:
                     continue
                 m_start = max(ss, s)
                 m_end = min(se, e)
-                ET.SubElement(
-                    clip,
-                    "marker",
-                    {
-                        "start": _t(m_start, tb, fd_num),
-                        "duration": _t(max(m_end - m_start, 1 / 30.0), tb, fd_num),
-                        "value": label,
-                    },
-                )
+                m_attrs = {
+                    "start": _t(m_start, tb, fd_num),
+                    "duration": _t(max(m_end - m_start, 1 / 30.0), tb, fd_num),
+                    "value": label,
+                }
+                if full_text and len(full_text) > len(label):
+                    m_attrs["note"] = full_text
+                ET.SubElement(clip, "marker", m_attrs)
         else:
             # Fallback: group consecutive words into ~6-word phrases so a
             # transcript without segment data still gives the editor
@@ -643,13 +643,77 @@ async def build_multicam_fcpxml(
     # rounded timestamp so the editor doesn't see five overlapping pins at
     # the same second (chapter ∩ soundbite ∩ question ∩ speaker change).
     words = (transcript or {}).get("words") or []
+    segments_tx = (transcript or {}).get("segments") or []
 
     def _truncate(text: str, n: int = 60) -> str:
         text = (text or "").strip().replace("\n", " ")
         return text if len(text) <= n else text[: n - 1] + "…"
 
-    def _marker_for(start_s: float, value: str, dur_s: float = 1 / 30.0) -> dict:
-        return {"start": _t(start_s, tb, fd_num), "duration": _t(max(dur_s, 1 / 30.0), tb, fd_num), "value": value}
+    def _spoken_text_at(t: float, *, window_s: float = 6.0) -> str:
+        """Return the transcript text spoken in a ±(window_s/2) window around
+        timestamp `t`. Used to populate marker `note` attributes so the
+        editor can see WHAT was said at each beat without having to scrub.
+        Prefers segments (sentences) — falls back to word concatenation."""
+        lo = max(0.0, t - window_s / 2.0)
+        hi = t + window_s / 2.0
+        # Try segments first (cleaner punctuation).
+        if segments_tx:
+            picked: list[str] = []
+            for seg in segments_tx:
+                try:
+                    ss = float(seg.get("start") or 0.0)
+                    se = float(seg.get("end") or ss)
+                except (TypeError, ValueError):
+                    continue
+                # Segment overlaps the window.
+                if se >= lo and ss <= hi:
+                    txt = (seg.get("text") or "").strip()
+                    if txt:
+                        picked.append(txt)
+                if ss > hi:
+                    break
+            if picked:
+                return " ".join(picked)
+        # Fall back to word list.
+        if words:
+            picked_words: list[str] = []
+            for w in words:
+                try:
+                    ws = float(w.get("start") or 0.0)
+                except (TypeError, ValueError):
+                    continue
+                if ws < lo:
+                    continue
+                if ws > hi:
+                    break
+                tok = (w.get("word") or w.get("text") or "").strip()
+                if tok:
+                    picked_words.append(tok)
+            if picked_words:
+                return " ".join(picked_words)
+        return ""
+
+    def _marker_for(start_s: float, value: str, dur_s: float = 1 / 30.0, *,
+                    note: str | None = None, kind: str = "marker") -> dict:
+        """Build a marker payload. `kind` ∈ {"marker", "chapter-marker"}.
+        `note` populates the FCPXML note attr — Final Cut renders it as
+        the marker's body text in the inspector, so we put the spoken
+        line there so the editor can read what's being said without
+        scrubbing. Chapters use FCPXML's <chapter-marker> element which
+        populates Final Cut's Chapter Markers panel (proper navigation)
+        instead of being just another pin on the marker line."""
+        attrs = {
+            "start": _t(start_s, tb, fd_num),
+            "duration": _t(max(dur_s, 1 / 30.0), tb, fd_num),
+            "value": value,
+        }
+        if note:
+            attrs["note"] = note
+        # We tunnel the element name in via a special key the writer
+        # consumes when emitting the marker (see further down). Anything
+        # starting with "_" doesn't show up in the XML.
+        attrs["_kind"] = kind
+        return attrs
 
     # `extra_markers` is a list of (timestamp_seconds, marker_attrs_dict).
     # Priority order matters: later inserts at the same second WIN, so we
@@ -668,7 +732,13 @@ async def build_multicam_fcpxml(
             if name == last_speaker:
                 continue
             last_speaker = name
-            extra_markers.append((t, _marker_for(t, f"🎙 {name}")))
+            # The note carries the first ~6s of what THIS speaker says
+            # right after the turn boundary, so the editor sees the
+            # opening line in the inspector.
+            note_text = _spoken_text_at(t, window_s=6.0)
+            extra_markers.append((t, _marker_for(
+                t, f"🎙 {name}", note=note_text or None,
+            )))
 
     # 2. Questions — surface every interrogative segment so the editor can
     # jump straight to the Q&A beats.
@@ -679,9 +749,14 @@ async def build_multicam_fcpxml(
                 end = float(q.get("end") or t)
             except (TypeError, ValueError):
                 continue
-            text = _truncate(str(q.get("text") or q.get("quote") or "?"), 70)
+            text = (q.get("text") or q.get("quote") or "").strip()
+            label = f"❓ Pergunta: {_truncate(text, 70)}"
             dur = max(end - t, 1 / 30.0)
-            extra_markers.append((t, _marker_for(t, f"❓ Pergunta: {text}", dur)))
+            # Note carries the full question text (un-truncated) so the
+            # editor can read the whole prompt in the inspector.
+            extra_markers.append((t, _marker_for(
+                t, label, dur, note=text or None,
+            )))
 
     # 3. Soundbites — the AI-picked highlight quotes. Higher priority than
     # generic speaker change.
@@ -693,11 +768,21 @@ async def build_multicam_fcpxml(
             except (TypeError, ValueError):
                 continue
             topic = _truncate(str(sb.get("topic") or sb.get("title") or "Soundbite"), 28)
-            quote = _truncate(str(sb.get("quote") or sb.get("text") or ""), 56)
+            quote_full = (sb.get("quote") or sb.get("text") or "").strip()
+            quote = _truncate(quote_full, 56)
             label = f"⭐ {topic}" + (f": {quote}" if quote else "")
-            extra_markers.append((t, _marker_for(t, label, dur)))
+            # Note carries the full quote so the editor sees it in the
+            # inspector even though the marker label is truncated. If
+            # the soundbite has no quote (rare), fall back to whatever
+            # the transcript captured in that window.
+            note_text = quote_full or _spoken_text_at(t + dur / 2, window_s=max(dur, 6.0))
+            extra_markers.append((t, _marker_for(
+                t, label, dur, note=note_text or None,
+            )))
 
     # 4. Chapters — story-level structural beats. Highest priority.
+    # Emit as <chapter-marker> so they populate Final Cut's chapter
+    # navigation panel (not just another pin on the marker track).
     if chapters:
         for i, ch in enumerate(chapters, start=1):
             try:
@@ -705,7 +790,14 @@ async def build_multicam_fcpxml(
             except (TypeError, ValueError):
                 continue
             title = _truncate(str(ch.get("title") or ch.get("name") or f"Capítulo {i}"))
-            extra_markers.append((t, _marker_for(t, f"📌 Cap. {i:02d} · {title}")))
+            # Note: first few seconds of dialogue inside the chapter so
+            # the editor sees the chapter's opening line.
+            note_text = _spoken_text_at(t, window_s=8.0)
+            extra_markers.append((t, _marker_for(
+                t, f"📌 Cap. {i:02d} · {title}",
+                note=note_text or None,
+                kind="chapter-marker",
+            )))
 
     # Dedupe: when two markers are at the same frame (within ~0.5s), keep
     # the higher-priority one (later in list). The user gets a clean
@@ -753,16 +845,23 @@ async def build_multicam_fcpxml(
                     se = float(seg.get("end") or ss)
                     if se <= s or ss >= e:
                         continue
-                    label = _truncate(str(seg.get("text") or ""), 80)
+                    full_text = str(seg.get("text") or "").strip()
+                    label = _truncate(full_text, 80)
                     if not label:
                         continue
                     m_start = max(ss, s)
                     m_end = min(se, e)
-                    ET.SubElement(mc, "marker", {
+                    attrs = {
                         "start": _t(m_start, tb, fd_num),
                         "duration": _t(max(m_end - m_start, 1 / 30.0), tb, fd_num),
                         "value": label,
-                    })
+                    }
+                    # When the sentence got truncated for the marker label,
+                    # put the full text in the note so the editor sees the
+                    # complete line in the inspector.
+                    if full_text and len(full_text) > len(label):
+                        attrs["note"] = full_text
+                    ET.SubElement(mc, "marker", attrs)
             else:
                 # No segments — fall back to ~6-word phrases so markers
                 # are still useful for an editor.
@@ -787,10 +886,60 @@ async def build_multicam_fcpxml(
                         "duration": _t(max(pe - ps, 1 / 30.0), tb, fd_num),
                         "value": _truncate(" ".join(p["word"] for p in phrase)),
                     })
-        # Chapter/soundbite/speaker markers.
+        # Chapter / soundbite / speaker / question markers.
+        # Each marker carries a `_kind` field telling us whether to emit
+        # <marker> (default, regular pin on the timeline) or
+        # <chapter-marker> (populates Final Cut's Chapter panel — a
+        # proper navigation surface, not just a pin).
         for mt, mattrs in extra_markers:
-            if mt >= s and mt < e:
-                ET.SubElement(mc, "marker", mattrs)
+            if not (s <= mt < e):
+                continue
+            kind = mattrs.get("_kind", "marker")
+            attrs = {k: v for k, v in mattrs.items() if not k.startswith("_")}
+            ET.SubElement(mc, kind, attrs)
+
+        # <keyword> ranges — these show up in Final Cut as searchable
+        # tags on the clip in the Keyword Collections sidebar. Lets the
+        # editor filter the timeline by speaker or by soundbite without
+        # hunting markers. Anchored to the current mc-clip's time window
+        # (clipped to [s, e) and converted to clip-local time via the
+        # parent's `start` attr — FCPXML expects keyword start to be
+        # relative to the asset, not the project timeline).
+        def _emit_keyword(rng_start: float, rng_end: float, value: str) -> None:
+            kw_start = max(rng_start, s)
+            kw_end = min(rng_end, e)
+            if kw_end <= kw_start:
+                return
+            ET.SubElement(mc, "keyword", {
+                "start": _t(kw_start, tb, fd_num),
+                "duration": _t(max(kw_end - kw_start, 1 / 30.0), tb, fd_num),
+                "value": value,
+            })
+
+        if speakers:
+            for sp in speakers:
+                try:
+                    ss = float(sp.get("start") or 0.0)
+                    se = float(sp.get("end") or ss)
+                except (TypeError, ValueError):
+                    continue
+                if se <= s or ss >= e:
+                    continue
+                name = _truncate(str(sp.get("speaker") or sp.get("name") or "Speaker"), 24)
+                _emit_keyword(ss, se, f"Speaker: {name}")
+
+        if soundbites:
+            for sb in soundbites:
+                try:
+                    ss = float(sb.get("start") or 0.0)
+                    se = float(sb.get("end") or ss)
+                except (TypeError, ValueError):
+                    continue
+                if se <= s or ss >= e:
+                    continue
+                topic = _truncate(str(sb.get("topic") or sb.get("title") or "Soundbite"), 28)
+                _emit_keyword(ss, se, f"Soundbite: {topic}")
+
         offset += clip_dur
 
     return _render(fcpxml)

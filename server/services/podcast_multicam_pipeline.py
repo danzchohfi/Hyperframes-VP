@@ -422,14 +422,33 @@ async def run(
                         a["audio_offset"] = entry["offset"]
                         a["audio_offset_score"] = entry.get("score", 0.0)
                         a["audio_offset_reliable"] = bool(entry.get("reliable", False))
+                        a["audio_offset_drift"] = bool(entry.get("drift", False))
+                        a["audio_offset_spread_s"] = float(entry.get("spread_s", 0.0))
                         break
             storage.save(state_cur)
             storage.write_json(pid, "multicam_sync.json", {"offsets": offsets})
-            # Flag any unreliable sync so the user knows to verify manually.
-            weak = [e for e in offsets[1:] if not e.get("reliable", False)]
+            # Surface sync confidence to the user. Two separate concerns:
+            #   - weak: low correlation score (mics too different / room
+            #     reverb / one mic dominated by noise) → manual check
+            #   - drift: per-window offsets disagree, which means the
+            #     camera's clock is drifting relative to the master.
+            #     Cheap consumer cameras do this; a single global
+            #     audio_offset can't fix it. Flag prominently so the
+            #     editor knows to nudge in Final Cut.
+            weak = [e for e in offsets[1:] if not e.get("reliable", False) and not e.get("drift")]
+            drifters = [e for e in offsets[1:] if e.get("drift")]
+            warnings_parts = []
             if weak:
                 names = ", ".join(e["name"] for e in weak)
-                warn("multicam_sync", f"locks fracos em: {names} — verifique manualmente no Final Cut")
+                warnings_parts.append(f"locks fracos em: {names}")
+            if drifters:
+                detail = ", ".join(
+                    f"{e['name']} (±{e.get('spread_s', 0):.2f}s entre janelas)"
+                    for e in drifters
+                )
+                warnings_parts.append(f"⚠️ DRIFT detectado em: {detail} — relógio da câmera está derivando, sync único não compensa")
+            if warnings_parts:
+                warn("multicam_sync", " · ".join(warnings_parts) + " — verifique manualmente no Final Cut")
             else:
                 done("multicam_sync", f"{len(offsets) - 1} ângulo(s) alinhado(s)")
         except Exception as e:

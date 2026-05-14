@@ -162,6 +162,141 @@ def _best_offset(
     return float(offset_sec), float(score_wf)
 
 
+def _best_offset_window(
+    ref_slice: np.ndarray,
+    other_slice: np.ndarray,
+    *,
+    sr: int,
+) -> tuple[float, float]:
+    """Same algorithm as `_best_offset` but on pre-sliced windows (the
+    caller has already chosen which seconds to correlate). Used by the
+    multi-window verification path."""
+    if ref_slice.size < sr // 4 or other_slice.size < sr // 4:
+        return 0.0, 0.0
+    a_bp = _bandpass(ref_slice, sr, SPEECH_LOW_HZ, SPEECH_HIGH_HZ)
+    b_bp = _bandpass(other_slice, sr, SPEECH_LOW_HZ, SPEECH_HIGH_HZ)
+    idx, score_wf, corr = _normxcorr(a_bp, b_bp)
+    frac = _refine_peak(corr, idx)
+    lag_zero = len(b_bp) - 1
+    lag_samples = (idx + frac) - lag_zero
+    return -float(lag_samples) / sr, float(score_wf)
+
+
+def _multi_window_sync(
+    ref: np.ndarray,
+    other: np.ndarray,
+    *,
+    sr: int,
+    window_seconds: int = 30,
+    n_windows: int = 3,
+) -> dict:
+    """Compute the offset between two clips using N independent windows.
+
+    Strategy: take `n_windows` evenly spaced positions across the
+    overlap of both clips (e.g. 10%, 50%, 90% of the shorter clip).
+    Correlate each ref-window against the SAME absolute time-range in
+    `other` (extended by ±window_seconds to allow large offsets to
+    show up at the peak). If the resulting offsets agree across
+    windows (std < AGREEMENT_THRESHOLD), we have high confidence and
+    return their mean; if they disagree, we flag drift.
+
+    Why this matters: long recordings where one camera's clock drifts
+    relative to the master (cheap consumer cams do this) produce a
+    correct sync at minute 0 and a 2-3 second skew by minute 30. The
+    single-window correlation can't tell — it always reports SOME
+    offset. Multi-window catches it.
+
+    Returns:
+        {offset, score, reliable, drift, windows: [(t_anchor_s, offset, score)...]}
+    """
+    AGREEMENT_THRESHOLD = 0.25  # seconds of std between windows
+    DRIFT_FLAG_THRESHOLD = 0.5  # max-min across windows that triggers a drift warning
+    min_len = min(ref.size, other.size)
+    overlap_dur = min_len / sr
+    if overlap_dur < window_seconds + 2:
+        # Too short for multi-window — fall back to single-window.
+        off, score = _best_offset(ref, other, sr=sr, window_seconds=window_seconds)
+        return {
+            "offset": float(off),
+            "score": float(score),
+            "reliable": score >= MIN_RELIABLE_SCORE,
+            "drift": False,
+            "windows": [(overlap_dur / 2.0, float(off), float(score))],
+        }
+
+    # Place anchor points across the recording, leaving a margin on each
+    # side so we can extract a window around each anchor. Anchors are in
+    # the COMMON time domain (relative to ref).
+    margin = window_seconds // 2 + 1
+    usable_start = margin
+    usable_end = max(usable_start + 1, overlap_dur - margin)
+    if n_windows <= 1:
+        anchors = [(usable_start + usable_end) / 2.0]
+    else:
+        step = (usable_end - usable_start) / (n_windows - 1)
+        anchors = [usable_start + i * step for i in range(n_windows)]
+
+    half = window_seconds / 2.0
+    window_results: list[tuple[float, float, float]] = []
+    for t_anchor in anchors:
+        ref_lo = int(max(0, (t_anchor - half) * sr))
+        ref_hi = int(min(ref.size, (t_anchor + half) * sr))
+        # Other gets a wider window so the cross-correlation can find a
+        # lag even if `other` is shifted by up to ~half seconds.
+        oth_lo = int(max(0, (t_anchor - half - half) * sr))
+        oth_hi = int(min(other.size, (t_anchor + half + half) * sr))
+        if ref_hi - ref_lo < sr // 4 or oth_hi - oth_lo < sr // 4:
+            continue
+        local_off, score = _best_offset_window(ref[ref_lo:ref_hi], other[oth_lo:oth_hi], sr=sr)
+        # The local correlation gives the lag between the two slices in
+        # their local timebase. Since we offset `other` window's start
+        # by -half relative to ref's window start, the LOCAL lag needs
+        # that compensation: absolute_offset = local_offset - half +
+        # half = local_offset (the half cancels). But the windowed view
+        # of `other` started `half` seconds earlier, so a perfect match
+        # means the slices align when other_offset = +half. Adjust:
+        #   true_offset_at_anchor = local_off + ((oth_lo - ref_lo + half*sr) / sr)
+        # Simpler: just subtract the start-window-difference in seconds.
+        window_offset_diff = (oth_lo - ref_lo) / sr
+        absolute_offset = local_off + window_offset_diff
+        window_results.append((t_anchor, absolute_offset, score))
+
+    if not window_results:
+        return {"offset": 0.0, "score": 0.0, "reliable": False, "drift": False, "windows": []}
+
+    # Filter out very-low-score windows before averaging (they're noise).
+    good = [r for r in window_results if r[2] >= MIN_RELIABLE_SCORE]
+    used = good or window_results  # if none scored well, use them all (best effort)
+    offsets = np.array([r[1] for r in used], dtype=np.float64)
+    scores = np.array([r[2] for r in used], dtype=np.float64)
+
+    # Median is robust to a single outlier window (one noisy segment).
+    median_offset = float(np.median(offsets))
+    # Inverse-variance-style: weight by score, but if all scores are low,
+    # fall back to median.
+    if scores.sum() > 0:
+        weighted = float(np.average(offsets, weights=scores))
+    else:
+        weighted = median_offset
+    spread = float(np.std(offsets))
+    drift = (offsets.max() - offsets.min()) > DRIFT_FLAG_THRESHOLD
+
+    # Confidence: high score from individual windows + low spread between
+    # them. Capped so noisy-but-agreeing windows can still report reliable.
+    mean_score = float(scores.mean())
+    agreement_penalty = max(0.0, min(1.0, spread / AGREEMENT_THRESHOLD))
+    composite_score = mean_score * (1.0 - 0.4 * agreement_penalty)
+
+    return {
+        "offset": float(round(weighted, 3)),
+        "score": float(round(composite_score, 4)),
+        "reliable": composite_score >= MIN_RELIABLE_SCORE and not drift,
+        "drift": drift,
+        "spread_s": float(round(spread, 3)),
+        "windows": [(float(round(t, 2)), float(round(o, 3)), float(round(s, 4))) for t, o, s in window_results],
+    }
+
+
 async def compute_offsets(
     clips: list[tuple[str, Path]],
     *,
@@ -170,9 +305,18 @@ async def compute_offsets(
 ) -> list[dict]:
     """Align every clip to clip 0.
 
-    Returns a list of dicts with name, offset (s), score [0,1], reliable
-    (bool). The reference itself gets offset=0.0, score=1.0,
-    reliable=True.
+    Uses the multi-window verification path: takes 3 evenly-spaced
+    windows across the overlap of each (ref, other) pair, computes a
+    local offset at each, and reports the weighted average + a drift
+    flag when the windows disagree. Long recordings with clock drift
+    show up as drift=true and reliable=false so the UI / FCPXML can
+    nudge the editor to verify manually.
+
+    Returns a list of dicts with: name, offset (s), score [0,1],
+    reliable (bool), drift (bool, only for non-ref clips), spread_s
+    (std of per-window offsets in seconds), windows (per-window
+    detail). The reference itself gets offset=0.0, score=1.0,
+    reliable=True, drift=False.
     """
     if not clips:
         return []
@@ -180,25 +324,31 @@ async def compute_offsets(
     try:
         ref = await _decode(path0, sr=sr)
     except Exception as e:
-        return [{"name": name0, "offset": 0.0, "score": 0.0, "reliable": False, "error": str(e)}]
+        return [{"name": name0, "offset": 0.0, "score": 0.0, "reliable": False, "drift": False, "error": str(e)}]
 
     if ref.size == 0:
-        return [{"name": name0, "offset": 0.0, "score": 0.0, "reliable": False}]
+        return [{"name": name0, "offset": 0.0, "score": 0.0, "reliable": False, "drift": False}]
 
-    out: list[dict] = [{"name": name0, "offset": 0.0, "score": 1.0, "reliable": True}]
+    out: list[dict] = [{
+        "name": name0, "offset": 0.0, "score": 1.0,
+        "reliable": True, "drift": False, "windows": [],
+    }]
     for name, path in clips[1:]:
         try:
             other = await _decode(path, sr=sr)
-            off, score = _best_offset(ref, other, sr=sr, window_seconds=window_seconds)
+            res = _multi_window_sync(ref, other, sr=sr)
             out.append({
                 "name": name,
-                "offset": float(round(off, 3)),
-                "score": float(round(score, 4)),
-                "reliable": bool(score >= MIN_RELIABLE_SCORE),
+                "offset": res["offset"],
+                "score": res["score"],
+                "reliable": res["reliable"],
+                "drift": res["drift"],
+                "spread_s": res.get("spread_s", 0.0),
+                "windows": res["windows"],
             })
         except Exception as e:
             out.append({
                 "name": name, "offset": 0.0, "score": 0.0,
-                "reliable": False, "error": str(e),
+                "reliable": False, "drift": False, "error": str(e),
             })
     return out
