@@ -82,7 +82,7 @@ async def run(
     ctx: jobs_svc.JobContext,
     *,
     language: str | None = None,
-    cut_strategy: str = "silence",   # "silence" | "primary_speaker" | "none"
+    cut_strategy: str = "speech",   # "speech" | "silence" | "primary_speaker" | "none"
     enhance_audio: bool = False,
     auto_animations: bool = True,
 ) -> dict[str, Any]:
@@ -158,7 +158,46 @@ async def run(
     step("silences", "Achando silêncios e muletas…", 0.05)
     try:
         dur = state.source_duration or (await ff.duration(src))
-        if cut_strategy == "primary_speaker" and spk:
+        # Speech-driven cutting: uses Whisper word timestamps as the
+        # source of truth. Anything outside the dialogue (plane noise,
+        # room tone, silent intros, music between segments) gets cut
+        # because it has no associated words. Pauses INSIDE a thought
+        # stay because they're inside the merged-keep window. This is
+        # the strategy that survives "loud non-speech audio that
+        # silencedetect can't reach".
+        used_speech_strategy = False
+        if cut_strategy == "speech":
+            words = transcript.get("words") or []
+            if not words:
+                ctx.log("speech strategy needs a transcript with word timestamps; falling back to silence", level="warn")
+            else:
+                keep = silence_svc.plan_keep_from_speech(
+                    duration=float(dur or 0.0),
+                    words=words,
+                    pad=0.18,
+                    merge_gap=0.9,
+                    head_keep=0.0,
+                    tail_keep=0.25,
+                    min_keep=0.4,
+                )
+                storage.write_json(pid, "cuts.json", {
+                    "options": {"pad": 0.18, "merge_gap": 0.9, "tail_keep": 0.25, "min_keep": 0.4},
+                    "source_duration": dur,
+                    "silences": [],   # silence-based code paths still read this
+                    "keep": [{"start": s, "end": e} for s, e in keep],
+                    "kept_duration": silence_svc.total_kept(keep),
+                    "source": "speech",
+                })
+                silences_count = 0
+                cut_seconds = float(dur or 0.0) - silence_svc.total_kept(keep)
+                keep_summary = (
+                    f"{len(keep)} blocos · {cut_seconds:.1f}s removidos "
+                    f"(não-fala: ruído, música, silêncio fora de diálogo)"
+                )
+                used_speech_strategy = True
+        if used_speech_strategy:
+            pass  # already wrote cuts.json above
+        elif cut_strategy == "primary_speaker" and spk:
             # Speaker-aware cut: keep only the dominant speaker's turns.
             # Catches the "background chatter louder than the silence
             # threshold" case where pure RMS-based detection leaves

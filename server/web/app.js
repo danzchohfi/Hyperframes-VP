@@ -1042,7 +1042,6 @@ function clearProjectVisualState() {
   for (const id of [
     "render-chapters", "caps-roughcut", "caps-speakers",
     "rc-loudnorm", "rc-denoise",
-    "podcast-1click-host-only", "podcast-1click-skip-silence",
     "podcast-1click-enhance-audio",
   ]) {
     const el = document.getElementById(id);
@@ -4572,8 +4571,7 @@ async function startPodcast1Click() {
   document.getElementById("hp-pct").textContent = "0%";
   document.getElementById("hp-fill").style.width = "0%";
   const lang = document.getElementById("podcast-1click-lang")?.value || "";
-  const hostOnly = !!document.getElementById("podcast-1click-host-only")?.checked;
-  const skipSilence = !!document.getElementById("podcast-1click-skip-silence")?.checked;
+  const cutStrategy = document.getElementById("podcast-1click-cut-strategy")?.value || "speech";
   const enhanceAudio = !!document.getElementById("podcast-1click-enhance-audio")?.checked;
   // Auto-animations defaults to true (the checkbox is `checked` in HTML),
   // so explicitly send `false` only when the user unchecks it. Default-true
@@ -4584,10 +4582,11 @@ async function startPodcast1Click() {
   try {
     const body = {};
     if (lang) body.language = lang;
-    // host-only wins over skip-silence (primary_speaker already implies
-    // "no silence-based cutting", just smarter).
-    if (hostOnly) body.cut_strategy = "primary_speaker";
-    else if (skipSilence) body.cut_strategy = "none";
+    // Default "speech" (Whisper word timestamps) handles loud non-speech
+    // intros that the silence detector misses (plane noise, music) AND
+    // preserves intentional pauses inside thoughts (gaps <= 0.9s stay
+    // merged). The other strategies are kept as escape hatches.
+    if (cutStrategy && cutStrategy !== "speech") body.cut_strategy = cutStrategy;
     if (enhanceAudio) body.enhance_audio = true;
     if (!autoAnimations) body.auto_animations = false;
     if (quality && quality !== "fast") body.render_preset = quality;
