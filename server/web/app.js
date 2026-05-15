@@ -4446,6 +4446,7 @@ function bind() {
   bindMcPreview();
   bindHfPreview();
   bindHfLibrary();
+  bindHfBlockPreview();
 
   const cpb = $("#media-copy-path");
   if (cpb) cpb.onclick = () => {
@@ -5492,6 +5493,7 @@ function renderHfTimelineInspector() {
       <strong>${escapeHtml(title)}</strong>
       <span class="muted">${escapeHtml(b.name)}</span>
       <span style="flex:1"></span>
+      <button class="btn btn-primary btn-sm" id="hf-tl-insp-preview" type="button" title="Pré-visualiza o bloco em tela cheia (replay disponível)"><span data-icon="eye" data-icon-size="13"></span> Visualizar</button>
       <button class="btn btn-ghost btn-sm" id="hf-tl-insp-duplicate" type="button" title="Cria outra aparição do mesmo bloco logo após esta — mesmo arquivo, duas posições"><span data-icon="copy" data-icon-size="13"></span> Duplicar</button>
       <button class="btn btn-ghost btn-sm" id="hf-tl-insp-natural" type="button" title="Volta pra duração natural do bloco (${naturalDur}s)">Duração natural</button>
       <button class="btn btn-ghost btn-sm" id="hf-tl-insp-remove" type="button"><span data-icon="trash-2" data-icon-size="13"></span> Tirar do timeline</button>
@@ -5548,6 +5550,110 @@ function renderHfTimelineInspector() {
     _hfLib.selectedIdx = -1;
     _hfLibSetDirty(true);
     renderHfTimeline();
+  });
+  document.getElementById("hf-tl-insp-preview")?.addEventListener("click", () => {
+    openHfBlockPreview(b.name);
+  });
+}
+
+// Block preview modal. Mounts the installed block's HTML in a scaled
+// iframe so the user sees the actual animation play out before deciding
+// to keep it. The block file has its own internal GSAP timeline that
+// auto-plays on load; the modal's Replay button just nukes the src to
+// force a re-load (= re-play). Scaling preserves the block's native
+// dimensions (1920×1080 vs 1080×1920) inside a fixed container so the
+// preview matches what'll appear in the final render.
+
+function openHfBlockPreview(name) {
+  if (!state.current || !name) return;
+  const backdrop = document.getElementById("hf-block-preview-backdrop");
+  const iframe = document.getElementById("hf-block-preview-frame");
+  const titleEl = document.getElementById("hf-block-preview-title");
+  const subEl = document.getElementById("hf-block-preview-sub");
+  const metaEl = document.getElementById("hf-block-preview-meta");
+  const wrap = backdrop?.querySelector(".hf-block-preview-frame-wrap");
+  if (!backdrop || !iframe || !wrap) return;
+
+  // Resolve installed metadata so we can size the iframe to the block's
+  // native dimensions before CSS scales it down. Without this, very-
+  // landscape blocks (1920×1080) get squished into a portrait container.
+  const meta = _hfLib.installed.find(it => it.name === name) ||
+               _hfLib.catalog?.find(it => it.name === name) || {};
+  const w = parseInt(meta?.dimensions?.width) || 1920;
+  const h = parseInt(meta?.dimensions?.height) || 1080;
+  const dur = parseFloat(meta?.duration) || null;
+  const title = meta?.title || name;
+
+  if (titleEl) titleEl.textContent = title;
+  if (subEl) subEl.textContent = `${name} · ${w}×${h}${dur ? ` · ${dur}s natural` : ""}`;
+  if (metaEl) metaEl.textContent = "Replay reinicia a animação. ESC fecha.";
+
+  // The frame is rendered at NATIVE block size; we then compute a scale
+  // factor so it fills the wrapper while preserving aspect ratio. The
+  // wrapper has a fixed aspect (16:9 for landscape, 9:16 for portrait)
+  // so the scale is uniform on both axes.
+  iframe.style.width = `${w}px`;
+  iframe.style.height = `${h}px`;
+  iframe.style.transform = "scale(1)";
+  wrap.dataset.aspect = w > h ? "landscape" : "portrait";
+
+  iframe.src = `/api/projects/${state.current.id}/composition/compositions/${encodeURIComponent(name)}.html?_=${Date.now()}`;
+  backdrop.classList.remove("hidden");
+  if (window.HFIcons) HFIcons.render(backdrop);
+
+  // After the modal is on-screen the wrap has dimensions; compute scale
+  // now. requestAnimationFrame defers until layout settles. Re-run on
+  // viewport resize so dragging the browser window keeps it fit.
+  const fit = () => {
+    const rect = wrap.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const sx = rect.width / w;
+    const sy = rect.height / h;
+    const s = Math.min(sx, sy);
+    iframe.style.transform = `scale(${s})`;
+  };
+  requestAnimationFrame(fit);
+  // Wire a resize observer so the scale stays correct as the user
+  // resizes the browser. Stored on the wrap so closeHfBlockPreview
+  // can tear it down.
+  if (wrap._hfResizeObserver) wrap._hfResizeObserver.disconnect();
+  if (typeof ResizeObserver !== "undefined") {
+    const ro = new ResizeObserver(fit);
+    ro.observe(wrap);
+    wrap._hfResizeObserver = ro;
+  }
+}
+
+function closeHfBlockPreview() {
+  const backdrop = document.getElementById("hf-block-preview-backdrop");
+  const iframe = document.getElementById("hf-block-preview-frame");
+  const wrap = backdrop?.querySelector(".hf-block-preview-frame-wrap");
+  if (backdrop) backdrop.classList.add("hidden");
+  if (iframe) iframe.src = "about:blank";
+  // Tear down the resize observer so we don't leak it across reopen.
+  if (wrap && wrap._hfResizeObserver) {
+    wrap._hfResizeObserver.disconnect();
+    wrap._hfResizeObserver = null;
+  }
+}
+
+function bindHfBlockPreview() {
+  const backdrop = document.getElementById("hf-block-preview-backdrop");
+  if (!backdrop) return;
+  document.getElementById("hf-block-preview-close")?.addEventListener("click", closeHfBlockPreview);
+  backdrop.addEventListener("click", (e) => { if (e.target === backdrop) closeHfBlockPreview(); });
+  document.addEventListener("keydown", (e) => {
+    if (!backdrop.classList.contains("hidden") && e.key === "Escape") closeHfBlockPreview();
+  });
+  document.getElementById("hf-block-preview-reload")?.addEventListener("click", () => {
+    const iframe = document.getElementById("hf-block-preview-frame");
+    if (!iframe) return;
+    const cur = iframe.src;
+    iframe.src = "about:blank";
+    // Tick out so the iframe fully resets before reloading. Without
+    // this, some browsers reuse the cached document state and the
+    // timeline doesn't actually replay from frame 0.
+    setTimeout(() => { iframe.src = cur.replace(/\?_=\d+/, `?_=${Date.now()}`); }, 30);
   });
 }
 
@@ -5798,9 +5904,13 @@ function renderHfGrid() {
         <div class="hf-lib-card-tags">${tags}</div>
         <div class="hf-lib-card-actions">
           ${isInstalled
-            ? `<button class="btn btn-ghost btn-sm hf-lib-uninstall" type="button"><span data-icon="trash-2" data-icon-size="12"></span> Remover</button>
+            ? `<button class="btn btn-ghost btn-sm hf-lib-preview" type="button" title="Pré-visualiza este bloco em tela cheia"><span data-icon="eye" data-icon-size="12"></span> Ver</button>
+               <button class="btn btn-ghost btn-sm hf-lib-uninstall" type="button"><span data-icon="trash-2" data-icon-size="12"></span> Remover</button>
                <span class="hf-lib-installed-badge">instalado</span>`
-            : `<button class="btn btn-primary btn-sm hf-lib-install" type="button"><span data-icon="download" data-icon-size="12"></span> Instalar</button>`
+            : (it.type === "block"
+                ? `<button class="btn btn-ghost btn-sm hf-lib-install-and-preview" type="button" title="Instala e mostra preview — pode remover depois se não gostar"><span data-icon="eye" data-icon-size="12"></span> Ver</button>
+                   <button class="btn btn-primary btn-sm hf-lib-install" type="button"><span data-icon="download" data-icon-size="12"></span> Instalar</button>`
+                : `<button class="btn btn-primary btn-sm hf-lib-install" type="button"><span data-icon="download" data-icon-size="12"></span> Instalar</button>`)
           }
         </div>
       </div>`;
@@ -5939,13 +6049,21 @@ function bindHfLibrary() {
     renderHfGrid();
   });
 
-  // Event delegation for install/uninstall buttons on the grid.
-  document.getElementById("hf-lib-grid")?.addEventListener("click", (e) => {
+  // Event delegation for install / uninstall / preview buttons on the grid.
+  document.getElementById("hf-lib-grid")?.addEventListener("click", async (e) => {
     const card = e.target.closest(".hf-lib-card");
     if (!card) return;
     const name = card.dataset.name;
     if (e.target.closest(".hf-lib-install")) installHfBlock(name);
     else if (e.target.closest(".hf-lib-uninstall")) uninstallHfBlock(name);
+    else if (e.target.closest(".hf-lib-preview")) openHfBlockPreview(name);
+    else if (e.target.closest(".hf-lib-install-and-preview")) {
+      // Install first (so the file exists locally), then open the
+      // preview. Single-click flow: "show me what this looks like
+      // before I commit to keeping it on the timeline".
+      await installHfBlock(name);
+      openHfBlockPreview(name);
+    }
   });
 
   // Timeline strip — drag bands to move, drag the right edge to resize,
@@ -5981,6 +6099,16 @@ function bindHfLibrary() {
         _hfLib.selectedIdx = idx;
         renderHfTimeline();
       }
+    });
+    strip.addEventListener("dblclick", (e) => {
+      // Double-click a band → fullscreen preview. Faster than going via
+      // the inspector's Visualizar button for users who know they want
+      // a quick visual check.
+      const band = e.target.closest(".hf-tl-band");
+      if (!band) return;
+      const idx = parseInt(band.dataset.idx || "-1", 10);
+      const b = _hfLib.schedule[idx];
+      if (b) openHfBlockPreview(b.name);
     });
   }
   document.addEventListener("mousemove", onHfTlDragMove);

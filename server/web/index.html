@@ -1040,6 +1040,30 @@
       </div>
     </div>
 
+    <!-- Hyperframes block preview modal: iframe of the selected
+         registry-installed block, scaled to fit the viewport regardless
+         of the block's native dimensions (1920×1080 vs 1080×1920). -->
+    <div id="hf-block-preview-backdrop" class="confirm-backdrop hidden" aria-hidden="true">
+      <div class="hf-block-preview" role="dialog" aria-modal="true" aria-label="Preview do bloco">
+        <header class="mc-preview-head">
+          <div>
+            <h2 id="hf-block-preview-title">Preview do bloco</h2>
+            <p class="muted" id="hf-block-preview-sub"></p>
+          </div>
+          <button id="hf-block-preview-close" class="btn-ghost btn-sm" type="button" aria-label="Fechar">✕</button>
+        </header>
+        <div class="hf-block-preview-stage">
+          <div class="hf-block-preview-frame-wrap">
+            <iframe id="hf-block-preview-frame" class="hf-block-preview-frame" title="Block preview"></iframe>
+          </div>
+        </div>
+        <div class="hf-block-preview-controls">
+          <button id="hf-block-preview-reload" class="btn btn-ghost btn-sm" type="button"><span data-icon="rotate-cw" data-icon-size="14"></span> Replay</button>
+          <span class="muted" id="hf-block-preview-meta"></span>
+        </div>
+      </div>
+    </div>
+
     <script src="/app.js" type="module"></script>
   </body>
 </html>

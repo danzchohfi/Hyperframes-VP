@@ -2568,6 +2568,63 @@ a { color: inherit; text-decoration: none; }
 #hf-lib-timeline-revert:not([disabled]) {
   animation: mcDirtyPulse 1.6s ease-in-out infinite;
 }
+
+/* Hyperframes block preview modal — scales the iframe down from native
+   block dimensions (1920x1080 / 1080x1920 / 1080x1080) so the preview
+   fits the viewport while preserving each block's actual aspect ratio.
+   The iframe is rendered at native size and CSS `transform: scale()`
+   shrinks it inside the bounded wrapper. */
+.hf-block-preview {
+  width: min(1200px, 96vw);
+  max-height: 94vh;
+  display: flex; flex-direction: column;
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg, 14px);
+  box-shadow: 0 24px 70px rgba(0,0,0,0.6);
+  overflow: hidden;
+}
+.hf-block-preview-stage {
+  flex: 1;
+  display: grid; place-items: center;
+  padding: 14px;
+  background: #000;
+  overflow: hidden;
+}
+.hf-block-preview-frame-wrap {
+  position: relative;
+  overflow: hidden;
+  background: #000;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+}
+/* Landscape blocks (1920x1080 etc) get fit-to-width inside the modal. */
+.hf-block-preview-frame-wrap[data-aspect="landscape"] {
+  width: min(1100px, 90vw);
+  aspect-ratio: 16 / 9;
+}
+/* Portrait blocks (1080x1920 etc) get fit-to-height. */
+.hf-block-preview-frame-wrap[data-aspect="portrait"] {
+  height: min(80vh, 800px);
+  aspect-ratio: 9 / 16;
+}
+/* The iframe sits at NATIVE block size (1920×1080 or 1080×1920); we
+   apply a uniform `transform: scale()` set inline by JS to shrink it
+   to the wrapper. transform-origin pins to top-left so the content
+   doesn't drift off when the scale is < 1. The wrapper has fixed
+   aspect ratio so the scale stays uniform on both axes. */
+.hf-block-preview-frame {
+  position: absolute;
+  top: 0; left: 0;
+  border: 0;
+  background: #000;
+  transform-origin: top left;
+}
+.hf-block-preview-controls {
+  display: flex; gap: 12px; align-items: center;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+}
 .hf-library-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
