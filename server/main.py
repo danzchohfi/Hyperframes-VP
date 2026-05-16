@@ -205,6 +205,11 @@ class RenderIn(BaseModel):
     source: str = "graded"  # graded | roughcut | source
     include_chapter_cards: bool = False  # show chapter title cards from the story
     include_animations: bool = True       # overlay reels animations from reels_animations.json
+    # Cinematic overlay toggles — each layer (grain / vignette / light leaks /
+    # chromatic aberration on hooks / bloom on emphasis) is off by default
+    # so existing renders are unchanged. Pass `{"grain": true, ...}` to
+    # opt in. Maps 1:1 to composer.build_composition(cinematic=...).
+    cinematic: dict[str, bool] | None = None
 
 
 class ExportIn(BaseModel):
@@ -926,6 +931,7 @@ async def build_composition_only(pid: str, body: RenderIn | None = None) -> dict
             speaker_turns=speaker_turns,
             animations=animations,
             extra_blocks=extra_blocks,
+            cinematic=body.cinematic,
         )
     except Exception as e:
         raise HTTPException(500, f"compose: {e}")
@@ -1318,6 +1324,7 @@ async def do_render(pid: str, body: RenderIn) -> dict[str, Any]:
             speaker_turns=speaker_turns,
             animations=animations_for_render,
             extra_blocks=extra_blocks_for_render,
+            cinematic=getattr(body, "cinematic", None),
         )
     except Exception as e:
         _stage(state, "render", "error", f"compose: {e}")

@@ -106,6 +106,7 @@ def build_composition(
     speaker_turns: list[dict] | None = None,  # [{speaker, start, end}, ...]
     animations: list[dict] | None = None,  # reels animations to overlay
     extra_blocks: list[dict] | None = None,  # registry-installed blocks scheduled on the timeline
+    cinematic: dict | None = None,         # cinematic overlay toggles (grain / vignette / light_leaks / chromatic / bloom)
 ) -> Path:
     """Materialize a Hyperframes project at project_dir/composition. Returns path."""
     comp_dir = project_dir / "composition"
@@ -502,6 +503,187 @@ def build_composition(
 
     main_start = intro_dur
 
+    # --- cinematic overlay layers ------------------------------------------
+    # Optional CSS/HTML/JS additions that give the comp a more polished
+    # "movie / motion-graphics" feel. Each toggle is off by default so the
+    # base composer output is unchanged for existing renders.
+    cin = cinematic or {}
+    cin_grain = bool(cin.get("grain"))
+    cin_vignette = bool(cin.get("vignette"))
+    cin_light_leaks = bool(cin.get("light_leaks"))
+    cin_chromatic = bool(cin.get("chromatic_aberration"))
+    cin_bloom = bool(cin.get("bloom_emphasis"))
+
+    cinematic_css_parts: list[str] = []
+    cinematic_html_parts: list[str] = []
+    cinematic_js_parts: list[str] = []
+
+    if cin_grain:
+        # Animated film-grain using a tiled SVG noise pattern. We keep the
+        # noise inline (no external request) and the keyframes shift it a
+        # few pixels per frame so it reads as live grain, not a static
+        # texture.
+        cinematic_css_parts.append("""
+      .cinematic-grain {
+        position: absolute; inset: -8%;
+        pointer-events: none; z-index: 70;
+        opacity: 0.18;
+        mix-blend-mode: overlay;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.8 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+        background-size: 220px 220px;
+        animation: cinGrain 0.6s steps(6) infinite;
+      }
+      @keyframes cinGrain {
+        0%   { transform: translate(0, 0); }
+        20%  { transform: translate(-12px, 6px); }
+        40%  { transform: translate(8px, -10px); }
+        60%  { transform: translate(-6px, 14px); }
+        80%  { transform: translate(10px, 4px); }
+        100% { transform: translate(0, 0); }
+      }
+        """)
+        cinematic_html_parts.append('<div class="cinematic-grain"></div>')
+
+    if cin_vignette:
+        # Radial vignette that gently pulses tighter on chapter cards /
+        # hooks. CSS-only baseline; the JS below tightens it during
+        # hook/CTA windows for cinematic emphasis.
+        cinematic_css_parts.append("""
+      .cinematic-vignette {
+        position: absolute; inset: 0;
+        pointer-events: none; z-index: 72;
+        background: radial-gradient(ellipse 110% 88% at 50% 50%,
+          rgba(0,0,0,0) 55%, rgba(0,0,0,0.55) 100%);
+        opacity: 0.85;
+        will-change: opacity, transform;
+      }
+        """)
+        cinematic_html_parts.append('<div id="cinematic-vignette" class="cinematic-vignette"></div>')
+        # Tighten vignette during hook / CTA windows
+        cinematic_js_parts.append("""
+      // Vignette emphasis: tighten 5% during each hook/CTA card.
+      (function() {
+        const vig = document.getElementById("cinematic-vignette");
+        if (!vig) return;
+        const hooks = document.querySelectorAll(
+          '[data-anim-type="hook_card"], [data-anim-type="cta_end"]'
+        );
+        hooks.forEach(el => {
+          const start = parseFloat(el.dataset.start);
+          const dur = parseFloat(el.dataset.duration);
+          tl.to(vig, { opacity: 1.0, scale: 1.05, duration: 0.35, ease: "power2.out" }, start);
+          tl.to(vig, { opacity: 0.85, scale: 1.0, duration: 0.4, ease: "power2.inOut" }, start + dur - 0.4);
+        });
+      })();
+        """)
+
+    if cin_light_leaks and chapters and len(chapters) >= 2:
+        # Light-leak sweeps at each chapter boundary — a 0.6s 45deg
+        # gradient that travels across the frame, mTransitions-style.
+        cinematic_css_parts.append("""
+      .cinematic-light-leak {
+        position: absolute; inset: 0;
+        pointer-events: none; z-index: 74;
+        background: linear-gradient(115deg,
+          transparent 30%,
+          rgba(255, 220, 160, 0.0) 45%,
+          rgba(255, 210, 140, 0.28) 50%,
+          rgba(255, 220, 160, 0.0) 55%,
+          transparent 70%);
+        opacity: 0;
+        transform: translateX(-100%);
+        mix-blend-mode: screen;
+        will-change: transform, opacity;
+      }
+        """)
+        leak_parts: list[str] = []
+        leak_times: list[float] = []
+        for i, ch in enumerate(chapters):
+            t = float(ch.get("start", 0.0)) + intro_dur
+            if t < 0.6:
+                continue
+            leak_parts.append(
+                f'<div class="cinematic-light-leak clip" data-leak-i="{i}" '
+                f'data-start="{t - 0.1:.3f}" data-duration="0.8" data-track-index="7"></div>'
+            )
+            leak_times.append(t - 0.1)
+        cinematic_html_parts.extend(leak_parts)
+        if leak_times:
+            cinematic_js_parts.append("""
+      // Light leak sweeps — animate each leak div from left to right
+      // with opacity pulse over its 0.8s window.
+      for (const leak of document.querySelectorAll(".cinematic-light-leak")) {
+        const start = parseFloat(leak.dataset.start);
+        tl.fromTo(leak,
+          { x: "-100%", opacity: 0 },
+          { x: "100%", opacity: 1, duration: 0.6, ease: "power2.inOut" },
+          start);
+        tl.to(leak, { opacity: 0, duration: 0.2, ease: "power2.out" }, start + 0.6);
+      }
+            """)
+
+    if cin_chromatic:
+        # Chromatic aberration on hook/CTA entrance — 0.2s rgb-split
+        # text-shadow that decays to 0. Applied via a class toggle.
+        cinematic_css_parts.append("""
+      .reels-anim.chromatic-active .ra-title,
+      .reels-anim.chromatic-active .ra-bigword {
+        text-shadow:
+          2px 0 rgba(255, 60, 60, 0.85),
+          -2px 0 rgba(60, 255, 220, 0.85),
+          0 4px 28px rgba(0, 0, 0, 0.5);
+        transition: text-shadow 0.18s ease-out;
+      }
+        """)
+        cinematic_js_parts.append("""
+      // Chromatic aberration: pulse the rgb-split class on hook/CTA
+      // entrance and fade it out 0.2s later. word_zoom + number_pop
+      // ride the same effect for impact moments.
+      (function() {
+        const targets = document.querySelectorAll(
+          '[data-anim-type="hook_card"], [data-anim-type="cta_end"], ' +
+          '[data-anim-type="word_zoom"], [data-anim-type="number_pop"]'
+        );
+        targets.forEach(el => {
+          const start = parseFloat(el.dataset.start);
+          tl.call(() => el.classList.add("chromatic-active"), [], start);
+          tl.call(() => el.classList.remove("chromatic-active"), [], start + 0.22);
+        });
+      })();
+        """)
+
+    if cin_bloom:
+        # Bloom / glow on word_zoom + number_pop entrance — a layered
+        # drop-shadow that pulses up to peak intensity then settles.
+        cinematic_css_parts.append("""
+      .reels-anim.bloom-active .ra-bigword,
+      .reels-anim.bloom-active .ra-title {
+        filter:
+          drop-shadow(0 0 14px var(--bloom-color, rgba(255, 255, 255, 0.7)))
+          drop-shadow(0 0 32px var(--bloom-color, rgba(255, 255, 255, 0.5)));
+        transition: filter 0.35s ease-out;
+      }
+        """)
+        cinematic_js_parts.append("""
+      // Bloom: light up emphasis anims with a peak-then-settle drop-shadow.
+      (function() {
+        const targets = document.querySelectorAll(
+          '[data-anim-type="word_zoom"], [data-anim-type="number_pop"], ' +
+          '[data-anim-type="hook_card"], [data-anim-type="cta_end"]'
+        );
+        targets.forEach(el => {
+          const start = parseFloat(el.dataset.start);
+          const dur = parseFloat(el.dataset.duration);
+          tl.call(() => el.classList.add("bloom-active"), [], start);
+          tl.call(() => el.classList.remove("bloom-active"), [], start + dur - 0.2);
+        });
+      })();
+        """)
+
+    cinematic_css = "\n".join(cinematic_css_parts)
+    cinematic_html = "\n      ".join(cinematic_html_parts)
+    cinematic_js = "\n".join(cinematic_js_parts)
+
     # Chapter overlays ("Eddie cut" mode). Each chapter shows a flash card with
     # its name + summary for ~1.6s at the chapter boundary on the timeline.
     chapter_html = ""
@@ -779,6 +961,7 @@ def build_composition(
         text-shadow: 0 4px 38px rgba(0,0,0,0.85);
       }}
       {animations_css}
+      {cinematic_css}
     </style>
   </head>
   <body>
@@ -802,6 +985,7 @@ def build_composition(
       {extra_blocks_html}
       {animations_html}
       {animations_audio_html}
+      {cinematic_html}
       {outro_html}
     </div>
 
@@ -985,6 +1169,7 @@ def build_composition(
           window.dispatchEvent(new CustomEvent("hf-seek", {{ detail: {{ time: data.time }} }}));
         }}
       }});
+      {cinematic_js}
       try {{
         const tlDur = tl.duration();
         parent.postMessage({{ type: "hf-ready", duration: tlDur }}, "*");
