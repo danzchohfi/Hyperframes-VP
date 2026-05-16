@@ -4497,6 +4497,7 @@ function bind() {
 
   // Reels
   bindReels();
+  bindCinematicPanel();
   const mf = $("#music-file");
   $("#music-zone").addEventListener("click", () => mf.click());
   mf.addEventListener("change", () => mf.files[0] && uploadMusic(mf.files[0]));
@@ -4868,10 +4869,94 @@ async function loadReels() {
     REELS_STATE.duration = data.source_duration || 0;
     populateReelsTypeSelect();
     renderReelsList();
-    await Promise.all([loadReelTemplates(), loadSfxLibrary()]);
+    await Promise.all([loadReelTemplates(), loadSfxLibrary(), loadCinematicPanel()]);
   } catch (e) {
     log(`✗ reels: ${e.message}`, "err");
   }
+}
+
+// ---- Cinema panel (grain / vignette / light leaks / chromatic / bloom +
+// chapter transition). Reads the merged effective config from
+// /api/projects/{pid}/cinematic; writes overrides via PUT. The boxes
+// reflect the effective state (so users see what's on right now even
+// when a preset or reference is doing the work); a check shows whether
+// the source of each value is preset/reference or override.
+async function loadCinematicPanel() {
+  if (!state.current) return;
+  const block = document.getElementById("cinema-block");
+  if (!block) return;
+  try {
+    const data = await api(`/api/projects/${state.current.id}/cinematic`);
+    const effective = data.effective || {};
+    block.querySelectorAll('input[type="checkbox"][data-cinema-key]').forEach(cb => {
+      const k = cb.dataset.cinemaKey;
+      cb.checked = !!effective[k];
+    });
+    const trans = block.querySelector('select[data-cinema-key="chapter_transition"]');
+    if (trans) trans.value = effective.chapter_transition || "none";
+    const status = document.getElementById("cinema-status");
+    if (status) {
+      const overrideCount = Object.keys(data.overrides || {}).length;
+      status.textContent = overrideCount > 0
+        ? `${overrideCount} override${overrideCount === 1 ? "" : "s"} salvo${overrideCount === 1 ? "" : "s"}`
+        : "sem overrides — usando preset/referência";
+    }
+  } catch (e) {
+    log(`✗ cinematic: ${e.message}`, "err");
+  }
+}
+
+async function saveCinematicPanel() {
+  if (!state.current) return;
+  const block = document.getElementById("cinema-block");
+  if (!block) return;
+  const status = document.getElementById("cinema-status");
+  const payload = {};
+  block.querySelectorAll('input[type="checkbox"][data-cinema-key]').forEach(cb => {
+    payload[cb.dataset.cinemaKey] = cb.checked;
+  });
+  const trans = block.querySelector('select[data-cinema-key="chapter_transition"]');
+  if (trans) {
+    const v = trans.value || "none";
+    payload.chapter_transition = v;
+  }
+  try {
+    if (status) status.textContent = "salvando…";
+    const res = await api(`/api/projects/${state.current.id}/cinematic`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const n = Object.keys(res.overrides || {}).length;
+    if (status) status.textContent = `salvo · ${n} override${n === 1 ? "" : "s"}`;
+    toast?.("Look cinematográfico salvo. Use Preview para ver o efeito.", "ok");
+  } catch (e) {
+    if (status) status.textContent = `erro: ${e.message}`;
+    log(`✗ cinematic save: ${e.message}`, "err");
+  }
+}
+
+async function resetCinematicPanel() {
+  if (!state.current) return;
+  const status = document.getElementById("cinema-status");
+  try {
+    if (status) status.textContent = "limpando…";
+    await api(`/api/projects/${state.current.id}/cinematic`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    await loadCinematicPanel();
+    toast?.("Overrides limpos. Voltou pro preset/referência.", "ok");
+  } catch (e) {
+    if (status) status.textContent = `erro: ${e.message}`;
+    log(`✗ cinematic reset: ${e.message}`, "err");
+  }
+}
+
+function bindCinematicPanel() {
+  document.getElementById("cinema-save-btn")?.addEventListener("click", saveCinematicPanel);
+  document.getElementById("cinema-reset-btn")?.addEventListener("click", resetCinematicPanel);
 }
 
 async function loadSfxLibrary() {

@@ -597,6 +597,40 @@
               </div>
             </details>
 
+            <!-- Look cinematográfico — overlay layers (grain, vignette,
+                 light leaks, chromatic aberration, bloom) and chapter
+                 transition kind. Persisted via PUT /cinematic; rendered
+                 by composer.build_composition via the merged cinematic
+                 config (reference < preset < overrides < body). -->
+            <details class="reels-prompt-block" id="cinema-block">
+              <summary><span data-icon="film" data-icon-size="14"></span> Look cinematográfico <span class="muted">— grain, vignette, transições entre capítulos</span></summary>
+              <div class="reels-prompt-body cinema-body">
+                <div class="cinema-toggles">
+                  <label class="cb" title="Filme em 35mm: grão animado por cima da imagem"><input type="checkbox" data-cinema-key="grain" /> Film grain</label>
+                  <label class="cb" title="Borda escurece pra centrar o olho — aperta nos hooks/CTAs"><input type="checkbox" data-cinema-key="vignette" /> Vignette</label>
+                  <label class="cb" title="Sweep colorido no início de cada capítulo (mTransitions-style)"><input type="checkbox" data-cinema-key="light_leaks" /> Light leaks</label>
+                  <label class="cb" title="rgb-split breve no entrance dos hooks/word-zooms"><input type="checkbox" data-cinema-key="chromatic_aberration" /> Chromatic aberration</label>
+                  <label class="cb" title="Brilho/glow nos pontos de ênfase (word_zoom, hook, CTA)"><input type="checkbox" data-cinema-key="bloom_emphasis" /> Bloom em ênfases</label>
+                </div>
+                <div class="cinema-transition-row">
+                  <label class="cp-label" for="cinema-transition">Transição entre capítulos</label>
+                  <select id="cinema-transition" class="inline-select" data-cinema-key="chapter_transition">
+                    <option value="none">Nenhuma (corte seco)</option>
+                    <option value="whip">Whip-pan (motion blur)</option>
+                    <option value="flash">Flash branco</option>
+                    <option value="glitch">Glitch (rgb-split)</option>
+                    <option value="dissolve">Dissolve lento</option>
+                  </select>
+                </div>
+                <div class="cinema-actions">
+                  <button id="cinema-save-btn" class="btn btn-primary btn-sm" type="button"><span data-icon="check" data-icon-size="14"></span> Salvar</button>
+                  <button id="cinema-reset-btn" class="btn btn-ghost btn-sm" type="button" title="Limpa os overrides — o look volta pro preset / reference">Limpar overrides</button>
+                  <span id="cinema-status" class="status muted"></span>
+                </div>
+                <p class="muted cinema-hint">Estes ajustes ficam por cima do preset e da análise de referência. Limpar volta pra origem.</p>
+              </div>
+            </details>
+
             <!-- Biblioteca Hyperframes — catálogo da comunidade.
                  GET /api/registry/catalog é cacheado por 5min; install
                  escreve em pdir/composition/compositions/<name>.html. -->

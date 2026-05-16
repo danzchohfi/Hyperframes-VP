@@ -863,11 +863,13 @@ async def apply_edits(pid: str, body: ApplyIn | None = None) -> dict[str, Any]:
 # It's normally built as a side effect of /render, but the inline iframe
 # preview needs it earlier (before the user pays for a full MP4 render).
 def _resolve_cinematic(pid: str, body_cinematic: dict[str, Any] | None) -> dict[str, Any] | None:
-    """Merge cinematic toggles from three sources, lowest priority first:
+    """Merge cinematic toggles from four sources, lowest priority first:
       1. reference_analysis.json.cinematic — what Claude saw in the
          user's reference video.
       2. style_preset.json → preset.cinematic — explicit user pick.
-      3. body_cinematic — one-off request override.
+      3. cinematic_overrides.json — per-project toggle adjustments
+         (saved from the UI's cinema panel).
+      4. body_cinematic — one-off request override.
     Higher priority wins on key conflicts so a single render-time toggle
     doesn't blow away the rest of the persisted config."""
     pdir = storage.project_dir(pid)
@@ -891,6 +893,14 @@ def _resolve_cinematic(pid: str, body_cinematic: dict[str, Any] | None) -> dict[
                 preset = sp_mod.get_preset(pid_id)
                 if preset:
                     merged.update(dict(preset.get("cinematic") or {}))
+        except Exception:
+            pass
+
+    if (pdir / "cinematic_overrides.json").exists():
+        try:
+            overrides = storage.read_json(pid, "cinematic_overrides.json") or {}
+            if isinstance(overrides, dict):
+                merged.update(overrides)
         except Exception:
             pass
 
@@ -2278,6 +2288,57 @@ class ReelTemplateSaveIn(BaseModel):
 class ReelTemplateApplyIn(BaseModel):
     replace: bool = True
     append_to_existing: bool = False
+
+
+_CINEMATIC_KEYS = {
+    "grain", "vignette", "light_leaks",
+    "chromatic_aberration", "bloom_emphasis",
+    "chapter_transition",
+}
+_CHAPTER_TRANSITION_KINDS = {"none", "whip", "flash", "glitch", "dissolve"}
+
+
+@app.get("/api/projects/{pid}/cinematic")
+async def get_cinematic(pid: str) -> dict[str, Any]:
+    """Return the effective cinematic config for this project — the
+    full merge of reference + preset + overrides (the same value the
+    render call would pick up if body.cinematic isn't passed). The UI
+    uses this to render the toggles already 'on'."""
+    pdir = storage.project_dir(pid)
+    effective = _resolve_cinematic(pid, None) or {}
+    overrides: dict[str, Any] = {}
+    if (pdir / "cinematic_overrides.json").exists():
+        try:
+            overrides = storage.read_json(pid, "cinematic_overrides.json") or {}
+        except Exception:
+            overrides = {}
+    return {"effective": effective, "overrides": overrides}
+
+
+@app.put("/api/projects/{pid}/cinematic")
+async def put_cinematic(pid: str, body: dict[str, Any]) -> dict[str, Any]:
+    """Persist per-project cinematic toggle overrides. Body is a flat
+    dict of {grain, vignette, light_leaks, chromatic_aberration,
+    bloom_emphasis, chapter_transition}. Unknown keys are dropped,
+    booleans coerced, chapter_transition clamped to the supported set.
+    Omit a key (or send null) to remove that override and fall back
+    to the preset / reference layer for it."""
+    pdir = storage.project_dir(pid)
+    cleaned: dict[str, Any] = {}
+    for k, v in (body or {}).items():
+        if k not in _CINEMATIC_KEYS:
+            continue
+        if v is None:
+            continue
+        if k == "chapter_transition":
+            s = str(v).strip().lower()
+            if s in _CHAPTER_TRANSITION_KINDS:
+                cleaned[k] = None if s == "none" else s
+        else:
+            cleaned[k] = bool(v)
+    storage.write_json(pid, "cinematic_overrides.json", cleaned)
+    effective = _resolve_cinematic(pid, None) or {}
+    return {"overrides": cleaned, "effective": effective}
 
 
 @app.post("/api/projects/{pid}/reference/upload")
