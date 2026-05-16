@@ -187,6 +187,17 @@ Design rules:
 - Times must be inside the source duration. If you don't know the
   duration, stay before the last soundbite or chapter end you saw.
 
+Audio-reactive timing:
+- When a `<beats>` block is present in the context, the BPM and a list
+  of strong-beat timestamps come from the actual audio (drum / onset
+  detection). Align animation `start` values to beats whenever possible:
+  hook entrances on the first beat after speech starts, callouts /
+  emphasis on accent beats, the CTA on the last beat before the outro.
+- The server post-snaps starts to the nearest beat within ±0.15s, so
+  you don't need to hit the exact decimal — get within that window.
+- Density should track BPM: high BPM (≥130) tolerates more, denser
+  animations; low BPM (≤80) wants breathing room between events.
+
 Motion language (named easings + premium variants):
 - For each animation you can set `easing` to one of:
     apple-emphasis  — soft snap, Apple keynote entrance.
@@ -234,12 +245,18 @@ def _build_context(
     chapters: list[dict[str, Any]] | None,
     soundbites: list[dict[str, Any]] | None,
     duration: float | None,
+    beats: dict[str, Any] | None = None,
 ) -> str:
     """Compact context block. Goes AFTER the cache breakpoint, so it
     can vary per call without invalidating the system-prompt cache."""
     parts: list[str] = []
     if duration:
         parts.append(f"<source_duration>{duration:.1f}s</source_duration>")
+    if beats:
+        from . import audio_beats as ab
+        block = ab.beats_context_block(beats, chapters=chapters, soundbites=soundbites)
+        if block:
+            parts.append(block)
     if chapters:
         rows = "\n".join(
             f"- {float(c.get('start') or 0):.1f}s → {float(c.get('end') or 0):.1f}s · {c.get('name') or c.get('title') or ''}"
@@ -270,6 +287,8 @@ def plan_from_prompt(
     chapters: list[dict[str, Any]] | None = None,
     soundbites: list[dict[str, Any]] | None = None,
     duration: float | None = None,
+    beats: dict[str, Any] | None = None,
+    snap_to_beats: bool = True,
 ) -> dict[str, Any]:
     """Call Claude with forced tool use, return the parsed animation plan.
 
@@ -283,7 +302,7 @@ def plan_from_prompt(
     tool = _animation_tool()
     context = _build_context(
         transcript=transcript, chapters=chapters,
-        soundbites=soundbites, duration=duration,
+        soundbites=soundbites, duration=duration, beats=beats,
     )
     user_content = (
         f"<style_prompt>\n{user_prompt.strip()}\n</style_prompt>\n\n{context}"
@@ -361,8 +380,20 @@ def plan_from_prompt(
     if not normalized:
         raise RuntimeError("Todos os itens do plano foram rejeitados pela validação")
 
+    # Post-pass: snap animation starts to the nearest beat / onset.
+    # The LLM is told about the beats but doesn't always nail the
+    # alignment; the snap window (±0.15s) is tight enough that we
+    # don't drift placements far from the model's intent.
+    snapped_count = 0
+    if snap_to_beats and beats and (beats.get("beats") or beats.get("onsets")):
+        from . import audio_beats as ab
+        snapped = ab.snap_animations_to_beats(normalized, beats)
+        snapped_count = sum(1 for a in snapped if "snapped_from" in a)
+        normalized = snapped
+
     return {
         "rationale": raw.get("rationale") or "",
         "animations": normalized,
         "model": MODEL,
+        "beats_snapped": snapped_count,
     }

@@ -1804,6 +1804,15 @@ async def animations_from_prompt(pid: str, body: AnimFromPromptIn) -> dict[str, 
             soundbites = (storage.read_json(pid, "soundbites.json") or {}).get("soundbites")
         except Exception:
             pass
+    # Beats are optional — if audio_beats.json exists (the user ran
+    # /api/projects/{pid}/beats at some point) we feed it to the
+    # planner so it can align starts to the music.
+    beats = None
+    if (pdir / "audio_beats.json").exists():
+        try:
+            beats = storage.read_json(pid, "audio_beats.json")
+        except Exception:
+            beats = None
 
     # Lazy import so the rest of the server keeps booting if anthropic
     # isn't installed yet (fresh checkout before pip install).
@@ -1820,6 +1829,7 @@ async def animations_from_prompt(pid: str, body: AnimFromPromptIn) -> dict[str, 
             chapters=chapters,
             soundbites=soundbites,
             duration=state.source_duration,
+            beats=beats,
         )
     except RuntimeError as e:
         _stage(state, "anim_plan_prompt", "error", str(e))
@@ -2448,6 +2458,59 @@ async def cut_repetitions(pid: str, body: RepetitionsIn) -> dict[str, Any]:
 
 
 # ---- soundbites + topics -----------------------------------------------------
+
+@app.post("/api/projects/{pid}/beats")
+async def detect_audio_beats(pid: str) -> dict[str, Any]:
+    """Run librosa beat + onset detection on the project's source audio.
+
+    Writes `audio_beats.json` in the project dir; the animation planner
+    picks it up automatically on subsequent /animations/from-prompt
+    calls and snaps animation starts to the nearest beat (±0.15s).
+
+    Cached by sha1 of the source file, so re-running on an unchanged
+    project is instant.
+    """
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    src = pdir / "source.mp4"
+    if not src.exists():
+        raise HTTPException(404, "no source.mp4 — upload a file first")
+    try:
+        from .services import audio_beats as ab
+    except ImportError as e:
+        raise HTTPException(500, f"audio_beats indisponível: {e}")
+    _stage(state, "audio_beats", "running", "librosa")
+    try:
+        data = await ab.detect_beats(src, project_dir=pdir)
+    except RuntimeError as e:
+        _stage(state, "audio_beats", "error", str(e))
+        raise HTTPException(502, str(e))
+    except Exception as e:
+        _stage(state, "audio_beats", "error", str(e))
+        raise HTTPException(500, f"beat detection falhou: {e}")
+    _stage(
+        state, "audio_beats", "done",
+        f"bpm={data.get('bpm', 0):.0f} · {len(data.get('beats') or [])} beats · "
+        f"{len(data.get('onsets') or [])} onsets",
+    )
+    return {
+        "bpm": data.get("bpm"),
+        "duration": data.get("duration"),
+        "beat_count": len(data.get("beats") or []),
+        "onset_count": len(data.get("onsets") or []),
+        "beats": data.get("beats"),
+        "onsets": data.get("onsets"),
+    }
+
+
+@app.get("/api/projects/{pid}/beats")
+async def get_audio_beats(pid: str) -> dict[str, Any]:
+    pdir = storage.project_dir(pid)
+    p = pdir / "audio_beats.json"
+    if not p.exists():
+        raise HTTPException(404, "no audio_beats.json — run POST /beats first")
+    return storage.read_json(pid, "audio_beats.json")
+
 
 @app.post("/api/projects/{pid}/soundbites")
 async def soundbites(pid: str, _body: SoundbitesIn | None = None) -> dict[str, Any]:
