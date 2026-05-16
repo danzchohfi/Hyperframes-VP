@@ -2453,6 +2453,30 @@ async def clear_reference(pid: str) -> dict[str, Any]:
     return {"removed": removed}
 
 
+@app.delete("/api/projects/{pid}/animation-preset")
+async def clear_animation_preset(pid: str) -> dict[str, Any]:
+    """Remove the persisted style preset for this project. Cinematic
+    overrides stay (use /cinematic to clear those separately)."""
+    pdir = storage.project_dir(pid)
+    p = pdir / "style_preset.json"
+    removed = False
+    if p.exists():
+        p.unlink()
+        removed = True
+    # Also strip the `preset` annotation from any cached animation
+    # plan so subsequent renders read the file cleanly.
+    ap = pdir / "reels_animations.json"
+    if ap.exists():
+        try:
+            data = storage.read_json(pid, "reels_animations.json")
+            if "preset" in data:
+                data.pop("preset", None)
+                storage.write_json(pid, "reels_animations.json", data)
+        except Exception:
+            pass
+    return {"removed": removed}
+
+
 @app.get("/api/animation-presets")
 async def list_animation_presets() -> dict[str, Any]:
     """Curated style presets ('Apple Keynote', 'MotionVFX Cinema', ...).

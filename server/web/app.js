@@ -4498,6 +4498,7 @@ function bind() {
   // Reels
   bindReels();
   bindCinematicPanel();
+  bindStylePresets();
   const mf = $("#music-file");
   $("#music-zone").addEventListener("click", () => mf.click());
   mf.addEventListener("change", () => mf.files[0] && uploadMusic(mf.files[0]));
@@ -4869,7 +4870,7 @@ async function loadReels() {
     REELS_STATE.duration = data.source_duration || 0;
     populateReelsTypeSelect();
     renderReelsList();
-    await Promise.all([loadReelTemplates(), loadSfxLibrary(), loadCinematicPanel()]);
+    await Promise.all([loadReelTemplates(), loadSfxLibrary(), loadCinematicPanel(), loadStylePresets()]);
   } catch (e) {
     log(`✗ reels: ${e.message}`, "err");
   }
@@ -4957,6 +4958,130 @@ async function resetCinematicPanel() {
 function bindCinematicPanel() {
   document.getElementById("cinema-save-btn")?.addEventListener("click", saveCinematicPanel);
   document.getElementById("cinema-reset-btn")?.addEventListener("click", resetCinematicPanel);
+}
+
+// ---- Style presets (Apple Keynote / MotionVFX Cinema / Documentary /
+// Indie Tech). Cached per-session: the preset list itself doesn't
+// change between projects. The selected preset is stored in
+// style_preset.json on the server and surfaces here on load so the
+// user can see which look is "currently on".
+const PRESET_STATE = { presets: [], selected: null, suggested: null };
+
+async function loadStylePresets() {
+  if (!state.current) return;
+  const grid = document.getElementById("preset-grid");
+  if (!grid) return;
+  try {
+    if (PRESET_STATE.presets.length === 0) {
+      const data = await api(`/api/animation-presets`);
+      PRESET_STATE.presets = data.presets || [];
+    }
+    // Pull project state: persisted preset choice + reference-analysis
+    // suggestion (for the "sugerido" badge).
+    PRESET_STATE.selected = null;
+    PRESET_STATE.suggested = null;
+    try {
+      const p = await api(`/api/projects/${state.current.id}/files/style_preset.json`);
+      PRESET_STATE.selected = p?.id || null;
+    } catch {}
+    try {
+      const ref = await api(`/api/projects/${state.current.id}/reference`);
+      if (ref?.analyzed && ref.analysis?.preset_suggestion) {
+        PRESET_STATE.suggested = ref.analysis.preset_suggestion;
+      }
+    } catch {}
+    renderPresetGrid();
+  } catch (e) {
+    log(`✗ presets: ${e.message}`, "err");
+    grid.innerHTML = `<div class="muted">Falha ao carregar: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function renderPresetGrid() {
+  const grid = document.getElementById("preset-grid");
+  if (!grid) return;
+  if (PRESET_STATE.presets.length === 0) {
+    grid.innerHTML = `<div class="muted">Sem presets disponíveis.</div>`;
+    return;
+  }
+  const sel = PRESET_STATE.pendingPick || PRESET_STATE.selected;
+  grid.innerHTML = PRESET_STATE.presets.map(p => {
+    const isActive = sel === p.id;
+    const isSuggested = PRESET_STATE.suggested === p.id;
+    const chips = [];
+    if (p.easing_default) chips.push(escapeHtml(p.easing_default));
+    if (p.cinematic?.chapter_transition) chips.push(`transição: ${escapeHtml(p.cinematic.chapter_transition)}`);
+    return `<div class="preset-card${isActive ? " is-active" : ""}${isSuggested ? " is-suggested" : ""}" data-preset-id="${escapeHtml(p.id)}" role="button" tabindex="0">
+      <div class="preset-card-title">${escapeHtml(p.label)}</div>
+      <div class="preset-card-summary">${escapeHtml(p.summary || "")}</div>
+      ${chips.length ? `<div class="preset-card-chips">${chips.map(c => `<span class="chip">${c}</span>`).join("")}</div>` : ""}
+    </div>`;
+  }).join("");
+  grid.querySelectorAll(".preset-card").forEach(card => {
+    card.addEventListener("click", () => {
+      PRESET_STATE.pendingPick = card.dataset.presetId;
+      renderPresetGrid();
+      const btn = document.getElementById("preset-apply-btn");
+      if (btn) btn.disabled = false;
+    });
+  });
+  const btn = document.getElementById("preset-apply-btn");
+  if (btn) btn.disabled = !PRESET_STATE.pendingPick || PRESET_STATE.pendingPick === PRESET_STATE.selected;
+}
+
+async function applySelectedPreset() {
+  if (!state.current || !PRESET_STATE.pendingPick) return;
+  const status = document.getElementById("preset-status");
+  const replan = !!document.getElementById("preset-replan")?.checked;
+  try {
+    if (status) status.textContent = replan ? "aplicando + re-planejando…" : "aplicando…";
+    const res = await api(`/api/projects/${state.current.id}/animation-preset`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ preset: PRESET_STATE.pendingPick, replan }),
+    });
+    PRESET_STATE.selected = res.preset;
+    PRESET_STATE.pendingPick = null;
+    if (status) {
+      status.textContent = res.replanned != null
+        ? `aplicado · ${res.replanned} animações re-planejadas`
+        : `aplicado · ${escapeHtml(res.label || res.preset)}`;
+    }
+    renderPresetGrid();
+    // Re-hydrate cinematic panel (preset cinema toggles may have changed)
+    // and animations list (replan may have replaced reels_animations.json).
+    await loadCinematicPanel();
+    if (replan) await loadReels();
+    toast?.(`Preset aplicado: ${res.label || res.preset}`, "ok");
+  } catch (e) {
+    if (status) status.textContent = `erro: ${e.message}`;
+    log(`✗ preset apply: ${e.message}`, "err");
+  }
+}
+
+async function clearSelectedPreset() {
+  if (!state.current) return;
+  const status = document.getElementById("preset-status");
+  try {
+    if (status) status.textContent = "limpando…";
+    await api(`/api/projects/${state.current.id}/animation-preset`, {
+      method: "DELETE",
+    });
+    PRESET_STATE.selected = null;
+    PRESET_STATE.pendingPick = null;
+    if (status) status.textContent = "preset removido";
+    renderPresetGrid();
+    await loadCinematicPanel();
+    toast?.("Preset removido — projeto volta pro default.", "ok");
+  } catch (e) {
+    if (status) status.textContent = `erro: ${e.message}`;
+    log(`✗ preset clear: ${e.message}`, "err");
+  }
+}
+
+function bindStylePresets() {
+  document.getElementById("preset-apply-btn")?.addEventListener("click", applySelectedPreset);
+  document.getElementById("preset-clear-btn")?.addEventListener("click", clearSelectedPreset);
 }
 
 async function loadSfxLibrary() {

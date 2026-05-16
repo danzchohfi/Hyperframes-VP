@@ -597,6 +597,24 @@
               </div>
             </details>
 
+            <!-- Style presets — top-level identity choice (Apple Keynote /
+                 MotionVFX Cinema / Documentary / Indie Tech). Each preset
+                 sets easing default, hook/CTA variant, cinematic toggles,
+                 and chapter transition in one shot. The cinema panel
+                 below can override individual toggles afterwards. -->
+            <details class="reels-prompt-block" id="style-preset-block">
+              <summary><span data-icon="palette" data-icon-size="14"></span> Style preset <span class="muted">— escolhe o "look" inteiro de uma vez</span></summary>
+              <div class="reels-prompt-body preset-body">
+                <div class="preset-grid" id="preset-grid"><div class="muted" style="padding:8px">carregando…</div></div>
+                <div class="preset-actions">
+                  <label class="cb" title="Re-roda o anim_planner com o prompt_hint do preset depois de aplicar"><input type="checkbox" id="preset-replan" /> re-planejar animações com o tom do preset</label>
+                  <button id="preset-apply-btn" class="btn btn-primary btn-sm" type="button" disabled><span data-icon="check" data-icon-size="14"></span> Aplicar preset</button>
+                  <button id="preset-clear-btn" class="btn btn-ghost btn-sm" type="button" title="Remove o preset persistido — volta pro default">Limpar</button>
+                  <span id="preset-status" class="status muted"></span>
+                </div>
+              </div>
+            </details>
+
             <!-- Look cinematográfico — overlay layers (grain, vignette,
                  light leaks, chromatic aberration, bloom) and chapter
                  transition kind. Persisted via PUT /cinematic; rendered
