@@ -862,6 +862,31 @@ async def apply_edits(pid: str, body: ApplyIn | None = None) -> dict[str, Any]:
 # The Hyperframes composition is the HTML/JS/MP4 bundle in pdir/composition/.
 # It's normally built as a side effect of /render, but the inline iframe
 # preview needs it earlier (before the user pays for a full MP4 render).
+def _resolve_cinematic(pid: str, body_cinematic: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Merge the request body's `cinematic` dict on top of any persisted
+    preset choice (style_preset.json). Body wins on key conflicts so a
+    one-off render can override a single toggle without dropping the
+    rest of the preset."""
+    preset_cinematic: dict[str, Any] = {}
+    pdir = storage.project_dir(pid)
+    if (pdir / "style_preset.json").exists():
+        try:
+            sp_data = storage.read_json(pid, "style_preset.json")
+            pid_id = (sp_data or {}).get("id")
+            if pid_id:
+                from .services import style_presets as sp_mod
+                preset = sp_mod.get_preset(pid_id)
+                if preset:
+                    preset_cinematic = dict(preset.get("cinematic") or {})
+        except Exception:
+            preset_cinematic = {}
+    if body_cinematic:
+        merged = {**preset_cinematic, **body_cinematic}
+    else:
+        merged = preset_cinematic
+    return merged or None
+
+
 # This endpoint materializes the composition without rendering — fast (~1s)
 # and idempotent. The inline preview calls it on first open if
 # state.has_composition is false.
@@ -931,7 +956,7 @@ async def build_composition_only(pid: str, body: RenderIn | None = None) -> dict
             speaker_turns=speaker_turns,
             animations=animations,
             extra_blocks=extra_blocks,
-            cinematic=body.cinematic,
+            cinematic=_resolve_cinematic(pid, body.cinematic),
         )
     except Exception as e:
         raise HTTPException(500, f"compose: {e}")
@@ -1324,7 +1349,7 @@ async def do_render(pid: str, body: RenderIn) -> dict[str, Any]:
             speaker_turns=speaker_turns,
             animations=animations_for_render,
             extra_blocks=extra_blocks_for_render,
-            cinematic=getattr(body, "cinematic", None),
+            cinematic=_resolve_cinematic(pid, getattr(body, "cinematic", None)),
         )
     except Exception as e:
         _stage(state, "render", "error", f"compose: {e}")
@@ -2228,6 +2253,92 @@ class ReelTemplateSaveIn(BaseModel):
 class ReelTemplateApplyIn(BaseModel):
     replace: bool = True
     append_to_existing: bool = False
+
+
+@app.get("/api/animation-presets")
+async def list_animation_presets() -> dict[str, Any]:
+    """Curated style presets ('Apple Keynote', 'MotionVFX Cinema', ...).
+    Each entry bundles easing default, hook/CTA variant, cinematic
+    overlay toggles, and chapter transition kind. The UI shows them
+    as a dropdown; apply via POST /api/projects/{pid}/animation-preset.
+    """
+    from .services import style_presets as sp
+    return {"presets": sp.list_presets()}
+
+
+class AnimationPresetApplyIn(BaseModel):
+    preset: str
+    # Re-plan animations under the preset's prompt hint as part of the
+    # apply. When False, just persists the preset choice so the next
+    # render reads it.
+    replan: bool = False
+
+
+@app.post("/api/projects/{pid}/animation-preset")
+async def apply_animation_preset(pid: str, body: AnimationPresetApplyIn) -> dict[str, Any]:
+    """Persist a style preset choice for this project. On the next
+    render the composer reads style_preset.json and merges the
+    preset's cinematic config + animation easing/variant fills."""
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    from .services import style_presets as sp
+    preset = sp.get_preset(body.preset)
+    if not preset:
+        raise HTTPException(404, f"preset desconhecido: {body.preset}")
+    storage.write_json(pid, "style_preset.json", {"id": body.preset})
+    msg = f"preset={body.preset}"
+
+    # Optional re-plan: re-run the animation planner with the preset's
+    # prompt_hint prepended so the LLM aligns text + density to the look.
+    replanned = None
+    if body.replan and (pdir / "reels_animations.json").exists():
+        try:
+            from .services import anim_planner
+        except ImportError as e:
+            raise HTTPException(500, f"anim_planner indisponível: {e}")
+        transcript = storage.read_json(pid, "transcript.json") if (pdir / "transcript.json").exists() else None
+        chapters = ((storage.read_json(pid, "chapters.json") or {}).get("chapters")
+                    if (pdir / "chapters.json").exists() else None)
+        soundbites = ((storage.read_json(pid, "soundbites.json") or {}).get("soundbites")
+                      if (pdir / "soundbites.json").exists() else None)
+        beats = storage.read_json(pid, "audio_beats.json") if (pdir / "audio_beats.json").exists() else None
+        existing = storage.read_json(pid, "reels_animations.json").get("animations") or []
+        existing_prompt = (storage.read_json(pid, "reels_animations.json") or {}).get("prompt") or ""
+        prompt = f"{preset['prompt_hint']}\n\n{existing_prompt}".strip()
+        try:
+            plan = anim_planner.plan_from_prompt(
+                user_prompt=prompt or preset["prompt_hint"],
+                transcript=transcript, chapters=chapters, soundbites=soundbites,
+                duration=state.source_duration, beats=beats,
+            )
+        except RuntimeError as e:
+            raise HTTPException(502, str(e))
+        new_anims = sp.apply_to_animations(plan["animations"], preset)
+        storage.write_json(pid, "reels_animations.json",
+                           {"animations": new_anims, "prompt": prompt, "preset": body.preset})
+        replanned = len(new_anims)
+        msg += f" · replan={replanned}"
+    else:
+        # Just fill in easing / variants on the existing animations
+        # (no LLM call) so the preset takes effect on next render.
+        if (pdir / "reels_animations.json").exists():
+            try:
+                cur = storage.read_json(pid, "reels_animations.json")
+                cur_anims = cur.get("animations") or []
+                cur["animations"] = sp.apply_to_animations(cur_anims, preset)
+                cur["preset"] = body.preset
+                storage.write_json(pid, "reels_animations.json", cur)
+            except Exception:
+                pass
+
+    _stage(state, "style_preset", "done", msg)
+    return {
+        "preset": body.preset,
+        "label": preset["label"],
+        "summary": preset["summary"],
+        "cinematic": preset["cinematic"],
+        "replanned": replanned,
+    }
 
 
 @app.get("/api/reel-templates")
