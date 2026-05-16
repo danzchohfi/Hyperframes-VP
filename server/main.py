@@ -863,12 +863,25 @@ async def apply_edits(pid: str, body: ApplyIn | None = None) -> dict[str, Any]:
 # It's normally built as a side effect of /render, but the inline iframe
 # preview needs it earlier (before the user pays for a full MP4 render).
 def _resolve_cinematic(pid: str, body_cinematic: dict[str, Any] | None) -> dict[str, Any] | None:
-    """Merge the request body's `cinematic` dict on top of any persisted
-    preset choice (style_preset.json). Body wins on key conflicts so a
-    one-off render can override a single toggle without dropping the
-    rest of the preset."""
-    preset_cinematic: dict[str, Any] = {}
+    """Merge cinematic toggles from three sources, lowest priority first:
+      1. reference_analysis.json.cinematic — what Claude saw in the
+         user's reference video.
+      2. style_preset.json → preset.cinematic — explicit user pick.
+      3. body_cinematic — one-off request override.
+    Higher priority wins on key conflicts so a single render-time toggle
+    doesn't blow away the rest of the persisted config."""
     pdir = storage.project_dir(pid)
+    merged: dict[str, Any] = {}
+
+    if (pdir / "reference_analysis.json").exists():
+        try:
+            ref = storage.read_json(pid, "reference_analysis.json") or {}
+            ref_cinema = ref.get("cinematic")
+            if isinstance(ref_cinema, dict):
+                merged.update(ref_cinema)
+        except Exception:
+            pass
+
     if (pdir / "style_preset.json").exists():
         try:
             sp_data = storage.read_json(pid, "style_preset.json")
@@ -877,13 +890,13 @@ def _resolve_cinematic(pid: str, body_cinematic: dict[str, Any] | None) -> dict[
                 from .services import style_presets as sp_mod
                 preset = sp_mod.get_preset(pid_id)
                 if preset:
-                    preset_cinematic = dict(preset.get("cinematic") or {})
+                    merged.update(dict(preset.get("cinematic") or {}))
         except Exception:
-            preset_cinematic = {}
+            pass
+
     if body_cinematic:
-        merged = {**preset_cinematic, **body_cinematic}
-    else:
-        merged = preset_cinematic
+        merged.update(body_cinematic)
+
     return merged or None
 
 
@@ -1817,6 +1830,18 @@ async def animations_from_prompt(pid: str, body: AnimFromPromptIn) -> dict[str, 
         raise HTTPException(400, "prompt vazio")
     if len(prompt) > 2000:
         raise HTTPException(400, "prompt longo demais (máx 2000 chars)")
+    # If the user analysed a reference video, fold its prompt_hint in
+    # so the planner inherits the observed style. The user's typed
+    # prompt still wins by appearing AFTER the hint — last-word rules
+    # for prompts.
+    if (pdir / "reference_analysis.json").exists():
+        try:
+            ref = storage.read_json(pid, "reference_analysis.json") or {}
+            ref_hint = (ref.get("prompt_hint") or "").strip()
+            if ref_hint:
+                prompt = f"{ref_hint}\n\n{prompt}"
+        except Exception:
+            pass
 
     transcript = None
     if (pdir / "transcript.json").exists():
@@ -2253,6 +2278,118 @@ class ReelTemplateSaveIn(BaseModel):
 class ReelTemplateApplyIn(BaseModel):
     replace: bool = True
     append_to_existing: bool = False
+
+
+@app.post("/api/projects/{pid}/reference/upload")
+async def upload_reference_video(
+    pid: str,
+    file: UploadFile = File(...),
+) -> dict[str, Any]:
+    """Upload a reference video that the user wants the pipeline to
+    emulate. Stored at project_dir/reference/source.mp4. Call
+    /reference/analyze afterwards to kick the Claude vision pass."""
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    ref_dir = pdir / "reference"
+    ref_dir.mkdir(parents=True, exist_ok=True)
+
+    ext = Path(file.filename or "video.mp4").suffix or ".mp4"
+    raw_path = ref_dir / f"raw{ext}"
+    dst_path = ref_dir / "source.mp4"
+
+    _stage(state, "reference_upload", "running", file.filename or "ref")
+    async with aiofiles.open(raw_path, "wb") as out:
+        while chunk := await file.read(1024 * 1024):
+            await out.write(chunk)
+    try:
+        await ff.normalize(raw_path, dst_path)
+        dur = await ff.duration(dst_path)
+    except ff.FFmpegError as e:
+        _stage(state, "reference_upload", "error", str(e))
+        raise HTTPException(400, f"ffmpeg failed: {e}")
+    try:
+        raw_path.unlink()
+    except Exception:
+        pass
+
+    _stage(state, "reference_upload", "done", f"{dur:.1f}s")
+    return {
+        "filename": file.filename,
+        "duration": round(dur, 2),
+        "path": "reference/source.mp4",
+    }
+
+
+class ReferenceAnalyzeIn(BaseModel):
+    deep: bool = False           # also upload the video via Files API
+    max_duration: float = 60.0   # truncate cap (seconds)
+
+
+@app.post("/api/projects/{pid}/reference/analyze")
+async def analyze_reference_video(pid: str, body: ReferenceAnalyzeIn | None = None) -> dict[str, Any]:
+    """Run keyframe extraction + Claude vision analysis on the uploaded
+    reference. Persists `reference_analysis.json` with structured
+    fields (preset_suggestion, cinematic, easing_suggestion,
+    prompt_hint) that the rest of the pipeline reads automatically."""
+    body = body or ReferenceAnalyzeIn()
+    state = _load(pid)
+    pdir = storage.project_dir(pid)
+    src = pdir / "reference" / "source.mp4"
+    if not src.exists():
+        raise HTTPException(404, "no reference uploaded — POST /reference/upload first")
+    try:
+        from .services import reference_video as rv
+    except ImportError as e:
+        raise HTTPException(500, f"reference_video indisponível: {e}")
+
+    _stage(state, "reference_analyze", "running",
+           "deep" if body.deep else "frames")
+    try:
+        analysis = await rv.build_analysis(
+            src=src, project_dir=pdir,
+            max_duration=max(5.0, min(300.0, float(body.max_duration))),
+            deep=bool(body.deep),
+        )
+    except RuntimeError as e:
+        _stage(state, "reference_analyze", "error", str(e))
+        raise HTTPException(502, str(e))
+    except Exception as e:
+        _stage(state, "reference_analyze", "error", str(e))
+        raise HTTPException(500, f"análise falhou: {e}")
+
+    _stage(state, "reference_analyze", "done",
+           f"preset={analysis.get('preset_suggestion')} · "
+           f"tempo={analysis.get('pacing')}")
+    return analysis
+
+
+@app.get("/api/projects/{pid}/reference")
+async def get_reference_analysis(pid: str) -> dict[str, Any]:
+    pdir = storage.project_dir(pid)
+    p = pdir / "reference_analysis.json"
+    src = pdir / "reference" / "source.mp4"
+    if not p.exists():
+        if src.exists():
+            return {"uploaded": True, "analyzed": False}
+        raise HTTPException(404, "no reference video for this project")
+    data = storage.read_json(pid, "reference_analysis.json")
+    return {"uploaded": True, "analyzed": True, "analysis": data}
+
+
+@app.delete("/api/projects/{pid}/reference")
+async def clear_reference(pid: str) -> dict[str, Any]:
+    pdir = storage.project_dir(pid)
+    ref_dir = pdir / "reference"
+    analysis = pdir / "reference_analysis.json"
+    removed: list[str] = []
+    if ref_dir.exists():
+        import shutil as _shutil
+        _shutil.rmtree(ref_dir, ignore_errors=True)
+        removed.append("reference/")
+    if analysis.exists():
+        analysis.unlink()
+        removed.append("reference_analysis.json")
+    return {"removed": removed}
 
 
 @app.get("/api/animation-presets")
