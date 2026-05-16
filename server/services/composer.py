@@ -513,6 +513,9 @@ def build_composition(
     cin_light_leaks = bool(cin.get("light_leaks"))
     cin_chromatic = bool(cin.get("chromatic_aberration"))
     cin_bloom = bool(cin.get("bloom_emphasis"))
+    # "whip" | "flash" | "glitch" | "dissolve" | None — fires at each
+    # chapter boundary (and / or soundbite boundary when given).
+    cin_chapter_transition = cin.get("chapter_transition") or None
 
     cinematic_css_parts: list[str] = []
     cinematic_html_parts: list[str] = []
@@ -679,6 +682,24 @@ def build_composition(
         });
       })();
         """)
+
+    # Chapter transitions — fire at each chapter boundary (start of
+    # chapter 2..N). Centred on the boundary via per-kind lead time.
+    if cin_chapter_transition and chapters and len(chapters) >= 2:
+        from . import transitions as _trans
+        boundaries = [
+            float(ch.get("start", 0.0)) + intro_dur
+            for ch in chapters[1:]  # skip the very first chapter (no transition into it)
+        ]
+        trans_payload = _trans.build_transitions_payload(
+            cin_chapter_transition, boundaries,
+        )
+        if trans_payload["css"]:
+            cinematic_css_parts.append(trans_payload["css"])
+        if trans_payload["html"]:
+            cinematic_html_parts.append(trans_payload["html"])
+        if trans_payload["js"]:
+            cinematic_js_parts.append(trans_payload["js"])
 
     cinematic_css = "\n".join(cinematic_css_parts)
     cinematic_html = "\n      ".join(cinematic_html_parts)
