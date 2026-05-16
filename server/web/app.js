@@ -4499,6 +4499,7 @@ function bind() {
   bindReels();
   bindCinematicPanel();
   bindStylePresets();
+  bindReferenceVideo();
   const mf = $("#music-file");
   $("#music-zone").addEventListener("click", () => mf.click());
   mf.addEventListener("change", () => mf.files[0] && uploadMusic(mf.files[0]));
@@ -4870,7 +4871,7 @@ async function loadReels() {
     REELS_STATE.duration = data.source_duration || 0;
     populateReelsTypeSelect();
     renderReelsList();
-    await Promise.all([loadReelTemplates(), loadSfxLibrary(), loadCinematicPanel(), loadStylePresets()]);
+    await Promise.all([loadReelTemplates(), loadSfxLibrary(), loadCinematicPanel(), loadStylePresets(), loadReferenceVideo()]);
   } catch (e) {
     log(`✗ reels: ${e.message}`, "err");
   }
@@ -5082,6 +5083,161 @@ async function clearSelectedPreset() {
 function bindStylePresets() {
   document.getElementById("preset-apply-btn")?.addEventListener("click", applySelectedPreset);
   document.getElementById("preset-clear-btn")?.addEventListener("click", clearSelectedPreset);
+}
+
+// ---- Reference video (Claude vision). Flow:
+//   1. user picks a file → POST /reference/upload (multipart)
+//   2. 'Analisar' → POST /reference/analyze (long-running; ~5-30s)
+//   3. server returns structured analysis → we render preset suggestion,
+//      cinematic toggles seen, prompt_hint, palette, etc.
+// The result then auto-feeds anim_planner and _resolve_cinematic on
+// subsequent renders — no extra wiring needed.
+async function loadReferenceVideo() {
+  if (!state.current) return;
+  const block = document.getElementById("ref-video-block");
+  if (!block) return;
+  const status = document.getElementById("ref-status");
+  const analyzeBtn = document.getElementById("ref-analyze-btn");
+  const clearBtn = document.getElementById("ref-clear-btn");
+  const result = document.getElementById("ref-result");
+  try {
+    const data = await api(`/api/projects/${state.current.id}/reference`).catch(() => null);
+    if (!data || !data.uploaded) {
+      if (status) status.textContent = "nenhum vídeo de referência";
+      if (analyzeBtn) analyzeBtn.disabled = true;
+      if (clearBtn) clearBtn.disabled = true;
+      if (result) { result.classList.add("hidden"); result.innerHTML = ""; }
+      return;
+    }
+    if (analyzeBtn) analyzeBtn.disabled = false;
+    if (clearBtn) clearBtn.disabled = false;
+    if (!data.analyzed) {
+      if (status) status.textContent = "vídeo carregado · clique Analisar";
+      if (result) { result.classList.add("hidden"); result.innerHTML = ""; }
+      return;
+    }
+    if (status) status.textContent = "analisado";
+    renderReferenceAnalysis(data.analysis);
+  } catch (e) {
+    log(`✗ reference load: ${e.message}`, "err");
+  }
+}
+
+function renderReferenceAnalysis(a) {
+  const result = document.getElementById("ref-result");
+  if (!result || !a) return;
+  const palette = (a.dominant_palette || []).slice(0, 4);
+  const cin = a.cinematic || {};
+  const cinChips = [];
+  for (const k of ["grain", "vignette", "light_leaks", "chromatic_aberration", "bloom_emphasis"]) {
+    if (cin[k]) cinChips.push(k.replace(/_/g, " "));
+  }
+  if (cin.chapter_transition && cin.chapter_transition !== "none") {
+    cinChips.push(`transição: ${cin.chapter_transition}`);
+  }
+  result.classList.remove("hidden");
+  result.innerHTML = `
+    <div class="ref-summary">${escapeHtml(a.summary || "")}</div>
+    <div class="ref-row">
+      <span><strong>Estilo:</strong>${escapeHtml(a.edit_style || "—")}</span>
+      <span><strong>Pacing:</strong>${escapeHtml(a.pacing || "—")}</span>
+      <span><strong>Easing:</strong>${escapeHtml(a.easing_suggestion || "—")}</span>
+      <span><strong>Preset:</strong>${escapeHtml(a.preset_suggestion || "—")}</span>
+    </div>
+    ${palette.length ? `<div class="ref-row"><strong>Paleta:</strong><span class="ref-palette">${palette.map(c => `<span class="ref-swatch" style="background:${escapeHtml(c)}" title="${escapeHtml(c)}"></span>`).join("")}</span></div>` : ""}
+    ${cinChips.length ? `<div class="ref-row"><strong>Camadas detectadas:</strong><span class="ref-cinema-chips">${cinChips.map(c => `<span class="chip">${escapeHtml(c)}</span>`).join("")}</span></div>` : ""}
+    ${a.typography_notes ? `<div class="ref-row"><strong>Tipografia:</strong>${escapeHtml(a.typography_notes)}</div>` : ""}
+    ${a.prompt_hint ? `<div class="ref-prompt-hint">${escapeHtml(a.prompt_hint)}</div>` : ""}
+    <div class="ref-actions">
+      <button id="ref-apply-preset-btn" class="btn btn-ghost btn-sm" type="button" data-preset="${escapeHtml(a.preset_suggestion || "")}"><span data-icon="check" data-icon-size="14"></span> Aplicar preset sugerido</button>
+    </div>
+  `;
+  document.getElementById("ref-apply-preset-btn")?.addEventListener("click", async (ev) => {
+    const pick = ev.currentTarget.dataset.preset;
+    if (!pick) return;
+    PRESET_STATE.pendingPick = pick;
+    renderPresetGrid();
+    await applySelectedPreset();
+  });
+}
+
+async function uploadReferenceVideo(file) {
+  if (!state.current || !file) return;
+  const status = document.getElementById("ref-status");
+  const fd = new FormData();
+  fd.append("file", file);
+  try {
+    if (status) status.textContent = `subindo ${file.name}…`;
+    const data = await apiUpload(`/api/projects/${state.current.id}/reference/upload`, fd, {
+      onProgress: (pct) => { if (status) status.textContent = `subindo… ${Math.round(pct * 100)}%`; },
+    });
+    if (status) status.textContent = `subido (${data.duration}s) · clique Analisar`;
+    document.getElementById("ref-analyze-btn").disabled = false;
+    document.getElementById("ref-clear-btn").disabled = false;
+    if (data.duration > 60) {
+      toast?.(`Vídeo tem ${data.duration}s; análise vai truncar nos primeiros 60s.`, "warn");
+    }
+  } catch (e) {
+    if (status) status.textContent = `erro: ${e.message}`;
+    log(`✗ reference upload: ${e.message}`, "err");
+  }
+}
+
+async function analyzeReferenceVideo() {
+  if (!state.current) return;
+  const status = document.getElementById("ref-status");
+  const deep = !!document.getElementById("ref-deep")?.checked;
+  const btn = document.getElementById("ref-analyze-btn");
+  try {
+    if (status) status.textContent = deep ? "analisando (deep)…" : "analisando…";
+    if (btn) btn.disabled = true;
+    const data = await api(`/api/projects/${state.current.id}/reference/analyze`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ deep }),
+    });
+    renderReferenceAnalysis(data);
+    if (status) status.textContent = `análise pronta · ${data.preset_suggestion || "?"}`;
+    toast?.("Análise pronta — preset sugerido na seção Style preset.", "ok");
+    // Re-hydrate downstream panels: cinematic now picks up reference
+    // cinematic, presets show "sugerido" badge.
+    await Promise.all([loadCinematicPanel(), loadStylePresets()]);
+  } catch (e) {
+    if (status) status.textContent = `erro: ${e.message}`;
+    log(`✗ reference analyze: ${e.message}`, "err");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function clearReferenceVideo() {
+  if (!state.current) return;
+  const status = document.getElementById("ref-status");
+  try {
+    if (status) status.textContent = "limpando…";
+    await api(`/api/projects/${state.current.id}/reference`, { method: "DELETE" });
+    document.getElementById("ref-result").classList.add("hidden");
+    document.getElementById("ref-result").innerHTML = "";
+    document.getElementById("ref-analyze-btn").disabled = true;
+    document.getElementById("ref-clear-btn").disabled = true;
+    if (status) status.textContent = "removido";
+    await Promise.all([loadCinematicPanel(), loadStylePresets()]);
+    toast?.("Referência removida.", "ok");
+  } catch (e) {
+    if (status) status.textContent = `erro: ${e.message}`;
+    log(`✗ reference clear: ${e.message}`, "err");
+  }
+}
+
+function bindReferenceVideo() {
+  const input = document.getElementById("ref-file");
+  document.getElementById("ref-upload-btn")?.addEventListener("click", () => input?.click());
+  input?.addEventListener("change", (e) => {
+    const f = e.target.files?.[0];
+    if (f) uploadReferenceVideo(f);
+  });
+  document.getElementById("ref-analyze-btn")?.addEventListener("click", analyzeReferenceVideo);
+  document.getElementById("ref-clear-btn")?.addEventListener("click", clearReferenceVideo);
 }
 
 async function loadSfxLibrary() {

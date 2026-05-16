@@ -597,6 +597,26 @@
               </div>
             </details>
 
+            <!-- Reference video — user uploads a clip whose look they
+                 want to emulate. The pipeline extracts keyframes +
+                 transcript and asks Claude vision to classify the
+                 style. Result feeds the planner's prompt_hint and the
+                 cinematic merge automatically. -->
+            <details class="reels-prompt-block" id="ref-video-block">
+              <summary><span data-icon="video" data-icon-size="14"></span> Vídeo de referência <span class="muted">— Claude assiste e infere o estilo</span></summary>
+              <div class="reels-prompt-body ref-body">
+                <div class="ref-upload-row">
+                  <input id="ref-file" type="file" accept="video/*" hidden />
+                  <button id="ref-upload-btn" class="btn btn-ghost btn-sm" type="button"><span data-icon="upload-cloud" data-icon-size="14"></span> Subir vídeo (≤ 60s recomendado)</button>
+                  <label class="cb" title="Também envia o vídeo via Files API pra análise de movimento entre cortes (mais caro, mais preciso)"><input type="checkbox" id="ref-deep" /> análise profunda</label>
+                  <button id="ref-analyze-btn" class="btn btn-primary btn-sm" type="button" disabled><span data-icon="wand-2" data-icon-size="14"></span> Analisar</button>
+                  <button id="ref-clear-btn" class="btn btn-ghost btn-sm" type="button" disabled title="Remove o vídeo e a análise">Limpar</button>
+                  <span id="ref-status" class="status muted"></span>
+                </div>
+                <div id="ref-result" class="ref-result hidden"></div>
+              </div>
+            </details>
+
             <!-- Style presets — top-level identity choice (Apple Keynote /
                  MotionVFX Cinema / Documentary / Indie Tech). Each preset
                  sets easing default, hook/CTA variant, cinematic toggles,
