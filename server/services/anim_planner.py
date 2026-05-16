@@ -67,6 +67,7 @@ def _animation_tool() -> dict[str, Any]:
     # pick one per item; normalize_animation later clamps it to the
     # actually-supported variants for that type.
     all_variants = sorted({v for spec in ra.ANIMATION_TYPES.values() for v in spec.get("variants", [])})
+    easing_names = sorted(ra.EASINGS.keys())
     return {
         "name": "emit_animation_plan",
         "description": (
@@ -107,6 +108,17 @@ def _animation_tool() -> dict[str, Any]:
                             "sub": {"type": "string", "description": "Optional subtitle / supporting line."},
                             "emoji": {"type": "string", "description": "Single emoji for emoji_burst / sticker variants."},
                             "variant": {"type": "string", "enum": all_variants or ["default"]},
+                            "easing": {
+                                "type": "string",
+                                "enum": easing_names,
+                                "description": (
+                                    "Optional named easing preset for the entrance. "
+                                    "Pick the curve that matches the requested style "
+                                    "(e.g. 'apple-emphasis' / 'apple-decel' for "
+                                    "Apple-keynote feel, 'cinema-punch' for MotionVFX-"
+                                    "style impact). Leave empty to use the type's default."
+                                ),
+                            },
                             "show_logo": {"type": "boolean"},
                             "rationale": {"type": "string", "description": "Why this animation here (1 line)."},
                             # Free-form HTML for hook_card / cta_end only. The
@@ -174,6 +186,24 @@ Design rules:
   custom_html below.
 - Times must be inside the source duration. If you don't know the
   duration, stay before the last soundbite or chapter end you saw.
+
+Motion language (named easings + premium variants):
+- For each animation you can set `easing` to one of:
+    apple-emphasis  — soft snap, Apple keynote entrance.
+    apple-decel     — slow-out, Pages/Numbers reveal feel.
+    cinema-punch    — overshoot, MotionVFX impact.
+    swift-release   — fast in, slow settle.
+    glide-in        — smooth hero text reveal.
+  Pick the curve that matches the user's stylistic prompt. If they say
+  "Apple keynote", lean on apple-emphasis + apple-decel. If they say
+  "cinematic / MotionVFX / energetic", lean on cinema-punch + swift-release.
+  Omit `easing` to use a sensible per-type default.
+- The hook_card and cta_end types now support a `keynote` variant on
+  top of bold / gradient / minimal. The `keynote` variant uses Apple-
+  style cinematic typography: per-character entrance with blur and
+  staggered reveal, layered drop-shadows, depth-aware perspective.
+  Use it when the user asks for "Apple keynote", "premium", "elegant",
+  "minimal cinematic". Pair with apple-emphasis or apple-decel easing.
 
 Custom hook / CTA design (advanced):
 - For hook_card and cta_end items ONLY, you can emit custom_html +

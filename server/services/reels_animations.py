@@ -28,14 +28,14 @@ ANIMATION_TYPES: dict[str, dict[str, Any]] = {
         "default_duration": 1.4,
         "default_anchor": "center",
         "fields": ["text", "sub"],
-        "variants": ["bold", "gradient", "minimal"],
+        "variants": ["bold", "gradient", "minimal", "keynote"],
     },
     "cta_end": {
         "label": "CTA final",
         "default_duration": 2.0,
         "default_anchor": "center",
         "fields": ["text", "sub"],
-        "variants": ["bold", "gradient", "minimal"],
+        "variants": ["bold", "gradient", "minimal", "keynote"],
     },
     "text_callout": {
         "label": "Callout em sticker",
@@ -82,6 +82,55 @@ ANIMATION_TYPES: dict[str, dict[str, Any]] = {
 }
 
 
+# --- named easing presets --------------------------------------------------
+
+# Apple-keynote / MotionVFX cinema-grade curves the LLM can request and
+# users can override per-animation. Mapped to GSAP ease strings that
+# don't require paid plugins (CustomEase). The Python side carries
+# labels/descriptions for the planner system prompt; the JS side reads
+# the same names off `data-easing` to override the per-type default.
+EASINGS: dict[str, dict[str, str]] = {
+    "apple-emphasis": {
+        "gsap": "power3.out",
+        "label": "Apple Emphasis",
+        "description": "Soft snap, Apple keynote entrance.",
+    },
+    "apple-decel": {
+        "gsap": "expo.out",
+        "label": "Apple Decel",
+        "description": "Slow-out, Pages/Numbers reveal feel.",
+    },
+    "cinema-punch": {
+        "gsap": "back.out(3.5)",
+        "label": "Cinema Punch",
+        "description": "MotionVFX impact, overshoot then settle.",
+    },
+    "swift-release": {
+        "gsap": "power4.out",
+        "label": "Swift Release",
+        "description": "Fast in, slow settle.",
+    },
+    "glide-in": {
+        "gsap": "expo.out",
+        "label": "Glide In",
+        "description": "Smooth hero text reveal.",
+    },
+}
+
+# When an animation doesn't specify an easing explicitly we use the
+# type's default. None means "fall back to the legacy hard-coded ease".
+DEFAULT_EASING_FOR_TYPE: dict[str, str | None] = {
+    "hook_card":      "apple-emphasis",
+    "cta_end":        "apple-decel",
+    "text_callout":   None,
+    "word_zoom":      "cinema-punch",
+    "number_pop":     "cinema-punch",
+    "lower_third":    "swift-release",
+    "emoji_burst":    None,
+    "arrow_highlight": None,
+}
+
+
 def normalize_animation(anim: dict, source_duration: float | None = None) -> dict:
     """Apply defaults + clamp values. Returns a new dict."""
     a = dict(anim or {})
@@ -103,6 +152,13 @@ def normalize_animation(anim: dict, source_duration: float | None = None) -> dic
     variants = spec.get("variants") or ["default"]
     requested = (a.get("variant") or variants[0]).strip()
     a["variant"] = requested if requested in variants else variants[0]
+    # Named easing — clamped to EASINGS keys. Falls back to the type's
+    # default; the JS resolver then maps the name to a GSAP ease string.
+    raw_ease = (a.get("easing") or "").strip().lower() or None
+    if raw_ease in EASINGS:
+        a["easing"] = raw_ease
+    else:
+        a["easing"] = DEFAULT_EASING_FOR_TYPE.get(t)
     # show_logo only applies to hook_card / cta_end; default True so users
     # don't have to set it explicitly. The composer/preview drops it when
     # there's no brand logo, so it's safe to leave on.
@@ -179,6 +235,13 @@ def shared_css(brand: BrandBook, width: int) -> str:
     logo_size = int(width * 0.10)
     return f"""
       .reels-anim {{ position: absolute; z-index: 80; pointer-events: none; }}
+      /* Depth: hook / CTA cards get a perspective so the entrance can
+         pitch in from behind the camera. Other anims are flat. */
+      .reels-anim[data-anim-type="hook_card"],
+      .reels-anim[data-anim-type="cta_end"] {{
+        perspective: 1200px;
+        transform-style: preserve-3d;
+      }}
       .reels-anim.anchor-center      {{ inset: 0; display:flex; align-items:center; justify-content:center; }}
       .reels-anim.anchor-top         {{ top: 8%; left:0; right:0; display:flex; justify-content:center; }}
       .reels-anim.anchor-bottom      {{ bottom: 14%; left:0; right:0; display:flex; justify-content:center; }}
@@ -231,6 +294,40 @@ def shared_css(brand: BrandBook, width: int) -> str:
       .reels-anim .ra-card.variant-minimal {{
         background: transparent;
         text-shadow: 0 4px 28px rgba(0,0,0,0.7), 0 2px 6px rgba(0,0,0,0.5);
+      }}
+      /* Keynote variant — Apple-style cinematic typography. The
+         entrance JS wraps each character in <span class="char"> and
+         staggers them; this CSS sets up the per-character canvas and
+         a layered drop-shadow for the "cone of light" feel. */
+      .reels-anim .ra-card.variant-keynote {{
+        background: transparent;
+        padding: 24px 32px;
+        gap: 18px;
+        filter:
+          drop-shadow(0 12px 36px rgba(0, 0, 0, 0.55))
+          drop-shadow(0 2px 6px rgba(0, 0, 0, 0.4));
+      }}
+      .reels-anim .ra-card.variant-keynote .ra-title {{
+        font-size: {int(med * 1.25)}px;
+        font-weight: 600;
+        letter-spacing: -0.025em;
+        line-height: 1.02;
+        font-variation-settings: 'wght' 600;
+      }}
+      .reels-anim .ra-card.variant-keynote .ra-sub {{
+        font-size: {int(sml * 1.05)}px;
+        font-weight: 400;
+        color: {p.foreground}c8;
+        letter-spacing: -0.012em;
+      }}
+      .reels-anim .ra-card.variant-keynote .char {{
+        display: inline-block;
+        transform-origin: 50% 100%;
+        will-change: transform, opacity, filter;
+        white-space: pre;
+      }}
+      .reels-anim .ra-card.variant-keynote .ra-logo {{
+        transform: translateZ(20px);
       }}
       /* Custom-HTML hook/CTA cards: strip the templated container styling
          so the LLM's CSS is the source of truth. The OUTER positioning
@@ -323,17 +420,32 @@ def _safe(text: str) -> str:
     return html.escape(text or "")
 
 
+def _split_chars(text: str) -> str:
+    """Wrap each char of `text` in <span class="char"> for per-character
+    animation. Spaces are kept as-is inside the span (with `white-space:
+    pre`) so word-wrapping at the line level still works."""
+    if not text:
+        return ""
+    out: list[str] = []
+    for ch in text:
+        out.append(f'<span class="char">{html.escape(ch)}</span>')
+    return "".join(out)
+
+
 def build_animation_html(anim: dict, index: int, logo_src: str | None = None) -> str:
     """Return a single <div class='reels-anim clip ...'> for the animation."""
     t = anim["type"]
     aid = f"ra-{index}"
     cls = f"reels-anim clip anchor-{anim.get('anchor', 'center')}"
+    easing_attr = f' data-easing="{anim["easing"]}"' if anim.get("easing") else ""
+    variant_attr = f' data-variant="{_safe(anim.get("variant") or "")}"'
     common = (
         f'id="{aid}" class="{cls}" '
         f'data-start="{anim["start"]:.3f}" '
         f'data-duration="{anim["duration"]:.3f}" '
         f'data-track-index="{20 + index}" '
         f'data-anim-type="{t}"'
+        f'{variant_attr}{easing_attr}'
     )
     text = _safe(anim.get("text") or "")
     sub = _safe(anim.get("sub") or "")
@@ -369,9 +481,20 @@ def build_animation_html(anim: dict, index: int, logo_src: str | None = None) ->
         body = f'<div class="ra-card variant-{_safe(variant)}">'
         if logo_html:
             body += logo_html
-        body += f'<div class="ra-title">{text}</div>'
-        if sub:
-            body += f'<div class="ra-sub">{sub}</div>'
+        if variant == "keynote":
+            # Per-character spans so the JS can stagger blur/y/opacity.
+            # The raw `text` field was already escaped above, so we
+            # split from the original anim text (still safe via
+            # _split_chars's html.escape).
+            title_html = _split_chars(anim.get("text") or "")
+            sub_html = _split_chars(anim.get("sub") or "") if anim.get("sub") else ""
+            body += f'<div class="ra-title">{title_html}</div>'
+            if sub_html:
+                body += f'<div class="ra-sub">{sub_html}</div>'
+        else:
+            body += f'<div class="ra-title">{text}</div>'
+            if sub:
+                body += f'<div class="ra-sub">{sub}</div>'
         body += "</div>"
         return f'<div {common}>{body}</div>'
 
@@ -417,28 +540,72 @@ def build_animation_html(anim: dict, index: int, logo_src: str | None = None) ->
 # --- per-type GSAP tween snippets -----------------------------------------
 
 JS_TWEENS = """
+      // Apple/MotionVFX-inspired named eases. Keep in sync with
+      // server/services/reels_animations.py EASINGS map. All values
+      // resolve to stock GSAP eases so no CustomEase plugin is needed.
+      const REELS_EASINGS = {
+        "apple-emphasis": "power3.out",
+        "apple-decel":    "expo.out",
+        "cinema-punch":   "back.out(3.5)",
+        "swift-release":  "power4.out",
+        "glide-in":       "expo.out",
+      };
+      function pickEase(el, fallback) {
+        const name = el.dataset.easing;
+        return (name && REELS_EASINGS[name]) || fallback;
+      }
       // Reels animations — each .reels-anim gets a tween based on its type.
       for (const el of document.querySelectorAll(".reels-anim")) {
         const start = parseFloat(el.dataset.start);
         const dur = parseFloat(el.dataset.duration);
         const t = el.dataset.animType;
+        const variant = el.dataset.variant || "";
         const out = Math.max(0.3, dur - 0.35);
         if (t === "hook_card" || t === "cta_end") {
-          tl.fromTo(el, { opacity: 0, scale: 0.92, y: 24 },
-                        { opacity: 1, scale: 1, y: 0, duration: 0.45, ease: "back.out(1.5)" }, start);
-          tl.to(el, { opacity: 0, scale: 0.96, duration: 0.35, ease: "power2.in" }, start + out);
+          const card = el.querySelector(".ra-card") || el;
+          const chars = variant === "keynote"
+            ? el.querySelectorAll(".ra-card.variant-keynote .char")
+            : null;
+          if (chars && chars.length) {
+            // Apple keynote feel: card itself glides in with depth, then
+            // each char emerges from blur with a tight stagger.
+            const ease = pickEase(el, "expo.out");
+            tl.fromTo(card,
+              { opacity: 0, rotateX: -8, z: -40 },
+              { opacity: 1, rotateX: 0, z: 0, duration: 0.55, ease: ease },
+              start);
+            tl.fromTo(chars,
+              { opacity: 0, y: 24, filter: "blur(12px)" },
+              { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.5,
+                ease: ease, stagger: 0.035 },
+              start + 0.05);
+            tl.to(el, { opacity: 0, scale: 0.97, duration: 0.4,
+                        ease: "power2.in" }, start + out);
+          } else {
+            // Default hook/CTA — depth-aware entrance with named ease.
+            const ease = pickEase(el, "back.out(1.5)");
+            tl.fromTo(el,
+              { opacity: 0, scale: 0.92, y: 24, rotateX: -4 },
+              { opacity: 1, scale: 1, y: 0, rotateX: 0,
+                duration: 0.5, ease: ease },
+              start);
+            tl.to(el, { opacity: 0, scale: 0.96, duration: 0.35,
+                        ease: "power2.in" }, start + out);
+          }
         } else if (t === "text_callout") {
           tl.fromTo(el, { opacity: 0, y: 28, x: -10 },
                         { opacity: 1, y: 0, x: 0, duration: 0.4, ease: "back.out(1.7)" }, start);
           tl.to(el, { opacity: 0, y: 28, duration: 0.35, ease: "power2.in" }, start + out);
         } else if (t === "word_zoom" || t === "number_pop") {
+          const ease = pickEase(el, "back.out(2.2)");
           tl.fromTo(el, { opacity: 0, scale: 0.4 },
-                        { opacity: 1, scale: 1, duration: 0.45, ease: "back.out(2.2)" }, start);
+                        { opacity: 1, scale: 1, duration: 0.45, ease: ease }, start);
           tl.to(el, { scale: 1.06, duration: 0.25, ease: "power2.inOut", yoyo: true, repeat: 1 }, start + 0.5);
           tl.to(el, { opacity: 0, scale: 0.6, duration: 0.3, ease: "power2.in" }, start + out);
         } else if (t === "lower_third") {
+          const ease = pickEase(el, "power3.out");
           tl.fromTo(el, { opacity: 0, x: -36 },
-                        { opacity: 1, x: 0, duration: 0.45, ease: "power3.out" }, start);
+                        { opacity: 1, x: 0, duration: 0.45, ease: ease }, start);
           tl.to(el, { opacity: 0, x: -36, duration: 0.35, ease: "power2.in" }, start + out);
         } else if (t === "emoji_burst") {
           tl.fromTo(el, { opacity: 0, scale: 0.2, rotate: -22 },
