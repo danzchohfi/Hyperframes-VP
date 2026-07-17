@@ -659,6 +659,127 @@
         opacity: 0;
       }
 
+
+      /* ---------- 21st.dev-inspired polish ---------- */
+      @property --beam-angle {
+        syntax: "<angle>";
+        inherits: false;
+        initial-value: 0deg;
+      }
+      .beam { position: relative; }
+      .beam::before {
+        content: "";
+        position: absolute;
+        inset: -3px;
+        border-radius: inherit;
+        padding: 3px;
+        background: conic-gradient(
+          from var(--beam-angle),
+          transparent 0deg,
+          transparent 288deg,
+          rgba(255, 138, 60, 0.9) 322deg,
+          #ffe1c4 342deg,
+          rgba(255, 138, 60, 0.9) 352deg,
+          transparent 360deg
+        );
+        -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+        -webkit-mask-composite: xor;
+        mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+        mask-composite: exclude;
+        animation: hf-beam 3.2s linear infinite;
+        pointer-events: none;
+      }
+      @keyframes hf-beam {
+        to { --beam-angle: 360deg; }
+      }
+
+      .shine { position: relative; overflow: hidden; }
+      .shine::after {
+        content: "";
+        position: absolute;
+        top: -60%;
+        bottom: -60%;
+        left: -75%;
+        width: 50%;
+        background: linear-gradient(
+          105deg,
+          transparent 0%,
+          rgba(255, 255, 255, 0.22) 42%,
+          rgba(255, 255, 255, 0.4) 50%,
+          rgba(255, 255, 255, 0.22) 58%,
+          transparent 100%
+        );
+        animation: hf-shine 2.8s ease-in-out infinite;
+        pointer-events: none;
+      }
+      @keyframes hf-shine {
+        0% { transform: translateX(0) skewX(-16deg); }
+        60%, 100% { transform: translateX(460%) skewX(-16deg); }
+      }
+
+      .gradtext {
+        background: linear-gradient(
+          100deg,
+          #ffffff 12%,
+          #ffe1c4 30%,
+          var(--orange-hot) 46%,
+          #ffffff 60%,
+          #ffffff 88%
+        );
+        background-size: 240% 100%;
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        animation: hf-gradslide 3.6s linear infinite;
+      }
+      @keyframes hf-gradslide {
+        to { background-position: -240% 0; }
+      }
+
+      .cut::before {
+        content: "";
+        position: absolute;
+        inset: -22%;
+        background:
+          radial-gradient(ellipse 42% 30% at 30% 28%, rgba(240, 118, 47, 0.15), transparent 70%),
+          radial-gradient(ellipse 36% 28% at 72% 62%, rgba(255, 138, 60, 0.1), transparent 70%);
+        animation: hf-aurora 8s ease-in-out infinite alternate;
+        pointer-events: none;
+      }
+      @keyframes hf-aurora {
+        from { transform: translate(-2%, -2%) scale(1); }
+        to { transform: translate(2.5%, 3%) scale(1.07); }
+      }
+
+      .meteor {
+        position: absolute;
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        background: var(--orange-hot);
+        box-shadow: 0 0 12px 2px rgba(255, 138, 60, 0.55);
+        opacity: 0;
+        animation: hf-meteor 4.2s linear infinite;
+        pointer-events: none;
+      }
+      .meteor::before {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 2px;
+        width: 140px;
+        height: 2px;
+        transform: translateY(-50%);
+        background: linear-gradient(90deg, rgba(255, 190, 140, 0.85), transparent);
+        border-radius: 2px;
+      }
+      @keyframes hf-meteor {
+        0% { opacity: 0; transform: rotate(215deg) translateX(0); }
+        6% { opacity: 1; }
+        38% { opacity: 0; transform: rotate(215deg) translateX(-560px); }
+        100% { opacity: 0; transform: rotate(215deg) translateX(-560px); }
+      }
+
       /* ---------- grain ---------- */
       #grain-overlay {
         position: absolute;
@@ -823,7 +944,7 @@
             <svg class="chk" viewBox="0 0 24 24"><use href="#i-check" /></svg>
           </div>
         </div>
-        <div id="c1-sell">
+        <div id="c1-sell" class="shine">
           <span class="small">E NO FINAL…</span>
           VENDEU POR BEM MENOS DO QUE PAGOU
         </div>
@@ -839,7 +960,7 @@
           <div class="c2-term" id="c2-t1"><span class="plus">+</span> DINHEIRO PARADO NO CARRO</div>
           <div class="c2-term" id="c2-t2"><span class="plus">+</span> IPVA · SEGURO · MANUTENÇÃO</div>
           <div class="c2-term" id="c2-t3"><span class="plus">+</span> DEPRECIAÇÃO NA REVENDA</div>
-          <div id="c2-eq">
+          <div id="c2-eq" class="shine">
             <svg viewBox="0 0 24 24"><use href="#i-calc" /></svg>
             = QUANTO TE CUSTOU?
           </div>
@@ -864,7 +985,7 @@
           <div class="c3-mini" id="c3-r3">ZERO REVENDA</div>
         </div>
         <div id="c3-vs">VS</div>
-        <div id="c3-period">
+        <div id="c3-period" class="beam">
           <svg viewBox="0 0 24 24" style="width:40px;height:40px;vertical-align:-6px;margin-right:12px;color:var(--orange-hot)"><use href="#i-cal" /></svg>
           MESMO PERÍODO: <span>36 MESES</span>
         </div>
@@ -875,6 +996,9 @@
         <div class="dots"></div>
         <div class="tick tl"></div><div class="tick tr"></div>
         <div class="tick bl"></div><div class="tick br"></div>
+        <div class="meteor" style="top: 180px; left: 260px; animation-delay: -0.6s"></div>
+        <div class="meteor" style="top: 340px; left: 760px; animation-delay: -2.1s"></div>
+        <div class="meteor" style="top: 1430px; left: 520px; animation-delay: -3.3s"></div>
         <div id="c4-in">
           <div class="kicker">Mais de</div>
           <div id="c4-numrow"><span id="c4-num"><span class="c4v" id="c4-n1">23</span><span class="c4v" id="c4-n2">51</span><span id="c4-n3">70</span></span><span id="c4-pct">%</span></div>
@@ -886,25 +1010,25 @@
 
       <!-- keyword chips -->
       <div class="kchip clip" id="k1" data-start="26.0" data-duration="3.8" data-track-index="7">
-        <div class="kbody">
+        <div class="kbody shine">
           <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>
           OPERAÇÃO FINANCEIRA
         </div>
       </div>
       <div class="kchip clip" id="k2" data-start="40.85" data-duration="4.0" data-track-index="7">
-        <div class="kbody">
+        <div class="kbody shine">
           <svg viewBox="0 0 24 24"><use href="#i-down" /></svg>
           DEPRECIAÇÃO
         </div>
       </div>
       <div class="kchip clip" id="k3" data-start="85.3" data-duration="2.65" data-track-index="7">
-        <div class="kbody">
+        <div class="kbody shine">
           <svg viewBox="0 0 24 24"><use href="#i-bank" /></svg>
           FINANCIOU? É DO BANCO
         </div>
       </div>
       <div class="kchip clip" id="k4" data-start="101.3" data-duration="3.5" data-track-index="7">
-        <div class="kbody">
+        <div class="kbody shine">
           <svg viewBox="0 0 24 24"><use href="#i-up" /></svg>
           RECORDE TODOS OS MESES
         </div>
@@ -925,13 +1049,13 @@
       </div>
 
       <!-- follow pill -->
-      <div id="follow" class="clip" data-start="105.3" data-duration="3.55" data-track-index="10">
+      <div id="follow" class="clip beam" data-start="105.3" data-duration="3.55" data-track-index="10">
         <div class="mono">C</div>
         <div class="who">
           <div class="n">ComparaCar</div>
           <div class="h">@comparacar_oficial</div>
         </div>
-        <div id="follow-btn">
+        <div id="follow-btn" class="shine">
           <svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>
           Seguir
         </div>
@@ -940,12 +1064,15 @@
       <!-- outro -->
       <div id="outro" class="clip" data-start="108.8" data-duration="3.2" data-track-index="11">
         <div class="dots"></div>
+        <div class="meteor" style="top: 220px; left: 300px; animation-delay: -1.2s"></div>
+        <div class="meteor" style="top: 420px; left: 820px; animation-delay: -2.8s"></div>
+        <div class="meteor" style="top: 1500px; left: 640px; animation-delay: -0.2s"></div>
         <div id="outro-center">
           <svg id="outro-car" viewBox="0 0 24 24"><use href="#i-car" /></svg>
-          <div id="outro-mark">COMPARA<span>CAR</span></div>
+          <div id="outro-mark" class="gradtext">COMPARACAR</div>
           <div id="outro-line"></div>
           <div id="outro-tag">Tem gente fazendo conta.</div>
-          <div id="outro-handle">
+          <div id="outro-handle" class="beam">
             <svg viewBox="0 0 24 24"><use href="#i-ig" /></svg>
             @comparacar_oficial
           </div>
