@@ -1,0 +1,306 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE fcpxml>
+<fcpxml version="1.11">
+    <resources>
+        <format id="r1" name="FFVideoFormatRateUndefined" frameDuration="100/3000s" width="1080" height="1920" colorSpace="1-1-1 (Rec. 709)"/>
+        <asset id="r2" name="reel" uid="COMPARACAR_REEL_SRC" start="0s" duration="327750/3000s" hasVideo="1" format="r1" hasAudio="1" audioSources="1" audioChannels="2" audioRate="48000">
+            <media-rep kind="original-media" src="file:///RELINK/assets/reel.mp4"/>
+        </asset>
+        <asset id="r3" name="comparacar_reel_editado (referencia renderizada)" uid="COMPARACAR_REEL_RENDER" start="0s" duration="336000/3000s" hasVideo="1" format="r1" hasAudio="1" audioSources="1" audioChannels="2" audioRate="48000">
+            <media-rep kind="original-media" src="file:///RELINK/output/comparacar_reel_editado.mp4"/>
+        </asset>
+        <effect id="r4" name="Basic Title" uid=".../Titles.localized/Basic Text.localized/Basic Title.localized/Basic Title.moti"/>
+        <effect id="r5" name="Custom" uid=".../Generators.localized/Solids.localized/Custom.localized/Custom.motn"/>
+    </resources>
+    <library>
+        <event name="ComparaCar — Reel assinatura">
+            <asset-clip ref="r3" name="Referência renderizada (HyperFrames)" duration="336000/3000s" format="r1" tcFormat="NDF" audioRole="dialogue"/>
+            <project name="ComparaCar — Carro por assinatura (edit)">
+                <sequence format="r1" duration="336000/3000s" tcStart="0s" tcFormat="NDF" audioLayout="stereo" audioRate="48k">
+                    <spine>
+                        <asset-clip ref="r2" offset="0s" name="Reel ComparaCar (fonte)" start="0s" duration="327700/3000s" format="r1" tcFormat="NDF" audioRole="dialogue">
+                            <adjust-transform>
+                                <param name="scale">
+                            <keyframe time="18400/3000s" value="1.0 1.0"/>
+                            <keyframe time="19400/3000s" value="1.062 1.062"/>
+                            <keyframe time="20300/3000s" value="1.062 1.062"/>
+                            <keyframe time="25100/3000s" value="1.0 1.0"/>
+                            <keyframe time="50300/3000s" value="1.0 1.0"/>
+                            <keyframe time="51300/3000s" value="1.07 1.07"/>
+                            <keyframe time="52200/3000s" value="1.07 1.07"/>
+                            <keyframe time="57000/3000s" value="1.0 1.0"/>
+                            <keyframe time="126800/3000s" value="1.0 1.0"/>
+                            <keyframe time="127700/3000s" value="1.062 1.062"/>
+                            <keyframe time="128600/3000s" value="1.062 1.062"/>
+                            <keyframe time="133400/3000s" value="1.0 1.0"/>
+                            <keyframe time="193900/3000s" value="1.0 1.0"/>
+                            <keyframe time="194900/3000s" value="1.07 1.07"/>
+                            <keyframe time="195800/3000s" value="1.07 1.07"/>
+                            <keyframe time="200600/3000s" value="1.0 1.0"/>
+                            <keyframe time="264700/3000s" value="1.0 1.0"/>
+                            <keyframe time="265700/3000s" value="1.062 1.062"/>
+                            <keyframe time="266600/3000s" value="1.062 1.062"/>
+                            <keyframe time="271400/3000s" value="1.0 1.0"/>
+                            <keyframe time="279100/3000s" value="1.0 1.0"/>
+                            <keyframe time="280100/3000s" value="1.055 1.055"/>
+                            <keyframe time="281000/3000s" value="1.055 1.055"/>
+                            <keyframe time="285800/3000s" value="1.0 1.0"/>
+                                </param>
+                            </adjust-transform>
+                <video ref="r5" lane="1" offset="97800/3000s" name="BG C1 — custos (ink)" start="0s" duration="23200/3000s">
+                    <param name="Color" key="9999/10003/10004/2/113" value="0.047 0.047 0.063"/>
+                </video>
+                <video ref="r5" lane="1" offset="137500/3000s" name="BG C2 — somatoria (ink)" start="0s" duration="8700/3000s">
+                    <param name="Color" key="9999/10003/10004/2/113" value="0.047 0.047 0.063"/>
+                </video>
+                <video ref="r5" lane="1" offset="176200/3000s" name="BG C3 — versus (ink; metade direita laranja no original)" start="0s" duration="17300/3000s">
+                    <param name="Color" key="9999/10003/10004/2/113" value="0.047 0.047 0.063"/>
+                </video>
+                <video ref="r5" lane="1" offset="224600/3000s" name="BG F1 — freeze duotone (usar still assets/still_75.png)" start="0s" duration="8700/3000s">
+                    <param name="Color" key="9999/10003/10004/2/113" value="0.047 0.047 0.063"/>
+                </video>
+                <video ref="r5" lane="1" offset="289500/3000s" name="BG C4 — 70% (ink)" start="0s" duration="12600/3000s">
+                    <param name="Color" key="9999/10003/10004/2/113" value="0.047 0.047 0.063"/>
+                </video>
+                <title ref="r4" lane="2" offset="3000/3000s" name="comparacar_oficial" start="0s" duration="310800/3000s">
+                    <adjust-transform position="0 815"/>
+                    <text><text-style ref="ts0">comparacar_oficial</text-style></text>
+                    <text-style-def id="ts0">
+                        <text-style font="Archivo" fontSize="30" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                    </text-style-def>
+                </title>
+                <title ref="r4" lane="2" offset="78000/3000s" name="OPERAÇÃO FINANCEIRA" start="0s" duration="11400/3000s">
+                    <adjust-transform position="0 501"/>
+                    <text><text-style ref="ts1">OPERAÇÃO FINANCEIRA</text-style></text>
+                    <text-style-def id="ts1">
+                        <text-style font="Archivo Black" fontSize="44" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                    </text-style-def>
+                </title>
+                <title ref="r4" lane="2" offset="122600/3000s" name="DEPRECIAÇÃO" start="0s" duration="12000/3000s">
+                    <adjust-transform position="0 501"/>
+                    <text><text-style ref="ts2">DEPRECIAÇÃO</text-style></text>
+                    <text-style-def id="ts2">
+                        <text-style font="Archivo Black" fontSize="44" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                    </text-style-def>
+                </title>
+                <title ref="r4" lane="2" offset="255900/3000s" name="FINANCIOU? É DO BANCO" start="0s" duration="8000/3000s">
+                    <adjust-transform position="0 501"/>
+                    <text><text-style ref="ts3">FINANCIOU? É DO BANCO</text-style></text>
+                    <text-style-def id="ts3">
+                        <text-style font="Archivo Black" fontSize="44" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                    </text-style-def>
+                </title>
+                <title ref="r4" lane="2" offset="303900/3000s" name="RECORDE TODOS OS MESES" start="0s" duration="10500/3000s">
+                    <adjust-transform position="0 501"/>
+                    <text><text-style ref="ts4">RECORDE TODOS OS MESES</text-style></text>
+                    <text-style-def id="ts4">
+                        <text-style font="Archivo Black" fontSize="44" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                    </text-style-def>
+                </title>
+                <title ref="r4" lane="2" offset="97800/3000s" name="CARRO PRÓPRIO · NA PONTA DO LÁPIS" start="0s" duration="23200/3000s">
+                    <adjust-transform position="0 590"/>
+                    <text><text-style ref="ts5">CARRO PRÓPRIO · NA PONTA DO LÁPIS</text-style></text>
+                    <text-style-def id="ts5">
+                        <text-style font="Archivo" fontSize="30" fontFace="Regular" fontColor="1 0.541 0.235 1" bold="1" alignment="center"/>
+                    </text-style-def>
+                </title>
+                <title ref="r4" lane="2" offset="97800/3000s" name="VOCÊ PAGOU:" start="0s" duration="23200/3000s">
+                    <adjust-transform position="0 470"/>
+                    <text><text-style ref="ts6">VOCÊ PAGOU:</text-style></text>
+                    <text-style-def id="ts6">
+                        <text-style font="Archivo Black" fontSize="88" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                    </text-style-def>
+                </title>
+                <title ref="r4" lane="2" offset="99000/3000s" name="IPVA" start="0s" duration="22000/3000s">
+                    <adjust-transform position="0 60"/>
+                    <text><text-style ref="ts7">IPVA
+</text-style><text-style ref="ts7">SEGURO
+</text-style><text-style ref="ts7">MANUTENÇÃO
+</text-style><text-style ref="ts7">+ DESPESAS</text-style></text>
+                    <text-style-def id="ts7">
+                        <text-style font="Archivo Black" fontSize="66" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                    </text-style-def>
+                </title>
+                <title ref="r4" lane="2" offset="111000/3000s" name="E NO FINAL…" start="0s" duration="10000/3000s">
+                    <adjust-transform position="0 -560"/>
+                    <text><text-style ref="ts8">E NO FINAL…
+</text-style><text-style ref="ts8">VENDEU POR BEM MENOS DO QUE PAGOU</text-style></text>
+                    <text-style-def id="ts8">
+                        <text-style font="Archivo Black" fontSize="56" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                    </text-style-def>
+                </title>
+                <title ref="r4" lane="2" offset="137500/3000s" name="FAÇA A CONTA" start="0s" duration="8700/3000s">
+                    <adjust-transform position="0 330"/>
+                    <text><text-style ref="ts9">FAÇA A CONTA</text-style></text>
+                    <text-style-def id="ts9">
+                        <text-style font="Archivo" fontSize="30" fontFace="Regular" fontColor="1 0.541 0.235 1" bold="1" alignment="center"/>
+                    </text-style-def>
+                </title>
+                <title ref="r4" lane="2" offset="137900/3000s" name="+ DINHEIRO PARADO NO CARRO" start="0s" duration="8300/3000s">
+                    <adjust-transform position="0 60"/>
+                    <text><text-style ref="ts10">+ DINHEIRO PARADO NO CARRO
+</text-style><text-style ref="ts10">+ IPVA · SEGURO · MANUTENÇÃO
+</text-style><text-style ref="ts10">+ DEPRECIAÇÃO NA REVENDA</text-style></text>
+                    <text-style-def id="ts10">
+                        <text-style font="Archivo Black" fontSize="54" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                    </text-style-def>
+                </title>
+                <title ref="r4" lane="2" offset="142100/3000s" name="= QUANTO TE CUSTOU?" start="0s" duration="4100/3000s">
+                    <adjust-transform position="0 -280"/>
+                    <text><text-style ref="ts11">= QUANTO TE CUSTOU?</text-style></text>
+                    <text-style-def id="ts11">
+                        <text-style font="Archivo Black" fontSize="76" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                    </text-style-def>
+                </title>
+                <title ref="r4" lane="2" offset="176200/3000s" name="COMPRAR" start="0s" duration="17300/3000s">
+                    <adjust-transform position="-270 295"/>
+                    <text><text-style ref="ts12">COMPRAR</text-style></text>
+                    <text-style-def id="ts12">
+                        <text-style font="Archivo Black" fontSize="78" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                    </text-style-def>
+                </title>
+                <title ref="r4" lane="2" offset="176200/3000s" name="ASSINAR" start="0s" duration="17300/3000s">
+                    <adjust-transform position="270 295"/>
+                    <text><text-style ref="ts13">ASSINAR</text-style></text>
+                    <text-style-def id="ts13">
+                        <text-style font="Archivo Black" fontSize="78" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                    </text-style-def>
+                </title>
+                <title ref="r4" lane="2" offset="177900/3000s" name="VS" start="0s" duration="15600/3000s">
+                    <adjust-transform position="0 0"/>
+                    <text><text-style ref="ts14">VS</text-style></text>
+                    <text-style-def id="ts14">
+                        <text-style font="Archivo Black" fontSize="92" fontFace="Regular" fontColor="0.047 0.047 0.063 1" bold="1" alignment="center"/>
+                    </text-style-def>
+                </title>
+                <title ref="r4" lane="2" offset="179600/3000s" name="ENTRADA + PARCELAS" start="0s" duration="13900/3000s">
+                    <adjust-transform position="-270 -190"/>
+                    <text><text-style ref="ts15">ENTRADA + PARCELAS
+</text-style><text-style ref="ts15">IPVA · SEGURO
+</text-style><text-style ref="ts15">REVENDA POR MENOS</text-style></text>
+                    <text-style-def id="ts15">
+                        <text-style font="Archivo" fontSize="33" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                    </text-style-def>
+                </title>
+                <title ref="r4" lane="2" offset="181700/3000s" name="PARCELA ÚNICA" start="0s" duration="11800/3000s">
+                    <adjust-transform position="270 -190"/>
+                    <text><text-style ref="ts16">PARCELA ÚNICA
+</text-style><text-style ref="ts16">TUDO INCLUSO
+</text-style><text-style ref="ts16">ZERO REVENDA</text-style></text>
+                    <text-style-def id="ts16">
+                        <text-style font="Archivo" fontSize="33" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                    </text-style-def>
+                </title>
+                <title ref="r4" lane="2" offset="188500/3000s" name="MESMO PERÍODO: 36 MESES" start="0s" duration="5000/3000s">
+                    <adjust-transform position="0 -685"/>
+                    <text><text-style ref="ts17">MESMO PERÍODO: 36 MESES</text-style></text>
+                    <text-style-def id="ts17">
+                        <text-style font="Archivo" fontSize="40" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                    </text-style-def>
+                </title>
+                <title ref="r4" lane="2" offset="224600/3000s" name="O QUE É MAIS VANTAJOSO" start="0s" duration="8700/3000s">
+                    <adjust-transform position="0 700"/>
+                    <text><text-style ref="ts18">O QUE É MAIS VANTAJOSO</text-style></text>
+                    <text-style-def id="ts18">
+                        <text-style font="Archivo" fontSize="54" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                    </text-style-def>
+                </title>
+                <title ref="r4" lane="2" offset="225500/3000s" name="PRO SEU BOLSO" start="0s" duration="7800/3000s">
+                    <adjust-transform position="0 570"/>
+                    <text><text-style ref="ts19">PRO SEU BOLSO</text-style></text>
+                    <text-style-def id="ts19">
+                        <text-style font="Archivo Black" fontSize="118" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                    </text-style-def>
+                </title>
+                <title ref="r4" lane="2" offset="289500/3000s" name="MAIS DE" start="0s" duration="12600/3000s">
+                    <adjust-transform position="0 520"/>
+                    <text><text-style ref="ts20">MAIS DE</text-style></text>
+                    <text-style-def id="ts20">
+                        <text-style font="Archivo" fontSize="30" fontFace="Regular" fontColor="1 0.541 0.235 1" bold="1" alignment="center"/>
+                    </text-style-def>
+                </title>
+                <title ref="r4" lane="2" offset="290300/3000s" name="70%" start="0s" duration="11800/3000s">
+                    <adjust-transform position="0 150"/>
+                    <text><text-style ref="ts21">70%</text-style></text>
+                    <text-style-def id="ts21">
+                        <text-style font="Archivo Black" fontSize="300" fontFace="Regular" fontColor="1 0.541 0.235 1" bold="1" alignment="center"/>
+                    </text-style-def>
+                </title>
+                <title ref="r4" lane="2" offset="289500/3000s" name="DOS CASOS" start="0s" duration="12600/3000s">
+                    <adjust-transform position="0 -175"/>
+                    <text><text-style ref="ts22">DOS CASOS</text-style></text>
+                    <text-style-def id="ts22">
+                        <text-style font="Archivo" fontSize="46" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                    </text-style-def>
+                </title>
+                <title ref="r4" lane="2" offset="295800/3000s" name="A ASSINATURA É" start="0s" duration="6300/3000s">
+                    <adjust-transform position="0 -440"/>
+                    <text><text-style ref="ts23">A ASSINATURA É
+</text-style><text-style ref="ts23">MAIS ECONÔMICA E VANTAJOSA</text-style></text>
+                    <text-style-def id="ts23">
+                        <text-style font="Archivo Black" fontSize="78" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                    </text-style-def>
+                </title>
+                <title ref="r4" lane="2" offset="315900/3000s" name="ComparaCar · @comparacar_oficial · SEGUI" start="0s" duration="10600/3000s">
+                    <adjust-transform position="0 -230"/>
+                    <text><text-style ref="ts24">ComparaCar · @comparacar_oficial · SEGUIR</text-style></text>
+                    <text-style-def id="ts24">
+                        <text-style font="Archivo" fontSize="32" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                    </text-style-def>
+                </title>
+                    <chapter-marker start="0/3000s" duration="100/3000s" value="HOOK — Como assim assinar um carro?"/>
+                    <chapter-marker start="26900/3000s" duration="100/3000s" value="Contexto — todo dia o mesmo comentário"/>
+                    <chapter-marker start="50300/3000s" duration="100/3000s" value="Em NENHUM cenário o carro é seu"/>
+                    <chapter-marker start="77900/3000s" duration="100/3000s" value="Operação financeira"/>
+                    <chapter-marker start="97800/3000s" duration="100/3000s" value="CUTAWAY C1 — Custos do carro próprio"/>
+                    <chapter-marker start="122300/3000s" duration="100/3000s" value="Depreciação"/>
+                    <chapter-marker start="137500/3000s" duration="100/3000s" value="CUTAWAY C2 — Faça a conta"/>
+                    <chapter-marker start="176200/3000s" duration="100/3000s" value="CUTAWAY C3 — COMPRAR × ASSINAR"/>
+                    <chapter-marker start="193500/3000s" duration="100/3000s" value="Em qualquer modalidade não é seu"/>
+                    <chapter-marker start="224600/3000s" duration="100/3000s" value="FREEZE F1 — Pro seu bolso"/>
+                    <chapter-marker start="255700/3000s" duration="100/3000s" value="Financiado = do banco"/>
+                    <chapter-marker start="285400/3000s" duration="100/3000s" value="CUTAWAY C4 — 70% dos casos"/>
+                    <chapter-marker start="302000/3000s" duration="100/3000s" value="Recorde todos os meses"/>
+                    <chapter-marker start="315000/3000s" duration="100/3000s" value="Fechamento — tem gente fazendo conta"/>
+                    <marker start="78000/3000s" duration="100/3000s" value="Chip 'OPERAÇÃO FINANCEIRA': pop com back-ease (scale 0.82-&gt;1" completed="0" note="Chip 'OPERAÇÃO FINANCEIRA': pop com back-ease (scale 0.82-&gt;1, y +70-&gt;0), sai 29.4s"/>
+                    <marker start="97800/3000s" duration="100/3000s" value="C1 entra com slide da direita; itens IPVA/SEGURO/MANUTENCAO/" completed="0" note="C1 entra com slide da direita; itens IPVA/SEGURO/MANUTENCAO/+DESPESAS entram em 33.0/33.4/34.1/35.0 sincronizados com a fala; checks pop"/>
+                    <marker start="111000/3000s" duration="100/3000s" value="Banner laranja 'VENDEU POR BEM MENOS' sobe com back-ease e l" completed="0" note="Banner laranja 'VENDEU POR BEM MENOS' sobe com back-ease e leve rotacao -2deg"/>
+                    <marker start="122600/3000s" duration="100/3000s" value="Chip 'DEPRECIACAO' pop; sai 44.5s" completed="0" note="Chip 'DEPRECIACAO' pop; sai 44.5s"/>
+                    <marker start="137500/3000s" duration="100/3000s" value="C2 zoom-out sutil (scale 1.12-&gt;1); termos em stagger 0.3s; '" completed="0" note="C2 zoom-out sutil (scale 1.12-&gt;1); termos em stagger 0.3s; '= QUANTO TE CUSTOU?' pop 47.35"/>
+                    <marker start="176200/3000s" duration="100/3000s" value="C3 paineis deslizam das laterais; badge VS gira 360 e pop em" completed="0" note="C3 paineis deslizam das laterais; badge VS gira 360 e pop em 59.3 ('versus' falado); chips em stagger; pill 36 MESES pop 62.83"/>
+                    <marker start="224600/3000s" duration="100/3000s" value="F1: freeze frame com duotone laranja + halftone; flash branc" completed="0" note="F1: freeze frame com duotone laranja + halftone; flash branco 0.25s; textos slam (scale 1.7-&gt;1). Still pronto em assets/still_75.png"/>
+                    <marker start="255900/3000s" duration="100/3000s" value="Chip 'FINANCIOU? E DO BANCO' pop; sai 87.6s" completed="0" note="Chip 'FINANCIOU? E DO BANCO' pop; sai 87.6s"/>
+                    <marker start="289500/3000s" duration="100/3000s" value="C4: contador 23-&gt;51-&gt;70 em 96.78/97.0/97.2 (fala '70%' em 97" completed="0" note="C4: contador 23-&gt;51-&gt;70 em 96.78/97.0/97.2 (fala '70%' em 97.17); pop de escala no numero; linhas entram 98.6/98.85"/>
+                    <marker start="303900/3000s" duration="100/3000s" value="Chip 'RECORDE TODOS OS MESES' pop; sai 104.4s" completed="0" note="Chip 'RECORDE TODOS OS MESES' pop; sai 104.4s"/>
+                    <marker start="315900/3000s" duration="100/3000s" value="Follow pill estilo IG sobe com back-ease; botao Seguir pulsa" completed="0" note="Follow pill estilo IG sobe com back-ease; botao Seguir pulsa 106.4 e 107.5"/>
+                    <marker start="326400/3000s" duration="100/3000s" value="Video fade-out para outro card; wordmark/linha/tagline/handl" completed="0" note="Video fade-out para outro card; wordmark/linha/tagline/handle em cascata; fade final para preto 111.55"/>
+                        </asset-clip>
+                        <gap name="Outro" offset="327700/3000s" start="0s" duration="8300/3000s">
+                <title ref="r4" lane="2" offset="327700/3000s" name="COMPARACAR" start="0s" duration="8300/3000s">
+                    <adjust-transform position="0 80"/>
+                    <text><text-style ref="ts100">COMPARACAR</text-style></text>
+                    <text-style-def id="ts100">
+                        <text-style font="Archivo Black" fontSize="116" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                    </text-style-def>
+                </title>
+                <title ref="r4" lane="2" offset="329600/3000s" name="Tem gente fazendo conta." start="0s" duration="6400/3000s">
+                    <adjust-transform position="0 -120"/>
+                    <text><text-style ref="ts101">Tem gente fazendo conta.</text-style></text>
+                    <text-style-def id="ts101">
+                        <text-style font="Archivo" fontSize="44" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                    </text-style-def>
+                </title>
+                <title ref="r4" lane="2" offset="330500/3000s" name="@comparacar_oficial" start="0s" duration="5500/3000s">
+                    <adjust-transform position="0 -300"/>
+                    <text><text-style ref="ts102">@comparacar_oficial</text-style></text>
+                    <text-style-def id="ts102">
+                        <text-style font="Archivo" fontSize="36" fontFace="Regular" fontColor="1 0.541 0.235 1" bold="1" alignment="center"/>
+                    </text-style-def>
+                </title>
+                        </gap>
+                    </spine>
+                </sequence>
+            </project>
+        </event>
+    </library>
+</fcpxml>
