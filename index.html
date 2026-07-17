@@ -184,6 +184,8 @@
         inset: 0;
         overflow: hidden;
         background:
+          radial-gradient(ellipse 42% 30% at 30% 28%, rgba(240, 118, 47, 0.15), transparent 70%),
+          radial-gradient(ellipse 36% 28% at 72% 62%, rgba(255, 138, 60, 0.1), transparent 70%),
           radial-gradient(ellipse 90% 55% at 50% 34%, rgba(240, 118, 47, 0.16), transparent 68%),
           var(--ink);
       }
@@ -661,11 +663,6 @@
 
 
       /* ---------- 21st.dev-inspired polish ---------- */
-      @property --beam-angle {
-        syntax: "<angle>";
-        inherits: false;
-        initial-value: 0deg;
-      }
       .beam { position: relative; }
       .beam::before {
         content: "";
@@ -674,23 +671,20 @@
         border-radius: inherit;
         padding: 3px;
         background: conic-gradient(
-          from var(--beam-angle),
-          transparent 0deg,
-          transparent 288deg,
-          rgba(255, 138, 60, 0.9) 322deg,
-          #ffe1c4 342deg,
-          rgba(255, 138, 60, 0.9) 352deg,
-          transparent 360deg
+          from 214deg,
+          rgba(240, 118, 47, 0.5) 0deg,
+          rgba(255, 138, 60, 0.9) 60deg,
+          #ffe1c4 105deg,
+          rgba(255, 138, 60, 0.9) 150deg,
+          rgba(240, 118, 47, 0.5) 210deg,
+          rgba(194, 85, 28, 0.55) 300deg,
+          rgba(240, 118, 47, 0.5) 360deg
         );
         -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
         -webkit-mask-composite: xor;
         mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
         mask-composite: exclude;
-        animation: hf-beam 3.2s linear infinite;
         pointer-events: none;
-      }
-      @keyframes hf-beam {
-        to { --beam-angle: 360deg; }
       }
 
       .shine { position: relative; overflow: hidden; }
@@ -720,35 +714,14 @@
       .gradtext {
         background: linear-gradient(
           100deg,
-          #ffffff 12%,
-          #ffe1c4 30%,
-          var(--orange-hot) 46%,
-          #ffffff 60%,
-          #ffffff 88%
+          #ffffff 18%,
+          #fff4ea 42%,
+          #ffd9b8 58%,
+          var(--orange-hot) 88%
         );
-        background-size: 240% 100%;
         -webkit-background-clip: text;
         background-clip: text;
         -webkit-text-fill-color: transparent;
-        animation: hf-gradslide 3.6s linear infinite;
-      }
-      @keyframes hf-gradslide {
-        to { background-position: -240% 0; }
-      }
-
-      .cut::before {
-        content: "";
-        position: absolute;
-        inset: -22%;
-        background:
-          radial-gradient(ellipse 42% 30% at 30% 28%, rgba(240, 118, 47, 0.15), transparent 70%),
-          radial-gradient(ellipse 36% 28% at 72% 62%, rgba(255, 138, 60, 0.1), transparent 70%);
-        animation: hf-aurora 8s ease-in-out infinite alternate;
-        pointer-events: none;
-      }
-      @keyframes hf-aurora {
-        from { transform: translate(-2%, -2%) scale(1); }
-        to { transform: translate(2.5%, 3%) scale(1.07); }
       }
 
       .meteor {
