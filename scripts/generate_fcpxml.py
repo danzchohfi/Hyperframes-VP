@@ -141,11 +141,11 @@ def title_el(idx, ref, text, start, dur, size, color, px, py, align, font, lane)
         for i, l in enumerate(lines)
     )
     return f"""                <title ref="{ref}" lane="{lane}" offset="{fr(start)}" name="{escape(text.split(chr(10))[0][:40])}" start="0s" duration="{fr(dur)}">
-                    <adjust-transform position="{px} {py}"/>
                     <text>{body}</text>
                     <text-style-def id="{tsid}">
                         <text-style font="{font}" fontSize="{size}" fontFace="Black" fontColor="{color}" bold="1" alignment="{align}"/>
                     </text-style-def>
+                    <adjust-transform position="{px} {py}"/>
                 </title>"""
 
 def solid_el(name, start, dur, lane):
@@ -187,7 +187,9 @@ def build():
                         <asset-clip ref="r2" offset="0s" name="Reel ComparaCar (fonte)" start="0s" duration="{fr(VIDEO_DUR)}" format="r1" tcFormat="NDF" audioRole="dialogue">
                             <adjust-transform>
                                 <param name="scale">
+                                    <keyframeAnimation>
 {punch_keyframes()}
+                                    </keyframeAnimation>
                                 </param>
                             </adjust-transform>
 {solids}
