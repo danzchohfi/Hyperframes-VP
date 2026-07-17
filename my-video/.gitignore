@@ -1,0 +1,13 @@
+node_modules/
+/snapshots/
+/out.mp4
+/renders/
+work-*/
+
+# Large, re-derivable intermediates (not needed by the composition)
+assets/reel-audio.wav
+assets/reel.mp4
+
+# ...but DO keep the cut the composition actually loads.
+# (The repo-root .gitignore excludes every *.mp4, so re-include it explicitly.)
+!assets/reel-cut.mp4

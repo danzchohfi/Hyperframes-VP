@@ -1,30 +1,255 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=1920, height=1080" />
-    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="assets/vendor/gsap.min.js"></script>
     <style>
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
+      @font-face {
+        font-family: "Inter";
+        font-style: normal;
+        font-weight: 100 900;
+        font-display: block;
+        src: url("assets/fonts/inter.woff2") format("woff2"),
+             url("assets/fonts/inter-ext.woff2") format("woff2");
       }
-      html,
-      body {
-        margin: 0;
-        width: 1920px;
-        height: 1080px;
+      @font-face {
+        font-family: "Inter";
+        font-style: italic;
+        font-weight: 100 900;
+        font-display: block;
+        src: url("assets/fonts/inter-italic.woff2") format("woff2");
+      }
+
+      :root {
+        --bg: #07090d;
+        --ink: #ffffff;
+        --muted: #99a3b0;
+        --accent: #ff9e1b;
+        --accent-deep: #f5820a;
+      }
+
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: 1080px;
+        height: 1920px;
         overflow: hidden;
-        background: #000;
+        background: var(--bg);
       }
       body {
         font-family: "Inter", sans-serif;
+        color: var(--ink);
+        -webkit-font-smoothing: antialiased;
+        text-rendering: geometricPrecision;
       }
-      code,
-      pre,
-      .monospace {
-        font-family: "JetBrains Mono", monospace;
+
+      /* ---------- Base media ---------- */
+      #video {
+        position: absolute;
+        inset: 0;
+        width: 1080px;
+        height: 1920px;
+        object-fit: cover;
+        background: #000;
+      }
+
+      /* ---------- Overlay: progress bar + logo ---------- */
+      #overlay { position: absolute; inset: 0; pointer-events: none; }
+      .progress-track {
+        position: absolute;
+        top: 0; left: 0;
+        width: 1080px;
+        height: 8px;
+        background: rgba(255, 255, 255, 0.16);
+      }
+      .progress-fill {
+        position: absolute;
+        top: 0; left: 0;
+        width: 1080px;
+        height: 8px;
+        transform: scaleX(0);
+        transform-origin: left center;
+        background: linear-gradient(90deg, var(--accent-deep), var(--accent));
+        box-shadow: 0 0 18px rgba(255, 158, 27, 0.6);
+      }
+      .brand-badge {
+        position: absolute;
+        top: 40px; left: 40px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 14px 24px 14px 20px;
+        border-radius: 100px;
+        background: rgba(7, 9, 13, 0.5);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .brand-dot {
+        width: 16px; height: 16px;
+        border-radius: 5px;
+        background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+        box-shadow: 0 0 14px rgba(255, 158, 27, 0.7);
+        flex: none;
+      }
+      .brand-word {
+        font-size: 32px;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+        color: #fff;
+      }
+      .brand-word .amber { color: var(--accent); }
+
+      /* ---------- Full-frame cards (intro / outro) ---------- */
+      .card {
+        position: absolute;
+        inset: 0;
+        width: 1080px;
+        height: 1920px;
+        background: radial-gradient(120% 80% at 50% 0%, #12161f 0%, #07090d 60%);
+        overflow: hidden;
+      }
+      .card::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(90% 70% at 50% 45%, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
+        pointer-events: none;
+      }
+      .glow {
+        position: absolute;
+        width: 900px; height: 900px;
+        left: 50%;
+        top: -260px;
+        transform: translateX(-50%);
+        background: radial-gradient(circle, rgba(255, 158, 27, 0.22) 0%, transparent 62%);
+      }
+      .glow-b { top: auto; bottom: -320px; }
+
+      /* ---------- Intro ---------- */
+      #introInner { position: absolute; inset: 0; }
+      .intro-inner {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 0 96px;
+        z-index: 2;
+      }
+      .eyebrow {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        font-size: 30px;
+        font-weight: 700;
+        letter-spacing: 0.32em;
+        color: var(--muted);
+        margin-bottom: 40px;
+      }
+      .intro-head { line-height: 0.98; }
+      .intro-head .line-a {
+        display: block;
+        font-size: 48px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        color: #dfe5ee;
+        margin-bottom: 18px;
+      }
+      .intro-head .line-b {
+        display: block;
+        font-size: 148px;
+        font-weight: 900;
+        letter-spacing: -0.035em;
+        color: var(--accent);
+        text-shadow: 0 10px 60px rgba(255, 158, 27, 0.28);
+      }
+      .rule {
+        width: 132px;
+        height: 6px;
+        border-radius: 3px;
+        background: linear-gradient(90deg, var(--accent), var(--accent-deep));
+        transform: scaleX(0);
+        transform-origin: left center;
+        margin: 52px 0 34px;
+      }
+      .kicker {
+        font-size: 40px;
+        font-weight: 500;
+        color: var(--muted);
+      }
+      .kicker b { color: #fff; font-weight: 700; }
+
+      /* ---------- Outro ---------- */
+      .outro-inner {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 96px;
+        padding: 0 90px;
+        z-index: 2;
+      }
+      .stat-wrap { text-align: center; }
+      .stat-big {
+        font-size: 232px;
+        font-weight: 900;
+        letter-spacing: -0.04em;
+        line-height: 0.86;
+        color: var(--accent);
+        text-shadow: 0 12px 70px rgba(255, 158, 27, 0.3);
+      }
+      .stat-sub {
+        margin-top: 22px;
+        font-size: 46px;
+        font-weight: 500;
+        color: var(--muted);
+      }
+      .stat-sub b { color: #fff; font-weight: 800; }
+
+      .follow-card {
+        display: flex;
+        align-items: center;
+        gap: 30px;
+        width: 900px;
+        padding: 26px 30px;
+        border-radius: 28px;
+        background: rgba(20, 25, 33, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+      }
+      .avatar {
+        width: 118px; height: 118px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 3px solid var(--accent);
+        flex: none;
+      }
+      .follow-meta { flex: 1; min-width: 0; }
+      .follow-meta .handle {
+        font-size: 44px;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+        color: #fff;
+      }
+      .follow-meta .sub {
+        margin-top: 6px;
+        font-size: 30px;
+        font-weight: 500;
+        color: var(--muted);
+      }
+      .follow-btn {
+        flex: none;
+        padding: 22px 44px;
+        border-radius: 100px;
+        font-size: 36px;
+        font-weight: 800;
+        letter-spacing: 0.01em;
+        color: #1a1204;
+        background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+        box-shadow: 0 10px 30px rgba(255, 158, 27, 0.4);
       }
     </style>
   </head>
@@ -33,26 +258,130 @@
       id="root"
       data-composition-id="main"
       data-start="0"
-      data-duration="10"
-      data-width="1920"
-      data-height="1080"
+      data-duration="44"
+      data-width="1080"
+      data-height="1920"
     >
-      
-      
+      <!-- Base video (muted) — audio comes from the separate <audio> track -->
+      <video
+        id="video"
+        class="clip"
+        data-start="2.8"
+        data-duration="36.7"
+        data-track-index="0"
+        data-media-start="0"
+        data-has-audio="false"
+        src="assets/reel-cut.mp4"
+        muted
+        playsinline
+        style="z-index: 1"
+      ></video>
 
-      <!--
-        Add your clips here. Example:
-        <div id="title" class="clip" data-start="0" data-duration="5" data-track-index="1"
-             style="font-size: 64px; color: #fff; padding: 40px">
-          Hello World
+      <!-- Separate audio track (kept in sync with the video window) -->
+      <audio
+        id="audio"
+        data-start="2.8"
+        data-duration="36.7"
+        data-track-index="1"
+        data-media-start="0"
+        data-volume="1"
+        src="assets/reel-cut.m4a"
+      ></audio>
+
+      <!-- Persistent overlay: progress bar + brand badge -->
+      <div
+        id="overlay"
+        class="clip"
+        data-start="2.8"
+        data-duration="36.7"
+        data-track-index="5"
+        style="z-index: 5"
+      >
+        <div class="progress-track"><div id="progressFill" class="progress-fill"></div></div>
+        <div id="brandBadge" class="brand-badge">
+          <span class="brand-dot"></span>
+          <span class="brand-word">Compara<span class="amber">Car</span></span>
         </div>
-      -->
+      </div>
+
+      <!-- Intro hook card -->
+      <div
+        id="intro"
+        class="clip card"
+        data-start="0"
+        data-duration="2.8"
+        data-track-index="8"
+        style="z-index: 30"
+      >
+        <div id="introInner">
+          <div class="glow" data-layout-allow-overflow></div>
+          <div class="intro-inner">
+            <div id="introBrand" class="eyebrow"><span class="brand-dot"></span> COMPARACAR</div>
+            <h1 class="intro-head">
+              <span id="introLineA" class="line-a">CARRO POR ASSINATURA</span>
+              <span id="introLineB" class="line-b">VALE A PENA?</span>
+            </h1>
+            <div id="introRule" class="rule"></div>
+            <div id="introKick" class="kicker">A conta que <b>ninguém te faz</b>.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Outro CTA card -->
+      <div
+        id="outro"
+        class="clip card"
+        data-start="39.5"
+        data-duration="4.5"
+        data-track-index="9"
+        style="z-index: 31"
+      >
+        <div class="glow glow-b" data-layout-allow-overflow></div>
+        <div class="outro-inner">
+          <div id="statWrap" class="stat-wrap">
+            <div class="stat-big"><span id="statNum">+70%</span></div>
+            <div id="statSub" class="stat-sub">dos casos, <b>assinar sai mais barato</b>.</div>
+          </div>
+          <div id="followCard" class="follow-card">
+            <img class="avatar" src="assets/avatar.jpg" alt="" />
+            <div class="follow-meta">
+              <div class="handle">@comparacar_oficial</div>
+              <div class="sub">Faça a conta antes de decidir.</div>
+            </div>
+            <div class="follow-btn">Seguir</div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <script>
       window.__timelines = window.__timelines || {};
-      const tl = gsap.timeline({ paused: true });
-      // Example: tl.from("#title", { opacity: 0, y: -50, duration: 1 }, 0);
+      const tl = gsap.timeline({ paused: true, defaults: { ease: "power3.out" } });
+
+      /* ---- Intro (0 – 2.8s) ---- */
+      tl.fromTo("#introBrand", { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.5 }, 0.15);
+      tl.fromTo("#introLineA", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.55 }, 0.3);
+      tl.fromTo("#introLineB", { opacity: 0, y: 60, scale: 0.92 }, { opacity: 1, y: 0, scale: 1, duration: 0.66, ease: "back.out(1.5)" }, 0.5);
+      tl.fromTo("#introRule", { scaleX: 0 }, { scaleX: 1, duration: 0.5 }, 0.86);
+      tl.fromTo("#introKick", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.5 }, 1.02);
+      /* exit fade lives on the inner (non-clip) wrapper; hard-kill at the clip boundary */
+      tl.to("#introInner", { opacity: 0, duration: 0.32, ease: "power2.inOut" }, 2.48);
+      tl.set("#introInner", { opacity: 0 }, 2.8);
+
+      /* ---- Video + overlay in (2.8s) ---- */
+      tl.fromTo("#video", { opacity: 0 }, { opacity: 1, duration: 0.36, ease: "power2.out" }, 2.8);
+      tl.fromTo("#overlay", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 3.0);
+      tl.fromTo("#brandBadge", { opacity: 0, x: -18 }, { opacity: 1, x: 0, duration: 0.5 }, 3.0);
+      tl.fromTo("#progressFill", { scaleX: 0 }, { scaleX: 1, duration: 36.2, ease: "none" }, 2.95);
+      /* #video and #overlay are clips — the framework hard-cuts them at 39.5s (no exit tween) */
+
+      /* ---- Outro (39.5 – 44s): dark card is present instantly, contents animate in ---- */
+      tl.fromTo("#statNum", { opacity: 0, y: 44, scale: 0.8 }, { opacity: 1, y: 0, scale: 1, duration: 0.62, ease: "back.out(1.6)" }, 39.62);
+      tl.fromTo("#statSub", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.5 }, 39.95);
+      tl.fromTo("#followCard", { opacity: 0, y: 46 }, { opacity: 1, y: 0, duration: 0.6 }, 41.0);
+      /* hold the final frame to the composition end */
+      tl.to("#followCard", { opacity: 1, duration: 0.01 }, 43.99);
+
       window.__timelines["main"] = tl;
     </script>
   </body>
