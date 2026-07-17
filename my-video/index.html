@@ -6,341 +6,185 @@
     <script src="assets/vendor/gsap.min.js"></script>
     <style>
       @font-face {
-        font-family: "Inter";
-        font-style: normal;
-        font-weight: 100 900;
-        font-display: block;
-        src: url("assets/fonts/inter.woff2") format("woff2"),
-             url("assets/fonts/inter-ext.woff2") format("woff2");
+        font-family: "Inter"; font-style: normal; font-weight: 100 900; font-display: block;
+        src: url("assets/fonts/inter.woff2") format("woff2"), url("assets/fonts/inter-ext.woff2") format("woff2");
       }
       @font-face {
-        font-family: "Inter";
-        font-style: italic;
-        font-weight: 100 900;
-        font-display: block;
+        font-family: "Inter"; font-style: italic; font-weight: 100 900; font-display: block;
         src: url("assets/fonts/inter-italic.woff2") format("woff2");
       }
-
       :root {
-        --bg: #07090d;
-        --ink: #ffffff;
-        --muted: #99a3b0;
-        --accent: #ff9e1b;
-        --accent-deep: #f5820a;
+        --bg: #07090d; --ink: #ffffff; --muted: #97a2b0;
+        --amber: #ff9e1b; --amber-deep: #f5820a; --red: #ff5747; --green: #34d888;
       }
-
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      html, body {
-        width: 1080px;
-        height: 1920px;
-        overflow: hidden;
-        background: var(--bg);
-      }
-      body {
-        font-family: "Inter", sans-serif;
-        color: var(--ink);
-        -webkit-font-smoothing: antialiased;
-        text-rendering: geometricPrecision;
-      }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: var(--bg); }
+      body { font-family: "Inter", sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; text-rendering: geometricPrecision; }
+      .fill { position: absolute; inset: 0; width: 1080px; height: 1920px; }
 
-      /* ---------- Base media ---------- */
-      #video {
-        position: absolute;
-        inset: 0;
-        width: 1080px;
-        height: 1920px;
-        object-fit: cover;
-        background: #000;
-      }
+      #video { object-fit: cover; background: #000; }
 
-      /* ---------- Overlay: progress bar + logo ---------- */
-      #overlay { position: absolute; inset: 0; pointer-events: none; }
-      .progress-track {
-        position: absolute;
-        top: 0; left: 0;
-        width: 1080px;
-        height: 8px;
-        background: rgba(255, 255, 255, 0.16);
+      /* ---------- Texture ---------- */
+      #grain {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        background-size: 170px 170px; opacity: 0.09; mix-blend-mode: overlay; pointer-events: none;
       }
-      .progress-fill {
-        position: absolute;
-        top: 0; left: 0;
-        width: 1080px;
-        height: 8px;
-        transform: scaleX(0);
-        transform-origin: left center;
-        background: linear-gradient(90deg, var(--accent-deep), var(--accent));
-        box-shadow: 0 0 18px rgba(255, 158, 27, 0.6);
-      }
-      .brand-badge {
-        position: absolute;
-        top: 40px; left: 40px;
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        padding: 14px 24px 14px 20px;
-        border-radius: 100px;
-        background: rgba(7, 9, 13, 0.5);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-      }
-      .brand-dot {
-        width: 16px; height: 16px;
-        border-radius: 5px;
-        background: linear-gradient(135deg, var(--accent), var(--accent-deep));
-        box-shadow: 0 0 14px rgba(255, 158, 27, 0.7);
-        flex: none;
-      }
-      .brand-word {
-        font-size: 32px;
-        font-weight: 800;
-        letter-spacing: -0.01em;
-        color: #fff;
-      }
-      .brand-word .amber { color: var(--accent); }
+      #vignette { background: radial-gradient(120% 88% at 50% 42%, transparent 52%, rgba(0,0,0,0.42) 100%); pointer-events: none; }
 
-      /* ---------- Full-frame cards (intro / outro) ---------- */
-      .card {
-        position: absolute;
-        inset: 0;
-        width: 1080px;
-        height: 1920px;
-        background: radial-gradient(120% 80% at 50% 0%, #12161f 0%, #07090d 60%);
-        overflow: hidden;
-      }
-      .card::after {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background: radial-gradient(90% 70% at 50% 45%, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
-        pointer-events: none;
-      }
-      .glow {
-        position: absolute;
-        width: 900px; height: 900px;
-        left: 50%;
-        top: -260px;
-        transform: translateX(-50%);
-        background: radial-gradient(circle, rgba(255, 158, 27, 0.22) 0%, transparent 62%);
-      }
-      .glow-b { top: auto; bottom: -320px; }
+      /* ---------- Persistent overlay ---------- */
+      #overlay { pointer-events: none; }
+      .progress-track { position: absolute; top: 0; left: 0; width: 1080px; height: 8px; background: rgba(255,255,255,0.16); }
+      .progress-fill { position: absolute; top: 0; left: 0; width: 1080px; height: 8px; transform: scaleX(0); transform-origin: left center;
+        background: linear-gradient(90deg, var(--amber-deep), var(--amber)); box-shadow: 0 0 18px rgba(255,158,27,0.6); }
+      .brand-badge { position: absolute; top: 40px; left: 40px; display: flex; align-items: center; gap: 14px; padding: 13px 24px 13px 19px;
+        border-radius: 100px; background: rgba(7,9,13,0.52); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.1); }
+      .brand-dot { width: 15px; height: 15px; border-radius: 5px; background: linear-gradient(135deg, var(--amber), var(--amber-deep)); box-shadow: 0 0 14px rgba(255,158,27,0.7); flex: none; }
+      .brand-word { font-size: 31px; font-weight: 800; letter-spacing: -0.01em; }
+      .brand-word .amber { color: var(--amber); }
 
-      /* ---------- Intro ---------- */
+      /* ---------- Cards ---------- */
+      .card { position: absolute; inset: 0; width: 1080px; height: 1920px; overflow: hidden; background: radial-gradient(125% 80% at 50% 0%, #131824 0%, #07090d 58%); }
+      .card::after { content: ""; position: absolute; inset: 0; background: radial-gradient(92% 72% at 50% 44%, transparent 54%, rgba(0,0,0,0.6) 100%); pointer-events: none; }
+      .glow { position: absolute; width: 940px; height: 940px; left: 50%; top: -280px; transform: translateX(-50%); background: radial-gradient(circle, rgba(255,158,27,0.22) 0%, transparent 62%); }
+      .glow-green { background: radial-gradient(circle, rgba(52,216,136,0.2) 0%, transparent 62%); }
       #introInner { position: absolute; inset: 0; }
-      .intro-inner {
-        position: absolute;
-        inset: 0;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        padding: 0 96px;
-        z-index: 2;
-      }
-      .eyebrow {
-        display: flex;
-        align-items: center;
-        gap: 16px;
-        font-size: 30px;
-        font-weight: 700;
-        letter-spacing: 0.32em;
-        color: var(--muted);
-        margin-bottom: 40px;
-      }
-      .intro-head { line-height: 0.98; }
-      .intro-head .line-a {
-        display: block;
-        font-size: 48px;
-        font-weight: 700;
-        letter-spacing: 0.14em;
-        color: #dfe5ee;
-        margin-bottom: 18px;
-      }
-      .intro-head .line-b {
-        display: block;
-        font-size: 148px;
-        font-weight: 900;
-        letter-spacing: -0.035em;
-        color: var(--accent);
-        text-shadow: 0 10px 60px rgba(255, 158, 27, 0.28);
-      }
-      .rule {
-        width: 132px;
-        height: 6px;
-        border-radius: 3px;
-        background: linear-gradient(90deg, var(--accent), var(--accent-deep));
-        transform: scaleX(0);
-        transform-origin: left center;
-        margin: 52px 0 34px;
-      }
-      .kicker {
-        font-size: 40px;
-        font-weight: 500;
-        color: var(--muted);
-      }
+      .intro-pad { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; padding: 0 92px; z-index: 2; }
+      .eyebrow { display: flex; align-items: center; gap: 15px; font-size: 29px; font-weight: 700; letter-spacing: 0.3em; color: var(--muted); margin-bottom: 38px; }
+      .intro-head { line-height: 0.96; position: relative; overflow: hidden; }
+      .intro-head .la { display: block; font-size: 46px; font-weight: 700; letter-spacing: 0.13em; color: #dbe2ec; margin-bottom: 16px; }
+      .intro-head .lb { display: block; font-size: 150px; font-weight: 900; letter-spacing: -0.04em; color: var(--amber); text-shadow: 0 10px 60px rgba(255,158,27,0.28); }
+      #introShine { position: absolute; top: 40px; left: 0; width: 240px; height: 250px; background: linear-gradient(100deg, transparent, rgba(255,255,255,0.42), transparent); mix-blend-mode: overlay; }
+      .rule { width: 130px; height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--amber), var(--amber-deep)); transform: scaleX(0); transform-origin: left center; margin: 50px 0 32px; }
+      .kicker { font-size: 39px; font-weight: 500; color: var(--muted); }
       .kicker b { color: #fff; font-weight: 700; }
 
-      /* ---------- Outro ---------- */
-      .outro-inner {
-        position: absolute;
-        inset: 0;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        gap: 96px;
-        padding: 0 90px;
-        z-index: 2;
-      }
-      .stat-wrap { text-align: center; }
-      .stat-big {
-        font-size: 232px;
-        font-weight: 900;
-        letter-spacing: -0.04em;
-        line-height: 0.86;
-        color: var(--accent);
-        text-shadow: 0 12px 70px rgba(255, 158, 27, 0.3);
-      }
-      .stat-sub {
-        margin-top: 22px;
-        font-size: 46px;
-        font-weight: 500;
-        color: var(--muted);
-      }
-      .stat-sub b { color: #fff; font-weight: 800; }
+      /* ---------- Chapter flash (label inside the sliding bar) ---------- */
+      .chapter { position: absolute; inset: 0; display: flex; align-items: center; }
+      .chapter .bar { display: flex; align-items: center; gap: 26px; width: 1080px; height: 296px; padding-left: 92px; }
+      .chapter.amber .bar { background: linear-gradient(90deg, rgba(255,158,27,0.97), rgba(245,130,10,0.92)); }
+      .chapter.green .bar { background: linear-gradient(90deg, rgba(52,216,136,0.97), rgba(22,170,110,0.92)); }
+      .chapter .cnum { font-size: 40px; font-weight: 800; letter-spacing: 0.16em; color: rgba(10,10,12,0.72); }
+      .chapter .cname { font-size: 92px; font-weight: 900; letter-spacing: -0.03em; color: #0a0a0c; line-height: 0.95; }
 
-      .follow-card {
-        display: flex;
-        align-items: center;
-        gap: 30px;
-        width: 900px;
-        padding: 26px 30px;
-        border-radius: 28px;
-        background: rgba(20, 25, 33, 0.9);
-        border: 1px solid rgba(255, 255, 255, 0.09);
-        box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
-      }
-      .avatar {
-        width: 118px; height: 118px;
-        border-radius: 50%;
-        object-fit: cover;
-        border: 3px solid var(--accent);
-        flex: none;
-      }
+      /* ---------- Cost receipt (Act 2) ---------- */
+      #costPanel { position: absolute; top: 296px; right: 44px; width: 452px; }
+      .cost-title { font-size: 26px; font-weight: 800; letter-spacing: 0.1em; color: var(--red); margin-bottom: 18px; text-shadow: 0 2px 12px rgba(0,0,0,0.7); }
+      .cost-row { display: flex; align-items: center; gap: 16px; margin-bottom: 13px; padding: 15px 20px; border-radius: 16px; background: rgba(12,15,20,0.82); border: 1px solid rgba(255,255,255,0.08); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+      .cost-row .ic { width: 34px; height: 34px; border-radius: 9px; background: rgba(255,87,71,0.16); color: var(--red); font-weight: 800; font-size: 22px; display: flex; align-items: center; justify-content: center; flex: none; }
+      .cost-row .lbl { font-size: 33px; font-weight: 700; }
+      .cost-row.big { background: rgba(255,87,71,0.16); border-color: rgba(255,87,71,0.5); }
+      .cost-row.big .lbl { color: #ffd9d4; }
+      .cost-row.big .ic { background: var(--red); color: #fff; }
+      .cost-total { margin-top: 8px; padding: 16px 22px; border-radius: 16px; background: linear-gradient(135deg, var(--red), #d63428); font-size: 33px; font-weight: 900; color: #fff; letter-spacing: -0.01em; box-shadow: 0 14px 34px rgba(255,87,71,0.34); }
+
+      /* ---------- Callouts ---------- */
+      .stamp { position: absolute; top: 250px; right: 60px; font-size: 96px; font-weight: 900; letter-spacing: -0.03em; color: var(--red); text-shadow: 0 8px 30px rgba(0,0,0,0.6); -webkit-text-stroke: 2px rgba(255,255,255,0.14); }
+      .chip { position: absolute; top: 250px; left: 50%; display: inline-flex; align-items: center; gap: 14px; padding: 20px 34px; border-radius: 100px; background: rgba(12,15,20,0.86); border: 1.5px solid rgba(255,158,27,0.55); font-size: 40px; font-weight: 800; white-space: nowrap; box-shadow: 0 16px 40px rgba(0,0,0,0.45); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+      .chip .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 14px var(--amber); }
+      .callout-70 { position: absolute; top: 208px; left: 0; width: 1080px; text-align: center; }
+      .callout-70 .big { font-size: 200px; font-weight: 900; letter-spacing: -0.05em; line-height: 1.0; color: var(--green); text-shadow: 0 12px 60px rgba(52,216,136,0.4); }
+      .callout-70 .tag { display: inline-block; margin-top: 20px; padding: 12px 30px; border-radius: 100px; background: var(--green); color: #06231a; font-size: 40px; font-weight: 900; letter-spacing: 0.02em; }
+
+      /* ---------- Outro ---------- */
+      .outro-pad { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0 84px; z-index: 2; }
+      .count-big { font-size: 250px; font-weight: 900; letter-spacing: -0.05em; line-height: 0.84; color: var(--green); text-shadow: 0 12px 70px rgba(52,216,136,0.34); }
+      .count-sub { margin-top: 20px; font-size: 46px; font-weight: 500; color: var(--muted); text-align: center; }
+      .count-sub b { color: #fff; font-weight: 800; }
+      .bars { display: flex; align-items: flex-end; justify-content: center; gap: 46px; height: 300px; margin: 60px 0 42px; }
+      .bar-col { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+      .bar-shape { width: 150px; border-radius: 16px 16px 6px 6px; transform: scaleY(0); transform-origin: bottom center; }
+      .bar-buy { height: 260px; background: linear-gradient(180deg, #ff5747, #d63428); box-shadow: 0 12px 30px rgba(255,87,71,0.3); }
+      .bar-sub { height: 165px; background: linear-gradient(180deg, #34d888, #16aa6e); box-shadow: 0 12px 30px rgba(52,216,136,0.3); }
+      .bar-lbl { font-size: 30px; font-weight: 800; letter-spacing: 0.04em; }
+      .bar-lbl.buy { color: #ff8579; }
+      .bar-lbl.sub { color: var(--green); }
+      .follow-card { display: flex; align-items: center; gap: 28px; width: 912px; padding: 26px 30px; border-radius: 28px; background: rgba(20,25,33,0.92); border: 1px solid rgba(255,255,255,0.09); box-shadow: 0 30px 80px rgba(0,0,0,0.5); }
+      .avatar { width: 116px; height: 116px; border-radius: 50%; object-fit: cover; border: 3px solid var(--amber); flex: none; }
       .follow-meta { flex: 1; min-width: 0; }
-      .follow-meta .handle {
-        font-size: 44px;
-        font-weight: 800;
-        letter-spacing: -0.01em;
-        color: #fff;
-      }
-      .follow-meta .sub {
-        margin-top: 6px;
-        font-size: 30px;
-        font-weight: 500;
-        color: var(--muted);
-      }
-      .follow-btn {
-        flex: none;
-        padding: 22px 44px;
-        border-radius: 100px;
-        font-size: 36px;
-        font-weight: 800;
-        letter-spacing: 0.01em;
-        color: #1a1204;
-        background: linear-gradient(135deg, var(--accent), var(--accent-deep));
-        box-shadow: 0 10px 30px rgba(255, 158, 27, 0.4);
-      }
+      .follow-meta .handle { font-size: 43px; font-weight: 800; letter-spacing: -0.01em; }
+      .follow-meta .sub { margin-top: 5px; font-size: 29px; font-weight: 500; color: var(--muted); }
+      .follow-btn { flex: none; padding: 22px 44px; border-radius: 100px; font-size: 35px; font-weight: 800; color: #1a1204; background: linear-gradient(135deg, var(--amber), var(--amber-deep)); box-shadow: 0 10px 30px rgba(255,158,27,0.4); }
     </style>
   </head>
   <body>
-    <div
-      id="root"
-      data-composition-id="main"
-      data-start="0"
-      data-duration="44"
-      data-width="1080"
-      data-height="1920"
-    >
-      <!-- Base video (muted) — audio comes from the separate <audio> track -->
-      <video
-        id="video"
-        class="clip"
-        data-start="2.8"
-        data-duration="36.7"
-        data-track-index="0"
-        data-media-start="0"
-        data-has-audio="false"
-        src="assets/reel-cut.mp4"
-        muted
-        playsinline
-        style="z-index: 1"
-      ></video>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="56.7" data-width="1080" data-height="1920">
 
-      <!-- Separate audio track (kept in sync with the video window) -->
-      <audio
-        id="audio"
-        data-start="2.8"
-        data-duration="36.7"
-        data-track-index="1"
-        data-media-start="0"
-        data-volume="1"
-        src="assets/reel-cut.m4a"
-      ></audio>
+      <!-- Base video (muted) -->
+      <video id="video" class="clip fill" data-start="2.6" data-duration="48.1" data-track-index="0" data-media-start="0" data-has-audio="false" src="assets/reel-cut.mp4" muted playsinline style="z-index:1"></video>
 
-      <!-- Persistent overlay: progress bar + brand badge -->
-      <div
-        id="overlay"
-        class="clip"
-        data-start="2.8"
-        data-duration="36.7"
-        data-track-index="5"
-        style="z-index: 5"
-      >
+      <!-- Master audio: voice + SFX -->
+      <audio id="audio" data-start="0" data-duration="56.7" data-track-index="1" data-media-start="0" data-volume="1" src="assets/master.m4a"></audio>
+
+      <!-- Texture -->
+      <div id="grain" class="clip fill" data-start="2.6" data-duration="48.1" data-track-index="2" style="z-index:2"></div>
+      <div id="vignette" class="clip fill" data-start="2.6" data-duration="48.1" data-track-index="3" style="z-index:3"></div>
+
+      <!-- Persistent overlay -->
+      <div id="overlay" class="clip fill" data-start="2.6" data-duration="48.1" data-track-index="5" style="z-index:5">
         <div class="progress-track"><div id="progressFill" class="progress-fill"></div></div>
-        <div id="brandBadge" class="brand-badge">
-          <span class="brand-dot"></span>
-          <span class="brand-word">Compara<span class="amber">Car</span></span>
-        </div>
+        <div id="brandBadge" class="brand-badge"><span class="brand-dot"></span><span class="brand-word">Compara<span class="amber">Car</span></span></div>
       </div>
 
-      <!-- Intro hook card -->
-      <div
-        id="intro"
-        class="clip card"
-        data-start="0"
-        data-duration="2.8"
-        data-track-index="8"
-        style="z-index: 30"
-      >
+      <!-- Act 1: MITO? -->
+      <div id="stampMito" class="clip stamp" data-start="4.0" data-duration="3.6" data-track-index="6" style="z-index:7">MITO?</div>
+
+      <!-- Act 2: cost receipt -->
+      <div id="costPanel" class="clip" data-start="11.15" data-duration="12.8" data-track-index="7" style="z-index:7">
+        <div id="costTitle" class="cost-title">TER O CARRO CUSTA:</div>
+        <div id="cr1" class="cost-row"><span class="ic">R$</span><span class="lbl">IPVA</span></div>
+        <div id="cr2" class="cost-row"><span class="ic">R$</span><span class="lbl">Seguro</span></div>
+        <div id="cr3" class="cost-row"><span class="ic">R$</span><span class="lbl">Manutenção</span></div>
+        <div id="cr4" class="cost-row"><span class="ic">R$</span><span class="lbl">Despesas</span></div>
+        <div id="cr5" class="cost-row big"><span class="ic">↓</span><span class="lbl">Depreciação</span></div>
+        <div id="crTotal" class="cost-total">= tudo isso é seu custo</div>
+      </div>
+
+      <!-- Act 3: chip -->
+      <div id="chipLogica" class="clip chip" data-start="26.4" data-duration="6.2" data-track-index="8" style="z-index:7"><span class="dot"></span>NÃO É POSSE. É CONTA.</div>
+
+      <!-- Act 4: +70% -->
+      <div id="callout70" class="clip callout-70" data-start="38.4" data-duration="7.0" data-track-index="9" style="z-index:7">
+        <div id="c70big" class="big">+70%</div>
+        <div id="c70tag" class="tag">assinar sai mais barato</div>
+      </div>
+
+      <!-- Chapter flashes -->
+      <div id="ch2" class="clip chapter amber" data-start="11.15" data-duration="0.75" data-track-index="10" style="z-index:12">
+        <div class="bar"><span class="cnum">02</span><span class="cname">A&nbsp;CONTA</span></div>
+      </div>
+      <div id="ch3" class="clip chapter amber" data-start="23.95" data-duration="0.75" data-track-index="10" style="z-index:12">
+        <div class="bar"><span class="cnum">03</span><span class="cname">A&nbsp;LÓGICA</span></div>
+      </div>
+      <div id="ch4" class="clip chapter green" data-start="36.2" data-duration="0.75" data-track-index="10" style="z-index:12">
+        <div class="bar"><span class="cnum">04</span><span class="cname">O&nbsp;VEREDITO</span></div>
+      </div>
+
+      <!-- Intro card -->
+      <div id="intro" class="clip card" data-start="0" data-duration="2.6" data-track-index="11" style="z-index:20">
         <div id="introInner">
           <div class="glow" data-layout-allow-overflow></div>
-          <div class="intro-inner">
+          <div class="intro-pad">
             <div id="introBrand" class="eyebrow"><span class="brand-dot"></span> COMPARACAR</div>
             <h1 class="intro-head">
-              <span id="introLineA" class="line-a">CARRO POR ASSINATURA</span>
-              <span id="introLineB" class="line-b">VALE A PENA?</span>
+              <span id="ila" class="la">CARRO POR ASSINATURA</span>
+              <span id="ilb" class="lb">VALE A PENA?</span>
+              <div id="introShine"></div>
             </h1>
-            <div id="introRule" class="rule"></div>
-            <div id="introKick" class="kicker">A conta que <b>ninguém te faz</b>.</div>
+            <div id="irule" class="rule"></div>
+            <div id="ikick" class="kicker">A <b>matemática</b> que ninguém te mostra.</div>
           </div>
         </div>
       </div>
 
-      <!-- Outro CTA card -->
-      <div
-        id="outro"
-        class="clip card"
-        data-start="39.5"
-        data-duration="4.5"
-        data-track-index="9"
-        style="z-index: 31"
-      >
-        <div class="glow glow-b" data-layout-allow-overflow></div>
-        <div class="outro-inner">
-          <div id="statWrap" class="stat-wrap">
-            <div class="stat-big"><span id="statNum">+70%</span></div>
-            <div id="statSub" class="stat-sub">dos casos, <b>assinar sai mais barato</b>.</div>
+      <!-- Outro card -->
+      <div id="outro" class="clip card" data-start="50.7" data-duration="6.0" data-track-index="12" style="z-index:21">
+        <div class="glow glow-green" data-layout-allow-overflow style="top:auto;bottom:-320px"></div>
+        <div class="outro-pad">
+          <div id="countBig" class="count-big">+0%</div>
+          <div id="countSub" class="count-sub">dos casos, <b>assinar sai mais barato</b>.</div>
+          <div class="bars">
+            <div class="bar-col"><div id="barBuy" class="bar-shape bar-buy"></div><div class="bar-lbl buy">COMPRAR</div></div>
+            <div class="bar-col"><div id="barSub" class="bar-shape bar-sub"></div><div class="bar-lbl sub">ASSINAR</div></div>
           </div>
           <div id="followCard" class="follow-card">
             <img class="avatar" src="assets/avatar.jpg" alt="" />
@@ -357,30 +201,73 @@
     <script>
       window.__timelines = window.__timelines || {};
       const tl = gsap.timeline({ paused: true, defaults: { ease: "power3.out" } });
+      const hide = (s) => tl.set(s, { opacity: 0 }, 0);
 
-      /* ---- Intro (0 – 2.8s) ---- */
-      tl.fromTo("#introBrand", { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.5 }, 0.15);
-      tl.fromTo("#introLineA", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.55 }, 0.3);
-      tl.fromTo("#introLineB", { opacity: 0, y: 60, scale: 0.92 }, { opacity: 1, y: 0, scale: 1, duration: 0.66, ease: "back.out(1.5)" }, 0.5);
-      tl.fromTo("#introRule", { scaleX: 0 }, { scaleX: 1, duration: 0.5 }, 0.86);
-      tl.fromTo("#introKick", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.5 }, 1.02);
-      /* exit fade lives on the inner (non-clip) wrapper; hard-kill at the clip boundary */
-      tl.to("#introInner", { opacity: 0, duration: 0.32, ease: "power2.inOut" }, 2.48);
-      tl.set("#introInner", { opacity: 0 }, 2.8);
+      /* ===== INTRO (0–2.6) ===== */
+      tl.fromTo("#introBrand", { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.5 }, 0.12);
+      tl.fromTo("#ila", { opacity: 0, y: 28 }, { opacity: 1, y: 0, duration: 0.5 }, 0.26);
+      tl.fromTo("#ilb", { opacity: 0, y: 58, scale: 0.92 }, { opacity: 1, y: 0, scale: 1, duration: 0.64, ease: "back.out(1.5)" }, 0.46);
+      tl.fromTo("#introShine", { x: -500, opacity: 0 }, { opacity: 0.9, duration: 0.14 }, 0.85);
+      tl.to("#introShine", { x: 780, duration: 0.72, ease: "power2.inOut" }, 0.9);
+      tl.to("#introShine", { opacity: 0, duration: 0.2 }, 1.5);
+      tl.fromTo("#irule", { scaleX: 0 }, { scaleX: 1, duration: 0.5 }, 0.82);
+      tl.fromTo("#ikick", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.5 }, 1.0);
+      tl.to("#introInner", { opacity: 0, scale: 1.06, duration: 0.34, ease: "power2.in" }, 2.26);
+      tl.set("#introInner", { opacity: 0 }, 2.6);
 
-      /* ---- Video + overlay in (2.8s) ---- */
-      tl.fromTo("#video", { opacity: 0 }, { opacity: 1, duration: 0.36, ease: "power2.out" }, 2.8);
-      tl.fromTo("#overlay", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 3.0);
-      tl.fromTo("#brandBadge", { opacity: 0, x: -18 }, { opacity: 1, x: 0, duration: 0.5 }, 3.0);
-      tl.fromTo("#progressFill", { scaleX: 0 }, { scaleX: 1, duration: 36.2, ease: "none" }, 2.95);
-      /* #video and #overlay are clips — the framework hard-cuts them at 39.5s (no exit tween) */
+      /* ===== Video + overlay in (2.6) ===== */
+      tl.fromTo("#video", { opacity: 0 }, { opacity: 1, duration: 0.36 }, 2.6);
+      tl.fromTo("#grain", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 2.7);
+      tl.fromTo("#vignette", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 2.7);
+      tl.fromTo("#overlay", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 2.9);
+      tl.fromTo("#brandBadge", { opacity: 0, x: -18 }, { opacity: 1, x: 0, duration: 0.5 }, 2.9);
+      tl.fromTo("#progressFill", { scaleX: 0 }, { scaleX: 1, duration: 47.5, ease: "none" }, 2.9);
 
-      /* ---- Outro (39.5 – 44s): dark card is present instantly, contents animate in ---- */
-      tl.fromTo("#statNum", { opacity: 0, y: 44, scale: 0.8 }, { opacity: 1, y: 0, scale: 1, duration: 0.62, ease: "back.out(1.6)" }, 39.62);
-      tl.fromTo("#statSub", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.5 }, 39.95);
-      tl.fromTo("#followCard", { opacity: 0, y: 46 }, { opacity: 1, y: 0, duration: 0.6 }, 41.0);
-      /* hold the final frame to the composition end */
-      tl.to("#followCard", { opacity: 1, duration: 0.01 }, 43.99);
+      /* ===== Act 1: MITO? stamp ===== */
+      tl.fromTo("#stampMito", { opacity: 0, scale: 1.5, rotation: -8 }, { opacity: 1, scale: 1, rotation: -8, duration: 0.4, ease: "back.out(2)" }, 4.0);
+      tl.to("#stampMito", { opacity: 0, scale: 0.9, rotation: -8, duration: 0.3 }, 7.2);
+
+      /* ===== Chapter flashes (slide the labelled bar in and out via x) ===== */
+      tl.fromTo("#ch2 .bar", { x: -1160 }, { x: 0, duration: 0.34, ease: "power3.out" }, 11.15);
+      tl.to("#ch2 .bar", { x: 1160, duration: 0.3, ease: "power2.in" }, 11.55);
+      tl.fromTo("#ch3 .bar", { x: -1160 }, { x: 0, duration: 0.34, ease: "power3.out" }, 23.95);
+      tl.to("#ch3 .bar", { x: 1160, duration: 0.3, ease: "power2.in" }, 24.35);
+      tl.fromTo("#ch4 .bar", { x: -1160 }, { x: 0, duration: 0.34, ease: "power3.out" }, 36.2);
+      tl.to("#ch4 .bar", { x: 1160, duration: 0.3, ease: "power2.in" }, 36.6);
+
+      /* ===== Act 2: cost receipt ===== */
+      hide("#costTitle"); hide("#cr1"); hide("#cr2"); hide("#cr3"); hide("#cr4"); hide("#cr5"); hide("#crTotal");
+      tl.fromTo("#costTitle", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.35 }, 11.85);
+      tl.fromTo("#cr1", { opacity: 0, x: 40 }, { opacity: 1, x: 0, duration: 0.34 }, 12.0);
+      tl.fromTo("#cr2", { opacity: 0, x: 40 }, { opacity: 1, x: 0, duration: 0.34 }, 12.7);
+      tl.fromTo("#cr3", { opacity: 0, x: 40 }, { opacity: 1, x: 0, duration: 0.34 }, 13.7);
+      tl.fromTo("#cr4", { opacity: 0, x: 40 }, { opacity: 1, x: 0, duration: 0.34 }, 15.0);
+      tl.fromTo("#cr5", { opacity: 0, x: 40, scale: 1.04 }, { opacity: 1, x: 0, scale: 1, duration: 0.42, ease: "back.out(1.6)" }, 20.0);
+      tl.fromTo("#crTotal", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.4 }, 22.7);
+      tl.to("#costPanel", { opacity: 0, duration: 0.3 }, 23.62);
+      tl.set("#costPanel", { opacity: 0 }, 23.95);
+
+      /* ===== Act 3: chip ===== */
+      tl.fromTo("#chipLogica", { opacity: 0, y: 24, scale: 0.92, xPercent: -50 }, { opacity: 1, y: 0, scale: 1, xPercent: -50, duration: 0.44, ease: "back.out(1.6)" }, 26.4);
+      tl.to("#chipLogica", { opacity: 0, y: -14, xPercent: -50, duration: 0.3 }, 32.0);
+      tl.set("#chipLogica", { opacity: 0 }, 32.6);
+
+      /* ===== Act 4: +70% callout ===== */
+      tl.fromTo("#c70big", { opacity: 0, y: 40, scale: 0.7 }, { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: "back.out(1.8)" }, 38.4);
+      tl.fromTo("#c70tag", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4 }, 38.75);
+      tl.to("#callout70", { opacity: 0, duration: 0.35 }, 44.6);
+      tl.set("#callout70", { opacity: 0 }, 45.4);
+
+      /* ===== OUTRO (50.7–56.7) ===== */
+      const counter = { v: 0 };
+      hide("#countSub");
+      tl.fromTo("#countBig", { opacity: 0, y: 40, scale: 0.82 }, { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: "back.out(1.5)" }, 50.95);
+      tl.to(counter, { v: 70, duration: 0.85, ease: "power2.out", onUpdate: () => { const el = document.getElementById("countBig"); if (el) el.textContent = "+" + Math.round(counter.v) + "%"; } }, 50.95);
+      tl.fromTo("#countSub", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.45 }, 51.7);
+      tl.fromTo("#barBuy", { scaleY: 0 }, { scaleY: 1, duration: 0.55, ease: "power3.out" }, 52.2);
+      tl.fromTo("#barSub", { scaleY: 0 }, { scaleY: 1, duration: 0.7, ease: "power3.out" }, 52.45);
+      tl.fromTo("#followCard", { opacity: 0, y: 44 }, { opacity: 1, y: 0, duration: 0.55 }, 53.5);
+      tl.to("#followCard", { opacity: 1, duration: 0.01 }, 56.68);
 
       window.__timelines["main"] = tl;
     </script>
