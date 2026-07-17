@@ -2,25 +2,53 @@
 
 ## Skills — USE THESE FIRST
 
-**Always invoke the relevant skill before writing or modifying compositions.** Skills encode framework-specific patterns (e.g., `window.__timelines` registration, `data-*` attribute semantics, shader-compatible CSS rules) that are NOT in generic web docs. Skipping them produces broken compositions.
+**Always invoke the relevant skill before writing or modifying compositions.** Skills encode framework-specific patterns (e.g., `window.__timelines` registration, `data-*` attribute semantics, seek-safe animation rules) that are NOT in generic web docs. Skipping them produces broken compositions.
 
-| Skill                      | Command                   | When to use                                                                                       |
-| -------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------- |
-| **hyperframes**            | `/hyperframes`            | Creating or editing HTML compositions, captions, TTS, audio-reactive animation, marker highlights |
-| **hyperframes-cli**        | `/hyperframes-cli`        | Dev-loop CLI: init, lint, inspect, preview, render, doctor                                        |
-| **hyperframes-media**      | `/hyperframes-media`      | Asset preprocessing: tts (Kokoro), transcribe (Whisper), remove-background (u2net)                |
-| **hyperframes-registry**   | `/hyperframes-registry`   | Installing blocks and components via `hyperframes add`                                            |
-| **website-to-hyperframes** | `/website-to-hyperframes` | Capturing a URL and turning it into a video — full website-to-video pipeline                      |
-| **tailwind**               | `/tailwind`               | Tailwind v4 browser-runtime styles for projects created with `hyperframes init --tailwind`        |
-| **gsap**                   | `/gsap`                   | GSAP animations for HyperFrames — tweens, timelines, easing, performance                          |
-| **animejs**                | `/animejs`                | Anime.js animations registered on `window.__hfAnime`                                              |
-| **css-animations**         | `/css-animations`         | CSS keyframes that HyperFrames can pause and seek                                                 |
-| **lottie**                 | `/lottie`                 | `lottie-web` and dotLottie players registered on `window.__hfLottie`                              |
-| **three**                  | `/three`                  | Three.js scenes rendered from HyperFrames `hf-seek` events                                        |
-| **waapi**                  | `/waapi`                  | Web Animations API motion driven through `document.getAnimations()`                               |
+**Routing:** `/hyperframes` is the mandatory entry point for any request to make, edit, animate, or render a video — it resumes project state and selects the owning workflow. Before composing any animation, also load `/motion-doctrine`.
 
-> **Skills not available?** Ask the user to run `npx hyperframes skills` and restart their
-> agent session, or install manually: `npx skills add heygen-com/hyperframes`.
+### Core domain skills
+
+| Skill                     | Command                  | When to use                                                                                                  |
+| ------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| **hyperframes**           | `/hyperframes`           | Mandatory entry point for any video/animation request — resumes state, routes to the owning workflow          |
+| **hyperframes-core**      | `/hyperframes-core`      | Composition contract: `data-*` timing, `class="clip"`, tracks, sub-compositions, Tailwind, validation          |
+| **hyperframes-cli**       | `/hyperframes-cli`       | Dev-loop CLI: init, lint, check, preview, render, publish, doctor; diagnosing build/render failures            |
+| **hyperframes-animation** | `/hyperframes-animation` | All motion work + the seven runtime adapters (GSAP default, Lottie, Three.js, Anime.js, CSS, WAAPI, TypeGPU)   |
+| **hyperframes-keyframes** | `/hyperframes-keyframes` | Seek-safe 2D/3D keyframes, GSAP timelines, FLIP, paths, masks, SVG morph/draw, `keyframes` diagnostics         |
+| **hyperframes-creative**  | `/hyperframes-creative`  | Non-animation creative direction: design specs, palettes, typography, narration, beat planning                 |
+| **hyperframes-registry**  | `/hyperframes-registry`  | Installing and wiring registry blocks/components via `hyperframes add` / `hyperframes catalog`                 |
+| **media-use**             | `/media-use`             | Every media need: BGM, SFX, images, icons, logos, TTS/voiceover, transcription, captions, background removal   |
+
+### Workflow skills (input → video)
+
+| Skill                       | Command                    | When to use                                                                                 |
+| --------------------------- | -------------------------- | -------------------------------------------------------------------------------------------- |
+| **product-launch-video**    | `/product-launch-video`    | Product/marketing URL, script, or brief → launch/promo video (default for commercial URLs)    |
+| **faceless-explainer**      | `/faceless-explainer`      | Arbitrary text or topic → explainer with invented visuals (no site or footage to capture)     |
+| **pr-to-video**             | `/pr-to-video`             | GitHub pull request → code-change explainer video built from the diff and commits             |
+| **music-to-video**          | `/music-to-video`          | Music track → beat-synced lyric video, slideshow, or kinetic promo                            |
+| **changelog-video**         | `/changelog-video`         | Weekly changelog `.md` → branded ~45–60s changelog video (self-contained assets)              |
+| **general-video**           | `/general-video`           | Freeform or multi-scene builds when no specialized workflow fits                              |
+| **motion-graphics**         | `/motion-graphics`         | Short (~10s) design-led motion graphic: kinetic type, stat count-up, logo sting, lower-third  |
+| **slideshow**               | `/slideshow`               | Presentation / pitch deck — output is a navigable deck, not a rendered MP4                    |
+| **talking-head-recut**      | `/talking-head-recut`      | Timed graphic overlay cards on existing talking-head / podcast footage                        |
+| **embedded-captions**       | `/embedded-captions`       | Captions/subtitles on an existing talking-head video (36-style catalog, local end to end)     |
+| **remotion-to-hyperframes** | `/remotion-to-hyperframes` | Explicit ask to port a Remotion (React) composition to HyperFrames HTML                       |
+| **figma**                   | `/figma`                   | Import Figma designs, frames, brand tokens, or animations into a composition                  |
+
+### Motion doctrine & technique skills
+
+| Skill                | Command             | When to use                                                                                        |
+| -------------------- | ------------------- | ---------------------------------------------------------------------------------------------------|
+| **motion-doctrine**  | `/motion-doctrine`  | GATEWAY — load before composing any animation: vector law, film's current, Seam Gate, no idle wobble |
+| **cut-the-curve**    | `/cut-the-curve`    | Transition catalog (velocity-matched seams, waterfall entry, nudge curve) — read before any transition |
+| **seam-craft**       | `/seam-craft`       | Render-correct scene-to-scene seams on the master timeline; white-flash guard                        |
+| **oversized-cursor** | `/oversized-cursor` | House-style oversized cursor for UI scenes and pointer-led actions                                   |
+| **captions-overlay** | `/captions-overlay` | Caption model (drop / rail / embed); captions are overlays, never a reserved bottom band             |
+
+> Skills live in `.agents/skills/` (symlinked from `.claude/skills/`), installed via
+> `npx skills add heygen-com/hyperframes`. To refresh them: `npx hyperframes skills update`.
+> If skills don't appear in the agent session, restart the session after installing.
 
 ## Commands
 
