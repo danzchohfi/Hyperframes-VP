@@ -9,6 +9,7 @@
     "publish": "npx --yes hyperframes@0.5.5 publish"
   },
   "dependencies": {
-    "gsap": "^3.14.2"
+    "gsap": "^3.14.2",
+    "hyperframes": "^0.5.5"
   }
 }

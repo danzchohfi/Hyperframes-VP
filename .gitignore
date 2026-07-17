@@ -21,3 +21,9 @@ server/projects/*
 # allow the committed example renders
 *.mp4
 !preview/*.mp4
+
+# QC snapshots
+snapshots/
+
+# render output
+output/
