@@ -66,49 +66,49 @@
                     <adjust-transform position="0 815"/>
                     <text><text-style ref="ts0">comparacar_oficial</text-style></text>
                     <text-style-def id="ts0">
-                        <text-style font="Archivo" fontSize="30" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                        <text-style font="Nunito" fontSize="30" fontFace="Black" fontColor="1 1 1 1" bold="1" alignment="center"/>
                     </text-style-def>
                 </title>
                 <title ref="r4" lane="2" offset="78000/3000s" name="OPERAÇÃO FINANCEIRA" start="0s" duration="11400/3000s">
                     <adjust-transform position="0 501"/>
                     <text><text-style ref="ts1">OPERAÇÃO FINANCEIRA</text-style></text>
                     <text-style-def id="ts1">
-                        <text-style font="Archivo Black" fontSize="44" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                        <text-style font="Nunito" fontSize="44" fontFace="Black" fontColor="1 1 1 1" bold="1" alignment="center"/>
                     </text-style-def>
                 </title>
                 <title ref="r4" lane="2" offset="122600/3000s" name="DEPRECIAÇÃO" start="0s" duration="12000/3000s">
                     <adjust-transform position="0 501"/>
                     <text><text-style ref="ts2">DEPRECIAÇÃO</text-style></text>
                     <text-style-def id="ts2">
-                        <text-style font="Archivo Black" fontSize="44" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                        <text-style font="Nunito" fontSize="44" fontFace="Black" fontColor="1 1 1 1" bold="1" alignment="center"/>
                     </text-style-def>
                 </title>
                 <title ref="r4" lane="2" offset="255900/3000s" name="FINANCIOU? É DO BANCO" start="0s" duration="8000/3000s">
                     <adjust-transform position="0 501"/>
                     <text><text-style ref="ts3">FINANCIOU? É DO BANCO</text-style></text>
                     <text-style-def id="ts3">
-                        <text-style font="Archivo Black" fontSize="44" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                        <text-style font="Nunito" fontSize="44" fontFace="Black" fontColor="1 1 1 1" bold="1" alignment="center"/>
                     </text-style-def>
                 </title>
                 <title ref="r4" lane="2" offset="303900/3000s" name="RECORDE TODOS OS MESES" start="0s" duration="10500/3000s">
                     <adjust-transform position="0 501"/>
                     <text><text-style ref="ts4">RECORDE TODOS OS MESES</text-style></text>
                     <text-style-def id="ts4">
-                        <text-style font="Archivo Black" fontSize="44" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                        <text-style font="Nunito" fontSize="44" fontFace="Black" fontColor="1 1 1 1" bold="1" alignment="center"/>
                     </text-style-def>
                 </title>
                 <title ref="r4" lane="2" offset="97800/3000s" name="CARRO PRÓPRIO · NA PONTA DO LÁPIS" start="0s" duration="23200/3000s">
                     <adjust-transform position="0 590"/>
                     <text><text-style ref="ts5">CARRO PRÓPRIO · NA PONTA DO LÁPIS</text-style></text>
                     <text-style-def id="ts5">
-                        <text-style font="Archivo" fontSize="30" fontFace="Regular" fontColor="1 0.541 0.235 1" bold="1" alignment="center"/>
+                        <text-style font="Nunito" fontSize="30" fontFace="Black" fontColor="1 0.882 0.302 1" bold="1" alignment="center"/>
                     </text-style-def>
                 </title>
                 <title ref="r4" lane="2" offset="97800/3000s" name="VOCÊ PAGOU:" start="0s" duration="23200/3000s">
                     <adjust-transform position="0 470"/>
                     <text><text-style ref="ts6">VOCÊ PAGOU:</text-style></text>
                     <text-style-def id="ts6">
-                        <text-style font="Archivo Black" fontSize="88" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                        <text-style font="Nunito" fontSize="88" fontFace="Black" fontColor="1 1 1 1" bold="1" alignment="center"/>
                     </text-style-def>
                 </title>
                 <title ref="r4" lane="2" offset="99000/3000s" name="IPVA" start="0s" duration="22000/3000s">
@@ -118,7 +118,7 @@
 </text-style><text-style ref="ts7">MANUTENÇÃO
 </text-style><text-style ref="ts7">+ DESPESAS</text-style></text>
                     <text-style-def id="ts7">
-                        <text-style font="Archivo Black" fontSize="66" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                        <text-style font="Nunito" fontSize="66" fontFace="Black" fontColor="1 1 1 1" bold="1" alignment="center"/>
                     </text-style-def>
                 </title>
                 <title ref="r4" lane="2" offset="111000/3000s" name="E NO FINAL…" start="0s" duration="10000/3000s">
@@ -126,14 +126,14 @@
                     <text><text-style ref="ts8">E NO FINAL…
 </text-style><text-style ref="ts8">VENDEU POR BEM MENOS DO QUE PAGOU</text-style></text>
                     <text-style-def id="ts8">
-                        <text-style font="Archivo Black" fontSize="56" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                        <text-style font="Nunito" fontSize="56" fontFace="Black" fontColor="1 1 1 1" bold="1" alignment="center"/>
                     </text-style-def>
                 </title>
                 <title ref="r4" lane="2" offset="137500/3000s" name="FAÇA A CONTA" start="0s" duration="8700/3000s">
                     <adjust-transform position="0 330"/>
                     <text><text-style ref="ts9">FAÇA A CONTA</text-style></text>
                     <text-style-def id="ts9">
-                        <text-style font="Archivo" fontSize="30" fontFace="Regular" fontColor="1 0.541 0.235 1" bold="1" alignment="center"/>
+                        <text-style font="Nunito" fontSize="30" fontFace="Black" fontColor="1 0.882 0.302 1" bold="1" alignment="center"/>
                     </text-style-def>
                 </title>
                 <title ref="r4" lane="2" offset="137900/3000s" name="+ DINHEIRO PARADO NO CARRO" start="0s" duration="8300/3000s">
@@ -142,35 +142,35 @@
 </text-style><text-style ref="ts10">+ IPVA · SEGURO · MANUTENÇÃO
 </text-style><text-style ref="ts10">+ DEPRECIAÇÃO NA REVENDA</text-style></text>
                     <text-style-def id="ts10">
-                        <text-style font="Archivo Black" fontSize="54" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                        <text-style font="Nunito" fontSize="54" fontFace="Black" fontColor="1 1 1 1" bold="1" alignment="center"/>
                     </text-style-def>
                 </title>
                 <title ref="r4" lane="2" offset="142100/3000s" name="= QUANTO TE CUSTOU?" start="0s" duration="4100/3000s">
                     <adjust-transform position="0 -280"/>
                     <text><text-style ref="ts11">= QUANTO TE CUSTOU?</text-style></text>
                     <text-style-def id="ts11">
-                        <text-style font="Archivo Black" fontSize="76" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                        <text-style font="Nunito" fontSize="76" fontFace="Black" fontColor="1 1 1 1" bold="1" alignment="center"/>
                     </text-style-def>
                 </title>
                 <title ref="r4" lane="2" offset="176200/3000s" name="COMPRAR" start="0s" duration="17300/3000s">
                     <adjust-transform position="-270 295"/>
                     <text><text-style ref="ts12">COMPRAR</text-style></text>
                     <text-style-def id="ts12">
-                        <text-style font="Archivo Black" fontSize="78" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                        <text-style font="Nunito" fontSize="78" fontFace="Black" fontColor="1 1 1 1" bold="1" alignment="center"/>
                     </text-style-def>
                 </title>
                 <title ref="r4" lane="2" offset="176200/3000s" name="ASSINAR" start="0s" duration="17300/3000s">
                     <adjust-transform position="270 295"/>
                     <text><text-style ref="ts13">ASSINAR</text-style></text>
                     <text-style-def id="ts13">
-                        <text-style font="Archivo Black" fontSize="78" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                        <text-style font="Nunito" fontSize="78" fontFace="Black" fontColor="1 1 1 1" bold="1" alignment="center"/>
                     </text-style-def>
                 </title>
                 <title ref="r4" lane="2" offset="177900/3000s" name="VS" start="0s" duration="15600/3000s">
                     <adjust-transform position="0 0"/>
                     <text><text-style ref="ts14">VS</text-style></text>
                     <text-style-def id="ts14">
-                        <text-style font="Archivo Black" fontSize="92" fontFace="Regular" fontColor="0.047 0.047 0.063 1" bold="1" alignment="center"/>
+                        <text-style font="Nunito" fontSize="92" fontFace="Black" fontColor="0.047 0.047 0.063 1" bold="1" alignment="center"/>
                     </text-style-def>
                 </title>
                 <title ref="r4" lane="2" offset="179600/3000s" name="ENTRADA + PARCELAS" start="0s" duration="13900/3000s">
@@ -179,7 +179,7 @@
 </text-style><text-style ref="ts15">IPVA · SEGURO
 </text-style><text-style ref="ts15">REVENDA POR MENOS</text-style></text>
                     <text-style-def id="ts15">
-                        <text-style font="Archivo" fontSize="33" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                        <text-style font="Nunito" fontSize="33" fontFace="Black" fontColor="1 1 1 1" bold="1" alignment="center"/>
                     </text-style-def>
                 </title>
                 <title ref="r4" lane="2" offset="181700/3000s" name="PARCELA ÚNICA" start="0s" duration="11800/3000s">
@@ -188,49 +188,49 @@
 </text-style><text-style ref="ts16">TUDO INCLUSO
 </text-style><text-style ref="ts16">ZERO REVENDA</text-style></text>
                     <text-style-def id="ts16">
-                        <text-style font="Archivo" fontSize="33" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                        <text-style font="Nunito" fontSize="33" fontFace="Black" fontColor="1 1 1 1" bold="1" alignment="center"/>
                     </text-style-def>
                 </title>
                 <title ref="r4" lane="2" offset="188500/3000s" name="MESMO PERÍODO: 36 MESES" start="0s" duration="5000/3000s">
                     <adjust-transform position="0 -685"/>
                     <text><text-style ref="ts17">MESMO PERÍODO: 36 MESES</text-style></text>
                     <text-style-def id="ts17">
-                        <text-style font="Archivo" fontSize="40" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                        <text-style font="Nunito" fontSize="40" fontFace="Black" fontColor="1 1 1 1" bold="1" alignment="center"/>
                     </text-style-def>
                 </title>
                 <title ref="r4" lane="2" offset="224600/3000s" name="O QUE É MAIS VANTAJOSO" start="0s" duration="8700/3000s">
                     <adjust-transform position="0 700"/>
                     <text><text-style ref="ts18">O QUE É MAIS VANTAJOSO</text-style></text>
                     <text-style-def id="ts18">
-                        <text-style font="Archivo" fontSize="54" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                        <text-style font="Nunito" fontSize="54" fontFace="Black" fontColor="1 1 1 1" bold="1" alignment="center"/>
                     </text-style-def>
                 </title>
                 <title ref="r4" lane="2" offset="225500/3000s" name="PRO SEU BOLSO" start="0s" duration="7800/3000s">
                     <adjust-transform position="0 570"/>
                     <text><text-style ref="ts19">PRO SEU BOLSO</text-style></text>
                     <text-style-def id="ts19">
-                        <text-style font="Archivo Black" fontSize="118" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                        <text-style font="Nunito" fontSize="118" fontFace="Black" fontColor="1 1 1 1" bold="1" alignment="center"/>
                     </text-style-def>
                 </title>
                 <title ref="r4" lane="2" offset="289500/3000s" name="MAIS DE" start="0s" duration="12600/3000s">
                     <adjust-transform position="0 520"/>
                     <text><text-style ref="ts20">MAIS DE</text-style></text>
                     <text-style-def id="ts20">
-                        <text-style font="Archivo" fontSize="30" fontFace="Regular" fontColor="1 0.541 0.235 1" bold="1" alignment="center"/>
+                        <text-style font="Nunito" fontSize="30" fontFace="Black" fontColor="1 0.882 0.302 1" bold="1" alignment="center"/>
                     </text-style-def>
                 </title>
                 <title ref="r4" lane="2" offset="290300/3000s" name="70%" start="0s" duration="11800/3000s">
                     <adjust-transform position="0 150"/>
                     <text><text-style ref="ts21">70%</text-style></text>
                     <text-style-def id="ts21">
-                        <text-style font="Archivo Black" fontSize="300" fontFace="Regular" fontColor="1 0.541 0.235 1" bold="1" alignment="center"/>
+                        <text-style font="Nunito" fontSize="300" fontFace="Black" fontColor="1 0.882 0.302 1" bold="1" alignment="center"/>
                     </text-style-def>
                 </title>
                 <title ref="r4" lane="2" offset="289500/3000s" name="DOS CASOS" start="0s" duration="12600/3000s">
                     <adjust-transform position="0 -175"/>
                     <text><text-style ref="ts22">DOS CASOS</text-style></text>
                     <text-style-def id="ts22">
-                        <text-style font="Archivo" fontSize="46" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                        <text-style font="Nunito" fontSize="46" fontFace="Black" fontColor="1 1 1 1" bold="1" alignment="center"/>
                     </text-style-def>
                 </title>
                 <title ref="r4" lane="2" offset="295800/3000s" name="A ASSINATURA É" start="0s" duration="6300/3000s">
@@ -238,14 +238,14 @@
                     <text><text-style ref="ts23">A ASSINATURA É
 </text-style><text-style ref="ts23">MAIS ECONÔMICA E VANTAJOSA</text-style></text>
                     <text-style-def id="ts23">
-                        <text-style font="Archivo Black" fontSize="78" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                        <text-style font="Nunito" fontSize="78" fontFace="Black" fontColor="1 1 1 1" bold="1" alignment="center"/>
                     </text-style-def>
                 </title>
                 <title ref="r4" lane="2" offset="315900/3000s" name="ComparaCar · @comparacar_oficial · SEGUI" start="0s" duration="10600/3000s">
                     <adjust-transform position="0 -230"/>
                     <text><text-style ref="ts24">ComparaCar · @comparacar_oficial · SEGUIR</text-style></text>
                     <text-style-def id="ts24">
-                        <text-style font="Archivo" fontSize="32" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                        <text-style font="Nunito" fontSize="32" fontFace="Black" fontColor="1 1 1 1" bold="1" alignment="center"/>
                     </text-style-def>
                 </title>
                     <chapter-marker start="0/3000s" duration="100/3000s" value="HOOK — Como assim assinar um carro?"/>
@@ -273,6 +273,7 @@
                     <marker start="289500/3000s" duration="100/3000s" value="C4: contador 23-&gt;51-&gt;70 em 96.78/97.0/97.2 (fala '70%' em 97" completed="0" note="C4: contador 23-&gt;51-&gt;70 em 96.78/97.0/97.2 (fala '70%' em 97.17); pop de escala no numero; linhas entram 98.6/98.85"/>
                     <marker start="303900/3000s" duration="100/3000s" value="Chip 'RECORDE TODOS OS MESES' pop; sai 104.4s" completed="0" note="Chip 'RECORDE TODOS OS MESES' pop; sai 104.4s"/>
                     <marker start="315900/3000s" duration="100/3000s" value="Follow pill estilo IG sobe com back-ease; botao Seguir pulsa" completed="0" note="Follow pill estilo IG sobe com back-ease; botao Seguir pulsa 106.4 e 107.5"/>
+                    <marker start="96000/3000s" duration="100/3000s" value="SFX: whoosh nas entradas de cutaway (32.6/45.8/58.7/74.85/96" completed="0" note="SFX: whoosh nas entradas de cutaway (32.6/45.8/58.7/74.85/96.5/108.8), pops nos itens e chips, ticks+ding no contador 70%, impacts nos banners/VS/freeze — arquivos em assets/sfx/"/>
                     <marker start="326400/3000s" duration="100/3000s" value="Video fade-out para outro card; wordmark/linha/tagline/handl" completed="0" note="Video fade-out para outro card; wordmark/linha/tagline/handle em cascata; fade final para preto 111.55"/>
                         </asset-clip>
                         <gap name="Outro" offset="327700/3000s" start="0s" duration="8300/3000s">
@@ -280,21 +281,21 @@
                     <adjust-transform position="0 80"/>
                     <text><text-style ref="ts100">COMPARACAR</text-style></text>
                     <text-style-def id="ts100">
-                        <text-style font="Archivo Black" fontSize="116" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                        <text-style font="Nunito" fontSize="116" fontFace="Black" fontColor="1 1 1 1" bold="1" alignment="center"/>
                     </text-style-def>
                 </title>
                 <title ref="r4" lane="2" offset="329600/3000s" name="Tem gente fazendo conta." start="0s" duration="6400/3000s">
                     <adjust-transform position="0 -120"/>
                     <text><text-style ref="ts101">Tem gente fazendo conta.</text-style></text>
                     <text-style-def id="ts101">
-                        <text-style font="Archivo" fontSize="44" fontFace="Regular" fontColor="1 1 1 1" bold="1" alignment="center"/>
+                        <text-style font="Nunito" fontSize="44" fontFace="Black" fontColor="1 1 1 1" bold="1" alignment="center"/>
                     </text-style-def>
                 </title>
                 <title ref="r4" lane="2" offset="330500/3000s" name="@comparacar_oficial" start="0s" duration="5500/3000s">
                     <adjust-transform position="0 -300"/>
                     <text><text-style ref="ts102">@comparacar_oficial</text-style></text>
                     <text-style-def id="ts102">
-                        <text-style font="Archivo" fontSize="36" fontFace="Regular" fontColor="1 0.541 0.235 1" bold="1" alignment="center"/>
+                        <text-style font="Nunito" fontSize="36" fontFace="Black" fontColor="1 0.882 0.302 1" bold="1" alignment="center"/>
                     </text-style-def>
                 </title>
                         </gap>

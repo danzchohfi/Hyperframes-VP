@@ -13,8 +13,8 @@ import sys
 from xml.sax.saxutils import escape
 
 FPS = 30
-ORANGE = "1 0.541 0.235 1"      # #ff8a3c
-ORANGE_MID = "0.941 0.463 0.184 1"  # #f0762f
+ORANGE = "1 0.882 0.302 1"      # #ffe14d (amarelo claro da marca)
+ORANGE_MID = "0.984 0.831 0.039 1"  # #fbd40a (amarelo da marca, sampleado #F8D000)
 WHITE = "1 1 1 1"
 INK = "0.047 0.047 0.063"
 
@@ -69,6 +69,7 @@ TODOS = [
     (96.5, "C4: contador 23->51->70 em 96.78/97.0/97.2 (fala '70%' em 97.17); pop de escala no numero; linhas entram 98.6/98.85"),
     (101.3, "Chip 'RECORDE TODOS OS MESES' pop; sai 104.4s"),
     (105.3, "Follow pill estilo IG sobe com back-ease; botao Seguir pulsa 106.4 e 107.5"),
+    (32.0, "SFX: whoosh nas entradas de cutaway (32.6/45.8/58.7/74.85/96.5/108.8), pops nos itens e chips, ticks+ding no contador 70%, impacts nos banners/VS/freeze — arquivos em assets/sfx/"),
     (108.8, "Video fade-out para outro card; wordmark/linha/tagline/handle em cascata; fade final para preto 111.55"),
 ]
 
@@ -91,8 +92,8 @@ SOLIDS = [
 
 # ---------------- titulos ----------------
 # (texto, start, dur, size, color, pos_x, pos_y, align, font)
-AB = "Archivo Black"
-AR = "Archivo"
+AB = "Nunito"
+AR = "Nunito"
 TITLES = [
     ("comparacar_oficial", 1.0, 103.6, 30, WHITE, 0, 815, "center", AR),
     ("OPERAÇÃO FINANCEIRA", 26.0, 3.8, 44, WHITE, 0, 501, "center", AB),
@@ -143,7 +144,7 @@ def title_el(idx, ref, text, start, dur, size, color, px, py, align, font, lane)
                     <adjust-transform position="{px} {py}"/>
                     <text>{body}</text>
                     <text-style-def id="{tsid}">
-                        <text-style font="{font}" fontSize="{size}" fontFace="Regular" fontColor="{color}" bold="1" alignment="{align}"/>
+                        <text-style font="{font}" fontSize="{size}" fontFace="Black" fontColor="{color}" bold="1" alignment="{align}"/>
                     </text-style-def>
                 </title>"""
 

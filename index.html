@@ -6,31 +6,31 @@
     <script src="vendor/gsap.min.js"></script>
     <style>
       @font-face {
-        font-family: "Archivo Black";
+        font-family: "Nunito";
         font-style: normal;
-        font-weight: 400;
-        src: url("assets/fonts/ArchivoBlack-400.woff2") format("woff2");
+        font-weight: 700;
+        src: url("assets/fonts/Nunito-700.woff2") format("woff2");
       }
       @font-face {
-        font-family: "Archivo";
-        font-style: normal;
-        font-weight: 600;
-        src: url("assets/fonts/Archivo-600.woff2") format("woff2");
-      }
-      @font-face {
-        font-family: "Archivo";
+        font-family: "Nunito";
         font-style: normal;
         font-weight: 800;
-        src: url("assets/fonts/Archivo-800.woff2") format("woff2");
+        src: url("assets/fonts/Nunito-800.woff2") format("woff2");
+      }
+      @font-face {
+        font-family: "Nunito";
+        font-style: normal;
+        font-weight: 900;
+        src: url("assets/fonts/Nunito-900.woff2") format("woff2");
       }
 
       :root {
-        --orange: #f0762f;
-        --orange-hot: #ff8a3c;
-        --orange-deep: #c2551c;
-        --ink: #0c0c10;
-        --panel: #141419;
-        --cream: #fff4ea;
+        --orange: #fbd40a;      /* amarelo da marca (sampleado das legendas: #F8D000) */
+        --orange-hot: #ffe14d;  /* amarelo claro */
+        --orange-deep: #e8a80c; /* âmbar profundo */
+        --ink: #070709;
+        --panel: #101014;
+        --cream: #fff8e0;
       }
 
       * {
@@ -44,7 +44,7 @@
         height: 1920px;
         overflow: hidden;
         background: #000;
-        font-family: "Archivo", system-ui, sans-serif;
+        font-family: "Nunito", system-ui, sans-serif;
         -webkit-font-smoothing: antialiased;
       }
 
@@ -75,7 +75,6 @@
         height: 1920px;
         object-fit: cover;
         display: block;
-        filter: saturate(1.06) contrast(1.03);
       }
 
       /* ---------- progress bar ---------- */
@@ -98,7 +97,7 @@
         background: linear-gradient(90deg, var(--orange-deep), var(--orange-hot));
        
         transform-origin: 0 50%;
-        box-shadow: 0 0 14px rgba(240, 118, 47, 0.8);
+        box-shadow: 0 0 14px rgba(248, 208, 0, 0.8);
       }
 
       /* ---------- intro frame ---------- */
@@ -110,7 +109,7 @@
       #introframe .edge {
         position: absolute;
         background: var(--orange);
-        box-shadow: 0 0 18px rgba(240, 118, 47, 0.75);
+        box-shadow: 0 0 18px rgba(248, 208, 0, 0.75);
       }
       #if-top    { top: 26px; left: 26px; right: 26px; height: 6px; transform-origin: 0 50%; }
       #if-bottom { bottom: 26px; left: 26px; right: 26px; height: 6px; transform-origin: 100% 50%; }
@@ -129,7 +128,7 @@
         align-items: center;
         justify-content: center;
         gap: 14px;
-        background: rgba(12, 12, 16, 0.85);
+        background: rgba(7, 7, 9, 0.9);
         border: 1.5px solid rgba(255, 255, 255, 0.22);
         border-radius: 40px;
         color: #fff;
@@ -158,12 +157,13 @@
         align-items: center;
         gap: 18px;
         padding: 22px 40px;
-        background: linear-gradient(135deg, rgba(12, 12, 16, 0.88), rgba(28, 20, 14, 0.88));
+        background: linear-gradient(135deg, rgba(7, 7, 9, 0.93), rgba(20, 16, 4, 0.93));
         border: 2px solid var(--orange);
         border-radius: 22px;
-        box-shadow: 0 14px 44px rgba(0, 0, 0, 0.5), 0 0 26px rgba(240, 118, 47, 0.35);
+        box-shadow: 0 14px 44px rgba(0, 0, 0, 0.5), 0 0 26px rgba(248, 208, 0, 0.35);
         color: #fff;
-        font-family: "Archivo Black", "Archivo", sans-serif;
+        font-family: "Nunito", sans-serif;
+        font-weight: 900;
         font-size: 44px;
         letter-spacing: 0.03em;
         white-space: nowrap;
@@ -182,15 +182,15 @@
         inset: 0;
         overflow: hidden;
         background:
-          radial-gradient(ellipse 42% 30% at 30% 28%, rgba(240, 118, 47, 0.15), transparent 70%),
-          radial-gradient(ellipse 36% 28% at 72% 62%, rgba(255, 138, 60, 0.1), transparent 70%),
-          radial-gradient(ellipse 90% 55% at 50% 34%, rgba(240, 118, 47, 0.16), transparent 68%),
+          radial-gradient(ellipse 42% 30% at 30% 28%, rgba(248, 208, 0, 0.09), transparent 70%),
+          radial-gradient(ellipse 36% 28% at 72% 62%, rgba(255, 225, 77, 0.06), transparent 70%),
+          radial-gradient(ellipse 90% 55% at 50% 34%, rgba(248, 208, 0, 0.1), transparent 68%),
           var(--ink);
       }
       .cut .dots {
         position: absolute;
         inset: 0;
-        background-image: radial-gradient(circle, rgba(240, 118, 47, 0.13) 2px, transparent 2px);
+        background-image: radial-gradient(circle, rgba(248, 208, 0, 0.13) 2px, transparent 2px);
         background-size: 72px 72px;
       }
       .cut .tick {
@@ -222,7 +222,8 @@
       }
       #c1-in .kicker { margin-bottom: 30px; }
       #c1-title {
-        font-family: "Archivo Black", sans-serif;
+        font-family: "Nunito", sans-serif;
+        font-weight: 900;
         font-size: 88px;
         color: #fff;
         margin-bottom: 80px;
@@ -251,7 +252,8 @@
         flex-shrink: 0;
       }
       .c1-item .lbl {
-        font-family: "Archivo Black", sans-serif;
+        font-family: "Nunito", sans-serif;
+        font-weight: 900;
         font-size: 66px;
         color: #fff;
         letter-spacing: 0.01em;
@@ -270,25 +272,26 @@
         margin-left: -440px;
         width: 880px;
         padding: 40px 30px;
-        background: linear-gradient(135deg, var(--orange-deep), var(--orange));
+        background: linear-gradient(135deg, var(--orange), var(--orange-hot));
         border-radius: 24px;
         text-align: center;
-        font-family: "Archivo Black", sans-serif;
+        font-family: "Nunito", sans-serif;
+        font-weight: 900;
         font-size: 58px;
         line-height: 1.1;
         color: #fff;
-        box-shadow: 0 18px 60px rgba(240, 118, 47, 0.45);
+        box-shadow: 0 18px 60px rgba(248, 208, 0, 0.45);
         opacity: 0;
        
       }
       #c1-sell .small {
         display: block;
-        font-family: "Archivo", sans-serif;
+        font-family: "Nunito", sans-serif;
         font-weight: 800;
         font-size: 34px;
         letter-spacing: 0.2em;
         margin-bottom: 10px;
-        color: rgba(255, 244, 234, 0.85);
+        color: rgba(10, 10, 12, 0.7);
       }
 
       /* ---------- C2: somatória ---------- */
@@ -308,7 +311,8 @@
         display: flex;
         align-items: center;
         gap: 26px;
-        font-family: "Archivo Black", sans-serif;
+        font-family: "Nunito", sans-serif;
+        font-weight: 900;
         font-size: 54px;
         color: #fff;
         opacity: 0;
@@ -323,10 +327,11 @@
         padding: 34px 60px;
         background: var(--orange);
         border-radius: 24px;
-        font-family: "Archivo Black", sans-serif;
+        font-family: "Nunito", sans-serif;
+        font-weight: 900;
         font-size: 76px;
-        color: #fff;
-        box-shadow: 0 16px 60px rgba(240, 118, 47, 0.5);
+        color: #0a0a0c;
+        box-shadow: 0 16px 60px rgba(248, 208, 0, 0.5);
         opacity: 0;
        
         display: flex;
@@ -366,13 +371,15 @@
         margin-bottom: 40px;
       }
       #c3-left svg.big { color: rgba(255, 255, 255, 0.85); }
-      #c3-right svg.big { color: #fff; }
+      #c3-right svg.big { color: #0a0a0c; }
       #c3 .half .name {
-        font-family: "Archivo Black", sans-serif;
+        font-family: "Nunito", sans-serif;
+        font-weight: 900;
         font-size: 78px;
         color: #fff;
         margin-bottom: 330px;
       }
+      #c3-right .name { color: #0a0a0c; }
       .c3-mini {
         font-weight: 800;
         font-size: 33px;
@@ -386,7 +393,7 @@
         white-space: nowrap;
       }
       #c3-left .c3-mini { background: rgba(255, 255, 255, 0.08); border: 1.5px solid rgba(255, 255, 255, 0.18); }
-      #c3-right .c3-mini { background: rgba(0, 0, 0, 0.18); border: 1.5px solid rgba(255, 255, 255, 0.3); }
+      #c3-right .c3-mini { background: rgba(0, 0, 0, 0.12); border: 1.5px solid rgba(0, 0, 0, 0.3); color: #0a0a0c; }
       #c3-vs {
         position: absolute;
         top: 50%;
@@ -399,7 +406,8 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        font-family: "Archivo Black", sans-serif;
+        font-family: "Nunito", sans-serif;
+        font-weight: 900;
         font-size: 92px;
         color: var(--ink);
         box-shadow: 0 0 0 14px rgba(255, 255, 255, 0.14), 0 24px 70px rgba(0, 0, 0, 0.55);
@@ -413,7 +421,7 @@
         width: 660px;
         padding: 26px 0;
         text-align: center;
-        background: rgba(12, 12, 16, 0.9);
+        background: rgba(7, 7, 9, 0.94);
         border: 2px solid var(--orange);
         border-radius: 60px;
         font-weight: 800;
@@ -439,9 +447,10 @@
       #c4-numrow {
         display: flex;
         align-items: baseline;
-        font-family: "Archivo Black", sans-serif;
+        font-family: "Nunito", sans-serif;
+        font-weight: 900;
         color: var(--orange-hot);
-        text-shadow: 0 0 80px rgba(240, 118, 47, 0.55);
+        text-shadow: 0 0 80px rgba(248, 208, 0, 0.55);
         transform-origin: 50% 60%;
       }
       #c4-num { position: relative; display: inline-block; font-size: 430px; line-height: 1; letter-spacing: -0.03em; }
@@ -458,7 +467,8 @@
       }
       #c4-l1,
       #c4-l2 {
-        font-family: "Archivo Black", sans-serif;
+        font-family: "Nunito", sans-serif;
+        font-weight: 900;
         font-size: 78px;
         line-height: 1.08;
         color: #fff;
@@ -491,7 +501,7 @@
       #f1-tint {
         position: absolute;
         inset: 0;
-        background: linear-gradient(180deg, rgba(240, 118, 47, 0.42), rgba(194, 85, 28, 0.5));
+        background: linear-gradient(180deg, rgba(248, 208, 0, 0.5), rgba(216, 150, 10, 0.55));
         mix-blend-mode: multiply;
       }
       #f1-dots {
@@ -511,21 +521,22 @@
         left: 0;
         width: 1080px;
         text-align: center;
-        font-family: "Archivo Black", sans-serif;
+        font-family: "Nunito", sans-serif;
+        font-weight: 900;
         color: #fff;
         text-shadow: 0 10px 44px rgba(0, 0, 0, 0.55);
         opacity: 0;
        
       }
-      #f1-t1 { top: 236px; font-size: 54px; font-family: "Archivo", sans-serif; font-weight: 800; letter-spacing: 0.14em; }
+      #f1-t1 { top: 236px; font-size: 54px; font-family: "Nunito", sans-serif; font-weight: 800; letter-spacing: 0.14em; }
       #f1-t2 { top: 318px; font-size: 118px; color: var(--cream); }
       #f1-t2 em {
         font-style: normal;
-        color: #fff;
-        background: linear-gradient(135deg, var(--orange-deep), var(--orange));
+        color: #0a0a0c;
+        background: linear-gradient(135deg, var(--orange), var(--orange-hot));
         padding: 0 28px;
         border-radius: 18px;
-        box-shadow: 0 14px 50px rgba(240, 118, 47, 0.5);
+        box-shadow: 0 14px 50px rgba(248, 208, 0, 0.5);
         display: inline-block;
       }
 
@@ -541,7 +552,7 @@
         align-items: center;
         gap: 24px;
         padding: 0 22px;
-        background: rgba(12, 12, 16, 0.92);
+        background: rgba(7, 7, 9, 0.95);
         border: 2px solid rgba(255, 255, 255, 0.2);
         border-radius: 70px;
         box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
@@ -556,14 +567,15 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        font-family: "Archivo Black", sans-serif;
+        font-family: "Nunito", sans-serif;
+        font-weight: 900;
         font-size: 46px;
         color: #fff;
         flex-shrink: 0;
       }
       #follow .who { display: flex; flex-direction: column; }
       #follow .who .n { font-weight: 800; font-size: 32px; color: #fff; }
-      #follow .who .h { font-weight: 600; font-size: 25px; color: rgba(255, 255, 255, 0.55); }
+      #follow .who .h { font-weight: 700; font-size: 25px; color: rgba(255, 255, 255, 0.55); }
       #follow-btn {
         margin-left: auto;
         padding: 20px 34px;
@@ -571,7 +583,7 @@
         border-radius: 46px;
         font-weight: 800;
         font-size: 30px;
-        color: #fff;
+        color: #0a0a0c;
         display: flex;
         align-items: center;
         gap: 12px;
@@ -583,14 +595,14 @@
         position: absolute;
         inset: 0;
         background:
-          radial-gradient(ellipse 85% 50% at 50% 40%, rgba(240, 118, 47, 0.2), transparent 70%),
+          radial-gradient(ellipse 85% 50% at 50% 40%, rgba(248, 208, 0, 0.2), transparent 70%),
           var(--ink);
         opacity: 0;
       }
       #outro .dots {
         position: absolute;
         inset: 0;
-        background-image: radial-gradient(circle, rgba(240, 118, 47, 0.12) 2px, transparent 2px);
+        background-image: radial-gradient(circle, rgba(248, 208, 0, 0.12) 2px, transparent 2px);
         background-size: 72px 72px;
       }
       #outro-center {
@@ -613,7 +625,8 @@
        
       }
       #outro-mark {
-        font-family: "Archivo Black", sans-serif;
+        font-family: "Nunito", sans-serif;
+        font-weight: 900;
         font-size: 116px;
         color: #fff;
         letter-spacing: 0.01em;
@@ -647,7 +660,7 @@
         font-weight: 800;
         font-size: 36px;
         color: #fff;
-        background: rgba(240, 118, 47, 0.1);
+        background: rgba(248, 208, 0, 0.1);
         opacity: 0;
        
       }
@@ -670,13 +683,13 @@
         padding: 3px;
         background: conic-gradient(
           from 214deg,
-          rgba(240, 118, 47, 0.5) 0deg,
-          rgba(255, 138, 60, 0.9) 60deg,
-          #ffe1c4 105deg,
-          rgba(255, 138, 60, 0.9) 150deg,
-          rgba(240, 118, 47, 0.5) 210deg,
-          rgba(194, 85, 28, 0.55) 300deg,
-          rgba(240, 118, 47, 0.5) 360deg
+          rgba(248, 208, 0, 0.5) 0deg,
+          rgba(255, 225, 77, 0.9) 60deg,
+          #fff3b0 105deg,
+          rgba(255, 225, 77, 0.9) 150deg,
+          rgba(248, 208, 0, 0.5) 210deg,
+          rgba(232, 168, 12, 0.55) 300deg,
+          rgba(248, 208, 0, 0.5) 360deg
         );
         -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
         -webkit-mask-composite: xor;
@@ -714,7 +727,7 @@
           100deg,
           #ffffff 18%,
           #fff4ea 42%,
-          #ffd9b8 58%,
+          #ffe566 58%,
           var(--orange-hot) 88%
         );
         -webkit-background-clip: text;
@@ -728,7 +741,7 @@
         height: 4px;
         border-radius: 50%;
         background: var(--orange-hot);
-        box-shadow: 0 0 12px 2px rgba(255, 138, 60, 0.55);
+        box-shadow: 0 0 12px 2px rgba(255, 225, 77, 0.55);
         opacity: 0;
         animation: hf-meteor 4.2s linear infinite;
         pointer-events: none;
@@ -741,7 +754,7 @@
         width: 140px;
         height: 2px;
         transform: translateY(-50%);
-        background: linear-gradient(90deg, rgba(255, 190, 140, 0.85), transparent);
+        background: linear-gradient(90deg, rgba(255, 236, 150, 0.85), transparent);
         border-radius: 2px;
       }
       @keyframes hf-meteor {
@@ -1051,6 +1064,38 @@
         <div id="outro-fade"></div>
       </div>
 
+
+      <!-- efeitos sonoros (sintetizados, discretos sob a voz) -->
+      <audio id="sfx1" class="clip" src="assets/sfx/whoosh.m4a" data-start="32.6" data-duration="0.65" data-track-index="14" data-volume="0.4"></audio>
+      <audio id="sfx2" class="clip" src="assets/sfx/whoosh.m4a" data-start="45.82" data-duration="0.65" data-track-index="14" data-volume="0.4"></audio>
+      <audio id="sfx3" class="clip" src="assets/sfx/whoosh.m4a" data-start="58.72" data-duration="0.65" data-track-index="14" data-volume="0.4"></audio>
+      <audio id="sfx4" class="clip" src="assets/sfx/whoosh.m4a" data-start="74.85" data-duration="0.65" data-track-index="14" data-volume="0.35"></audio>
+      <audio id="sfx5" class="clip" src="assets/sfx/whoosh.m4a" data-start="96.5" data-duration="0.65" data-track-index="14" data-volume="0.4"></audio>
+      <audio id="sfx6" class="clip" src="assets/sfx/whoosh.m4a" data-start="108.82" data-duration="0.65" data-track-index="14" data-volume="0.4"></audio>
+      <audio id="sfx7" class="clip" src="assets/sfx/whoosh_out.m4a" data-start="39.9" data-duration="0.45" data-track-index="14" data-volume="0.28"></audio>
+      <audio id="sfx8" class="clip" src="assets/sfx/whoosh_out.m4a" data-start="48.35" data-duration="0.45" data-track-index="14" data-volume="0.28"></audio>
+      <audio id="sfx9" class="clip" src="assets/sfx/whoosh_out.m4a" data-start="64.06" data-duration="0.45" data-track-index="14" data-volume="0.28"></audio>
+      <audio id="sfx10" class="clip" src="assets/sfx/whoosh_out.m4a" data-start="100.32" data-duration="0.45" data-track-index="14" data-volume="0.28"></audio>
+      <audio id="sfx11" class="clip" src="assets/sfx/pop.m4a" data-start="33.0" data-duration="0.22" data-track-index="15" data-volume="0.45"></audio>
+      <audio id="sfx12" class="clip" src="assets/sfx/pop.m4a" data-start="33.42" data-duration="0.22" data-track-index="15" data-volume="0.45"></audio>
+      <audio id="sfx13" class="clip" src="assets/sfx/pop.m4a" data-start="34.12" data-duration="0.22" data-track-index="15" data-volume="0.45"></audio>
+      <audio id="sfx14" class="clip" src="assets/sfx/pop.m4a" data-start="35.05" data-duration="0.22" data-track-index="15" data-volume="0.45"></audio>
+      <audio id="sfx15" class="clip" src="assets/sfx/pop.m4a" data-start="62.82" data-duration="0.22" data-track-index="15" data-volume="0.45"></audio>
+      <audio id="sfx16" class="clip" src="assets/sfx/pop.m4a" data-start="105.35" data-duration="0.22" data-track-index="15" data-volume="0.45"></audio>
+      <audio id="sfx17" class="clip" src="assets/sfx/pop_soft.m4a" data-start="26.05" data-duration="0.2" data-track-index="15" data-volume="0.35"></audio>
+      <audio id="sfx18" class="clip" src="assets/sfx/pop_soft.m4a" data-start="40.9" data-duration="0.2" data-track-index="15" data-volume="0.35"></audio>
+      <audio id="sfx19" class="clip" src="assets/sfx/pop_soft.m4a" data-start="85.35" data-duration="0.2" data-track-index="15" data-volume="0.35"></audio>
+      <audio id="sfx20" class="clip" src="assets/sfx/pop_soft.m4a" data-start="101.35" data-duration="0.2" data-track-index="15" data-volume="0.35"></audio>
+      <audio id="sfx21" class="clip" src="assets/sfx/riser.m4a" data-start="96.68" data-duration="0.5" data-track-index="16" data-volume="0.38"></audio>
+      <audio id="sfx22" class="clip" src="assets/sfx/tick.m4a" data-start="96.78" data-duration="0.09" data-track-index="18" data-volume="0.5"></audio>
+      <audio id="sfx23" class="clip" src="assets/sfx/tick.m4a" data-start="97.0" data-duration="0.09" data-track-index="18" data-volume="0.5"></audio>
+      <audio id="sfx24" class="clip" src="assets/sfx/tick.m4a" data-start="97.2" data-duration="0.09" data-track-index="18" data-volume="0.5"></audio>
+      <audio id="sfx25" class="clip" src="assets/sfx/ding.m4a" data-start="97.25" data-duration="0.6" data-track-index="17" data-volume="0.4"></audio>
+      <audio id="sfx26" class="clip" src="assets/sfx/impact.m4a" data-start="37.0" data-duration="0.5" data-track-index="17" data-volume="0.5"></audio>
+      <audio id="sfx27" class="clip" src="assets/sfx/impact.m4a" data-start="59.3" data-duration="0.5" data-track-index="17" data-volume="0.5"></audio>
+      <audio id="sfx28" class="clip" src="assets/sfx/impact.m4a" data-start="74.87" data-duration="0.5" data-track-index="17" data-volume="0.45"></audio>
+      <audio id="sfx29" class="clip" src="assets/sfx/impact.m4a" data-start="109.3" data-duration="0.5" data-track-index="17" data-volume="0.45"></audio>
+
       <!-- progress bar -->
       <div id="progress" class="clip" data-start="0" data-duration="112" data-track-index="12">
         <div class="track"></div>
@@ -1115,6 +1160,7 @@
       /* ---------- progress bar ---------- */
       tl.to("#pbar", { scaleX: 1, duration: 109.25, ease: "none" }, 0);
       tl.to("#progress", { opacity: 0, duration: 0.4, ease: "power2.in" }, 108.85);
+      tl.set("#progress", { opacity: 0 }, 109.3);
 
       /* ---------- zoom punches on the base video ---------- */
       tl.to("#vwrap", { scale: 1.062, duration: 0.32, ease: "power3.out" }, 6.14);
