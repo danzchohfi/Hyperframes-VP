@@ -1,0 +1,195 @@
+<template data-composition-id="08-pare-de-reconstruir" data-width="1080" data-height="1920">
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+
+  <style>
+    @font-face {
+      font-family: "Montserrat";
+      src: url("assets/fonts/Montserrat-SemiBold.woff2") format("woff2");
+      font-weight: 600;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: "Montserrat";
+      src: url("assets/fonts/Montserrat-Bold.woff2") format("woff2");
+      font-weight: 700;
+      font-style: normal;
+    }
+
+    #root {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      container-type: size;
+      font-family: "Montserrat", sans-serif;
+    }
+
+    /* full-bleed ground — dedicated clip, never painted on #root */
+    .f08-bg {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      background: #FFFFFF;
+    }
+
+    /* stage centers the statement inside the top ~83% (caption keep-out below) */
+    .f08-stage {
+      position: absolute;
+      inset: 0 0 16.6cqh 0;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #f08-block {
+      width: 100%;
+      padding: 0 5cqw;
+      text-align: center;
+      will-change: transform;
+    }
+
+    /* focal — "Pare" heavy h1, near-black (headlines never cobalt) */
+    #f08-pare {
+      margin: 0;
+      font-size: 20cqw;
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: -0.02em;
+      color: #191919;
+      will-change: transform, opacity;
+    }
+
+    /* the rest of the statement, completing word by word */
+    #f08-rest {
+      margin: 3.6cqw 0 0;
+      font-size: 6.4cqw;
+      font-weight: 600;
+      line-height: 1.38;
+      letter-spacing: -0.02em;
+      color: #191919;
+    }
+    .f08-line {
+      display: block;
+    }
+    .f08-w {
+      display: inline-block;
+      will-change: transform, opacity;
+    }
+
+    /* css-marker-patterns — scribble mode, strikethrough variant (cobalt) */
+    .f08-strike-wrap {
+      position: relative;
+    }
+    .f08-strike-text {
+      position: relative;
+      z-index: 1;
+    }
+    .f08-strike-svg {
+      position: absolute;
+      left: -4%;
+      top: 56%;
+      width: 108%;
+      height: 3.2cqw;
+      transform: translateY(-50%);
+      z-index: 2;
+      overflow: visible;
+      pointer-events: none;
+    }
+  </style>
+
+  <div id="root">
+    <div class="clip f08-bg" data-start="0" data-duration="2.581" data-track-index="0"></div>
+
+    <div class="clip f08-stage" data-start="0" data-duration="2.581" data-track-index="1">
+      <div id="f08-block">
+        <h1 id="f08-pare">Pare</h1>
+        <p id="f08-rest">
+          <span class="f08-line">
+            <span class="f08-w">de</span>
+            <span class="f08-w f08-strike-wrap"><span class="f08-strike-text">reconstruir</span><svg class="f08-strike-svg" viewBox="0 0 500 24" preserveAspectRatio="none" aria-hidden="true"><path id="f08-strike-path" d="M0,12 Q31,4 62,12 Q93,20 125,12 Q156,4 187,12 Q218,20 250,12 Q281,4 312,12 Q343,20 375,12 Q406,4 437,12 Q468,20 500,12" fill="none" stroke="#0099FF" stroke-width="4" stroke-linecap="round"/></svg></span>
+            <span class="f08-w">o</span>
+          </span>
+          <span class="f08-line">
+            <span class="f08-w">histórico</span>
+            <span class="f08-w">dos</span>
+            <span class="f08-w">gastos.</span>
+          </span>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      window.__timelines = window.__timelines || {};
+      var tl = gsap.timeline({ paused: true });
+      var D = 2.581;
+
+      // Scene 1 (0.0–0.7s) — "Pare" lands alone: spring-pop-entrance, smooth
+      // register — oversized scales DOWN into rest size, power3.out, no overshoot.
+      tl.fromTo(
+        "#f08-pare",
+        { scale: 2.35, opacity: 0 },
+        { scale: 1, opacity: 1, duration: 0.62, ease: "power3.out" },
+        0.04
+      );
+
+      // Scene 2 (0.7–1.7s) — the statement completes per word. Word starts are
+      // pre-computed ONCE from content length (dynamic-content-sequencing
+      // reduction: dur = BASE + chars * SEC_PER_CHAR), then normalized onto the
+      // VO window — longer words earn a longer window, no hardcoded offsets.
+      var words = gsap.utils.toArray(".f08-w");
+      var BASE = 0.05;
+      var SEC_PER_CHAR = 0.02;
+      var cum = 0;
+      var starts = words.map(function (el) {
+        var s = cum;
+        cum += BASE + el.textContent.replace(/\s+/g, "").length * SEC_PER_CHAR;
+        return s;
+      });
+      var W_START = 0.7;
+      var W_LAST = 1.52;
+      var k = (W_LAST - W_START) / starts[starts.length - 1];
+      words.forEach(function (el, i) {
+        tl.fromTo(
+          el,
+          { y: 34, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.42, ease: "power3.out" },
+          W_START + starts[i] * k
+        );
+      });
+
+      // On the "reconstruir" cue — the cobalt strike-through draws across the
+      // word (css-marker-patterns, scribble strikethrough: stroke-dashoffset
+      // draw, left -> right); the struck word dims toward muted as it's covered.
+      var path = document.getElementById("f08-strike-path");
+      var len = path.getTotalLength();
+      gsap.set(path, { strokeDasharray: len });
+      var STRIKE_AT = W_START + starts[1] * k + 0.22;
+      tl.fromTo(
+        path,
+        { strokeDashoffset: len },
+        { strokeDashoffset: 0, duration: 0.44, ease: "power1.inOut" },
+        STRIKE_AT
+      );
+      tl.fromTo(
+        ".f08-strike-text",
+        { color: "#191919" },
+        { color: "#5A6472", duration: 0.44, ease: "power1.inOut" },
+        STRIKE_AT
+      );
+
+      // Scene 3 (1.7–2.58s) — held read. Subtle jitter at most: a single
+      // imperceptible micro-push on the whole block carries quiet life through
+      // the hold (no idle wobble, no exit — the root cut owns the exit).
+      tl.fromTo(
+        "#f08-block",
+        { scale: 1 },
+        { scale: 1.016, duration: D - 0.9, ease: "none" },
+        0.9
+      );
+
+      window.__timelines["08-pare-de-reconstruir"] = tl;
+    })();
+  </script>
+</template>

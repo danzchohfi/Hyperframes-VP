@@ -238,7 +238,7 @@ Scene 4 (7.4–10.3s): "cada gestor sabe o que está acontecendo e o que precisa
 - voiceover: "Pare de reconstruir o histórico dos gastos."
 - duration: 2.581s
 - transition_in: cut
-- status: outline
+- status: animated
 - src: compositions/frames/08-pare-de-reconstruir.html
 - type: benefit_highlight
 - persuasion: Síntese imperativa — devolve a dor como ordem de mudança
