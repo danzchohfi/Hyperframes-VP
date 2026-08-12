@@ -263,7 +263,7 @@ Scene 3 (1.7–2.6s): held read; subtle jitter no máximo.
 - voiceover: "Clique no link e conheça uma nova forma de comprar melhor e governar seus gastos."
 - duration: 4.757s
 - transition_in: blur-crossfade
-- status: outline
+- status: animated
 - src: compositions/frames/09-cta-missao.html
 - type: cta
 - persuasion: CTA único conectado ao funil (link na bio) + assinatura de autoridade
