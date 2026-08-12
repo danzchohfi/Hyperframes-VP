@@ -1,0 +1,304 @@
+<template data-composition-id="01-etiqueta-qualificacao" data-width="1080" data-height="1920">
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+
+  <style>
+    @font-face {
+      font-family: "Montserrat";
+      src: url("assets/fonts/Montserrat-SemiBold.woff2") format("woff2");
+      font-weight: 600;
+      font-style: normal;
+    }
+
+    #root {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      container-type: size;
+      font-family: "Montserrat", sans-serif;
+    }
+
+    /* full-bleed ground — dedicated clip, never painted on #root */
+    .f01-bg {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      background: #FFFFFF;
+    }
+
+    /* cover atmosphere — faint 3x3 cobalt dot grid, corner */
+    .f01-atmo {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+    }
+    #f01-dots {
+      position: absolute;
+      top: 7cqh;
+      right: 6.5cqw;
+      display: grid;
+      grid-template-columns: repeat(3, auto);
+      gap: 2.6cqw;
+    }
+    #f01-dots i {
+      display: block;
+      width: 1cqw;
+      height: 1cqw;
+      border-radius: 50%;
+      background: rgba(0, 153, 255, 0.35);
+    }
+
+    .f01-stage {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+    }
+    #f01-zoom {
+      position: absolute;
+      inset: 0;
+      transform-origin: 50% 36%;
+      will-change: transform;
+    }
+
+    /* etiqueta — tag-pill, upper third */
+    #f01-tag {
+      position: absolute;
+      top: 14.8cqh;
+      left: 0;
+      right: 0;
+      margin-inline: auto;
+      width: fit-content;
+      background: rgba(0, 153, 255, 0.08);
+      color: #0099FF;
+      font-size: 2.35cqw;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      padding: 1.55cqw 3.4cqw;
+      border-radius: 100px;
+      white-space: nowrap;
+      will-change: transform;
+    }
+
+    /* accent-line 60x4 under the etiqueta */
+    #f01-line {
+      position: absolute;
+      top: 19.6cqh;
+      left: 0;
+      right: 0;
+      margin-inline: auto;
+      width: 60px;
+      height: 4px;
+      border-radius: 2px;
+      background: #0099FF;
+      transform-origin: left center;
+      will-change: transform;
+    }
+
+    /* the cover question — anchor of the frame */
+    #f01-q {
+      position: absolute;
+      top: 28.4cqh;
+      left: 4cqw;
+      right: 4cqw;
+      margin: 0;
+      text-align: center;
+      font-size: 7.2cqw;
+      font-weight: 600;
+      line-height: 1.16;
+      letter-spacing: -0.02em;
+      color: #191919;
+    }
+    .f01-w {
+      display: inline-block;
+      will-change: transform;
+    }
+
+    /* underline sweep on "governa?" — marker-highlight mechanics as an underline */
+    .f01-hl-wrap {
+      position: relative;
+    }
+    #f01-hl {
+      position: absolute;
+      left: -6px;
+      right: -6px;
+      bottom: -7px;
+      height: 10px;
+      background: #0099FF;
+      border-radius: 100px;
+      transform-origin: left center;
+      z-index: 0;
+      will-change: transform;
+    }
+    .f01-hl-text {
+      position: relative;
+      z-index: 1;
+    }
+
+    /* qualification pills — tinted cards with cobalt check */
+    #f01-list {
+      position: absolute;
+      top: 45.8cqh;
+      left: 0;
+      right: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.95cqh;
+    }
+    .f01-pill {
+      display: flex;
+      align-items: center;
+      gap: 2.2cqw;
+      background: rgba(0, 153, 255, 0.04);
+      border: 1.5px solid rgba(0, 153, 255, 0.2);
+      border-radius: 100px;
+      padding: 1.7cqw 4.2cqw 1.7cqw 1.9cqw;
+      will-change: transform;
+    }
+    .f01-pill > span {
+      font-size: 3.3cqw;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: #191919;
+      white-space: nowrap;
+    }
+    .f01-check {
+      width: 5.2cqw;
+      height: 5.2cqw;
+      flex: none;
+      border-radius: 50%;
+      background: #0099FF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      will-change: transform;
+    }
+    .f01-check svg {
+      width: 2.7cqw;
+      height: 2.7cqw;
+      display: block;
+    }
+  </style>
+
+  <div id="root">
+    <div class="clip f01-bg" data-start="0" data-duration="4.949" data-track-index="0"></div>
+
+    <div class="clip f01-atmo" data-start="0" data-duration="4.949" data-track-index="1">
+      <div id="f01-dots"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    </div>
+
+    <div class="clip f01-stage" data-start="0" data-duration="4.949" data-track-index="2">
+      <div id="f01-zoom">
+        <div id="f01-tag">GOVERNANÇA DE GASTOS</div>
+        <div id="f01-line"></div>
+
+        <h2 id="f01-q">
+          <span class="f01-w">Sua</span> <span class="f01-w">empresa</span> <span class="f01-w">compra.</span><br>
+          <span class="f01-w">Mas</span> <span class="f01-w f01-hl-wrap"><span id="f01-hl"></span><span class="f01-hl-text">governa?</span></span>
+        </h2>
+
+        <div id="f01-list">
+          <div class="f01-pill" id="f01-pill-1">
+            <span class="f01-check"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <span>ERP</span>
+          </div>
+          <div class="f01-pill" id="f01-pill-2">
+            <span class="f01-check"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <span>Regras de aprovação</span>
+          </div>
+          <div class="f01-pill" id="f01-pill-3">
+            <span class="f01-check"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <span>Equipe de compras experiente</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      window.__timelines = window.__timelines || {};
+      var tl = gsap.timeline({ paused: true });
+
+      // Macro camera push — slow scale running under the whole shot
+      tl.fromTo("#f01-zoom", { scale: 1 }, { scale: 1.022, duration: 4.949, ease: "none" }, 0);
+
+      // Scene 1 (0.0–0.8s) — etiqueta slides down from above with a long settle;
+      // accent-line draws underneath (scaleX from left); dot-grid atmosphere fades in
+      tl.fromTo(
+        "#f01-tag",
+        { y: -140, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.75, ease: "expo.out" },
+        0.05
+      );
+      tl.fromTo(
+        "#f01-line",
+        { scaleX: 0 },
+        { scaleX: 1, duration: 0.5, ease: "power2.out" },
+        0.4
+      );
+      tl.fromTo(
+        "#f01-dots",
+        { opacity: 0 },
+        { opacity: 1, duration: 0.8, ease: "power2.out" },
+        0.35
+      );
+
+      // Scene 2 (0.8–2.0s) — per-word staggered reveal of the cover question.
+      // Word starts pre-computed ONCE from content length (dynamic-content-sequencing
+      // reduction: dur = BASE + chars * SEC_PER_CHAR) — longer words earn more window.
+      var words = gsap.utils.toArray(".f01-w");
+      var BASE = 0.05;
+      var SEC_PER_CHAR = 0.014;
+      var cum = 0.85;
+      var starts = words.map(function (el) {
+        var s = cum;
+        cum += BASE + el.textContent.length * SEC_PER_CHAR;
+        return s;
+      });
+      words.forEach(function (el, i) {
+        tl.fromTo(
+          el,
+          { y: 36, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.5, ease: "power3.out" },
+          starts[i]
+        );
+      });
+
+      // Underline sweep on "governa?" the instant it settles
+      // (css-marker-patterns highlight mechanics: scaleX 0 -> 1, left origin)
+      var HL_AT = starts[starts.length - 1] + 0.5;
+      tl.fromTo(
+        "#f01-hl",
+        { scaleX: 0 },
+        { scaleX: 1, duration: 0.45, ease: "power2.out" },
+        HL_AT
+      );
+
+      // Scene 3 (2.0–4.1s) — the three qualification pills settle one by one on
+      // voice cues (spring-pop-entrance, smooth register: power3.out, no overshoot)
+      var PILL_AT = [2.1, 2.8, 3.5];
+      ["#f01-pill-1", "#f01-pill-2", "#f01-pill-3"].forEach(function (sel, i) {
+        tl.fromTo(
+          sel,
+          { scale: 0, opacity: 0, y: 24 },
+          { scale: 1, opacity: 1, y: 0, duration: 0.55, ease: "power3.out" },
+          PILL_AT[i]
+        );
+        tl.fromTo(
+          sel + " .f01-check",
+          { scale: 0 },
+          { scale: 1, duration: 0.4, ease: "power3.out" },
+          PILL_AT[i] + 0.1
+        );
+      });
+
+      // Scene 4 (4.1–4.9s) — held read; one subtle sine breath on the etiqueta
+      // (sine-wave-loop at low amplitude, authored as two finite tweens — no repeat)
+      tl.to("#f01-tag", { y: -3, duration: 0.35, ease: "sine.inOut" }, 4.2);
+      tl.to("#f01-tag", { y: 0, duration: 0.35, ease: "sine.inOut" }, 4.55);
+
+      window.__timelines["01-etiqueta-qualificacao"] = tl;
+    })();
+  </script>
+</template>

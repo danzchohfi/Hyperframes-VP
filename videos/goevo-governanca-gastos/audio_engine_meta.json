@@ -4,17 +4,18 @@
   "bgm": {
     "path": "assets/bgm/track.wav",
     "volume": 0.12,
-    "mode": "detached-seed-loop",
-    "duration_s": null
+    "mode": "generate",
+    "query": "confident minimal tech underscore, discreet corporate electronic pulse, voice-dominant",
+    "duration_s": 55.466
   },
-  "bgm_pending": true,
+  "bgm_pending": false,
   "bgm_provider": "musicgen",
-  "bgm_pid": 5520,
-  "bgm_log": "/home/user/Hyperframes-VP/videos/goevo-governanca-gastos/assets/bgm/bgm-1786563500874.log",
-  "bgm_mode": "detached-seed-loop",
-  "bgm_target_duration_s": 55.466,
-  "bgm_seed_duration_s": 28,
-  "bgm_loop_count": 2,
+  "bgm_pid": null,
+  "bgm_log": null,
+  "bgm_mode": "generate",
+  "bgm_target_duration_s": null,
+  "bgm_seed_duration_s": null,
+  "bgm_loop_count": null,
   "voices": [
     {
       "id": "01",

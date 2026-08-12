@@ -45,7 +45,7 @@ language: pt-BR
 - voiceover: "Sua empresa já tem ERP, regras de aprovação e uma equipe de compras experiente."
 - duration: 4.949s
 - transition_in: cut
-- status: outline
+- status: animated
 - src: compositions/frames/01-etiqueta-qualificacao.html
 - type: hook
 - persuasion: Qualificação do público — falar só com quem já tem estrutura

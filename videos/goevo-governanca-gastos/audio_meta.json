@@ -1,5 +1,10 @@
 {
-  "bgm": null,
+  "bgm": {
+    "path": "assets/bgm/track.wav",
+    "volume": 0.12,
+    "query": "confident minimal tech underscore, discreet corporate electronic pulse, voice-dominant",
+    "duration_s": 55.466
+  },
   "bgm_pending": false,
   "voices": [
     {
