@@ -125,7 +125,7 @@ Scene 3 (3.1–4.6s): "de ponta a ponta" completa embaixo em eyebrow tracking la
 - voiceover: "Conheça o GOEVO SCM."
 - duration: 1.877s
 - transition_in: blur-crossfade
-- status: outline
+- status: animated
 - src: compositions/frames/04-revelacao-goevo.html
 - type: product_intro
 - persuasion: Revelação da marca só depois da dor estabelecida
