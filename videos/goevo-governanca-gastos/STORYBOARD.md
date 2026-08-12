@@ -209,7 +209,7 @@ Scene 4 (6.5–7.8s): held; float idle em oposição de fase (esquerda sin(t), d
 - voiceover: "Com integração aos principais ERPs, regras personalizáveis e visão de orçado, comprometido e realizado, cada gestor sabe o que está acontecendo e o que precisa decidir."
 - duration: 10.261s
 - transition_in: crossfade
-- status: outline
+- status: animated
 - src: compositions/frames/07-budget-aprovacao.html
 - type: feature_showcase
 - persuasion: Prova visual — a tela do produto como evidência, não tutorial

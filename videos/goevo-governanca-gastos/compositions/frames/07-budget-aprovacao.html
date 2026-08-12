@@ -1,0 +1,682 @@
+<template>
+  <div id="root" data-composition-id="07-budget-aprovacao">
+    <style>
+      @font-face {
+        font-family: "Montserrat";
+        src: url("assets/fonts/Montserrat-Regular.woff2") format("woff2");
+        font-weight: 400;
+        font-style: normal;
+        font-display: block;
+      }
+      @font-face {
+        font-family: "Montserrat";
+        src: url("assets/fonts/Montserrat-Medium.woff2") format("woff2");
+        font-weight: 500;
+        font-style: normal;
+        font-display: block;
+      }
+      @font-face {
+        font-family: "Montserrat";
+        src: url("assets/fonts/Montserrat-SemiBold.woff2") format("woff2");
+        font-weight: 600;
+        font-style: normal;
+        font-display: block;
+      }
+      @font-face {
+        font-family: "Montserrat";
+        src: url("assets/fonts/Montserrat-Bold.woff2") format("woff2");
+        font-weight: 700;
+        font-style: normal;
+        font-display: block;
+      }
+      @font-face {
+        font-family: "Montserrat";
+        src: url("assets/fonts/Montserrat-ExtraBold.woff2") format("woff2");
+        font-weight: 800;
+        font-style: normal;
+        font-display: block;
+      }
+
+      #root {
+        position: relative;
+        width: 1080px;
+        height: 1920px;
+        overflow: hidden;
+        container-type: size;
+        font-family: "Montserrat", sans-serif;
+      }
+
+      /* ---------- full-bleed ground (clip, never on #root) ---------- */
+      .f07-bg {
+        position: absolute;
+        inset: 0;
+        background: #ffffff;
+      }
+
+      /* ---------- slide header ---------- */
+      .f07-header {
+        position: absolute;
+        left: 54px;
+        right: 54px;
+        top: 96px;
+      }
+      .f07-accent-line {
+        width: 64px;
+        height: 5px;
+        border-radius: 2px;
+        background: #0099ff;
+        transform-origin: left center;
+      }
+      .f07-eyebrow {
+        margin-top: 20px;
+        font-size: 27px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #0099ff;
+        line-height: 1.2;
+      }
+      .f07-h3 {
+        margin-top: 12px;
+        font-size: 54px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        line-height: 1.15;
+        color: #191919;
+      }
+
+      /* ---------- ERP chips ---------- */
+      .f07-chips {
+        position: absolute;
+        left: 54px;
+        right: 54px;
+        top: 264px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+      }
+      .f07-chip {
+        box-sizing: border-box;
+        padding: 13px 27px;
+        border-radius: 100px;
+        background: rgba(0, 153, 255, 0.08);
+        color: #0099ff;
+        font-size: 24px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        line-height: 1;
+        transform-origin: 50% 50%;
+        will-change: transform;
+      }
+
+      /* ---------- dashboard mock ---------- */
+      .f07-mock {
+        position: absolute;
+        left: 54px;
+        top: 368px;
+        width: 972px;
+        height: 1180px;
+        box-sizing: border-box;
+        background: rgba(0, 153, 255, 0.04);
+        border: 1.5px solid rgba(0, 153, 255, 0.2);
+        border-radius: 14px;
+        padding: 34px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+      }
+      .f07-mock-head {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+      }
+      .f07-mock-head img {
+        width: 54px;
+        height: 54px;
+        border-radius: 12px;
+        display: block;
+      }
+      .f07-mock-title {
+        font-size: 29px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        color: #191919;
+      }
+
+      /* inner cards */
+      .f07-inner-card {
+        box-sizing: border-box;
+        background: #ffffff;
+        border: 1.5px solid rgba(0, 153, 255, 0.2);
+        border-radius: 12px;
+      }
+
+      /* rules card */
+      .f07-rules {
+        padding: 22px 28px 24px;
+      }
+      .f07-rules-label {
+        font-size: 19px;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #9a9a9a;
+      }
+      .f07-rule-row {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        height: 46px;
+        margin-top: 8px;
+      }
+      .f07-toggle {
+        position: relative;
+        width: 56px;
+        height: 30px;
+        border-radius: 100px;
+        background: rgba(0, 153, 255, 0.15);
+        flex: none;
+      }
+      .f07-knob {
+        position: absolute;
+        left: 3px;
+        top: 3px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: #ffffff;
+      }
+      .f07-rule-text {
+        font-size: 26px;
+        font-weight: 500;
+        color: #5a6472;
+      }
+
+      /* metric cards — the focal trio */
+      .f07-metric {
+        padding: 24px 30px 26px;
+      }
+      .f07-metric-label {
+        font-size: 21px;
+        font-weight: 600;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        color: #5a6472;
+      }
+      .f07-metric-row {
+        display: flex;
+        align-items: baseline;
+        margin-top: 10px;
+        line-height: 1;
+      }
+      .f07-num-wrap {
+        display: flex;
+        align-items: baseline;
+        transform-origin: left center;
+        will-change: transform;
+      }
+      .f07-currency {
+        font-size: 27px;
+        font-weight: 700;
+        color: #0099ff;
+        margin-right: 10px;
+      }
+      .f07-num {
+        font-size: 58px;
+        font-weight: 700;
+        color: #0099ff;
+        font-variant-numeric: tabular-nums;
+      }
+      .f07-suffix {
+        font-size: 30px;
+        font-weight: 700;
+        color: #0099ff;
+        margin-left: 10px;
+      }
+      .f07-bar-track {
+        margin-top: 18px;
+        width: 100%;
+        height: 13px;
+        border-radius: 6px;
+        background: rgba(0, 153, 255, 0.08);
+        overflow: hidden;
+      }
+      /* width:100% required — a zero-width fill scaled by any factor stays invisible */
+      .f07-bar-fill {
+        width: 100%;
+        height: 100%;
+        border-radius: 6px;
+        background: #0099ff;
+        transform: scaleX(0);
+        transform-origin: left center;
+      }
+
+      /* approval card */
+      .f07-approval {
+        margin-top: auto;
+        padding: 26px 30px;
+        border-left: 4px solid #0099ff;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        will-change: transform;
+      }
+      .f07-req-title {
+        font-size: 29px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        color: #191919;
+      }
+      .f07-req-meta {
+        margin-top: 9px;
+        font-size: 25px;
+        font-weight: 500;
+        color: #5a6472;
+      }
+      .f07-approve-btn {
+        box-sizing: border-box;
+        flex: none;
+        width: 262px;
+        padding: 17px 0;
+        border-radius: 100px;
+        border: 1.5px solid transparent;
+        background: #0099ff;
+        color: #ffffff;
+        font-size: 27px;
+        font-weight: 600;
+        text-align: center;
+        line-height: 1;
+        transform-origin: 50% 50%;
+        will-change: transform;
+      }
+      .f07-approve-btn.f07-approved {
+        background: #ffffff;
+        color: #059669;
+        border-color: rgba(5, 150, 105, 0.45);
+      }
+    </style>
+
+    <!-- full-bleed ground -->
+    <div
+      class="clip f07-bg"
+      data-start="0"
+      data-duration="10.261"
+      data-track-index="0"
+    ></div>
+
+    <!-- Scene 1 — slide header -->
+    <div
+      class="clip f07-header"
+      data-start="0"
+      data-duration="10.261"
+      data-track-index="1"
+    >
+      <div class="f07-accent-line" id="f07-accent"></div>
+      <div class="f07-eyebrow" id="f07-eyebrow">Integrado ao seu ERP</div>
+      <div class="f07-h3" id="f07-h3">Governança em tempo real</div>
+    </div>
+
+    <!-- Scene 1 — ERP chips -->
+    <div
+      class="clip f07-chips"
+      data-start="0"
+      data-duration="10.261"
+      data-track-index="2"
+    >
+      <div class="f07-chip">TOTVS</div>
+      <div class="f07-chip">SAP</div>
+      <div class="f07-chip">OMIE</div>
+      <div class="f07-chip">Senior</div>
+      <div class="f07-chip">+ outros</div>
+    </div>
+
+    <!-- dashboard mock — frames the middle, fills through the scenes -->
+    <div
+      class="clip f07-mock"
+      id="f07-mock"
+      data-start="0"
+      data-duration="10.261"
+      data-track-index="3"
+    >
+      <div class="f07-mock-head" id="f07-mock-head">
+        <img src="assets/goevo-logo-quadrado.png" alt="GoEvo" />
+        <div class="f07-mock-title">Painel de Budget</div>
+      </div>
+
+      <!-- Scene 2 — rules card -->
+      <div class="f07-inner-card f07-rules" id="f07-rules">
+        <div class="f07-rules-label">Regras</div>
+        <div class="f07-rule-row">
+          <div class="f07-toggle"><div class="f07-knob"></div></div>
+          <div class="f07-rule-text">Alçadas por valor</div>
+        </div>
+        <div class="f07-rule-row">
+          <div class="f07-toggle"><div class="f07-knob"></div></div>
+          <div class="f07-rule-text">Centro de custo</div>
+        </div>
+        <div class="f07-rule-row">
+          <div class="f07-toggle"><div class="f07-knob"></div></div>
+          <div class="f07-rule-text">Projeto</div>
+        </div>
+      </div>
+
+      <!-- Scene 3 — the three metric cards (focal) -->
+      <div class="f07-inner-card f07-metric" id="f07-metric-1">
+        <div class="f07-metric-label">Orçado</div>
+        <div class="f07-metric-row">
+          <div class="f07-num-wrap" id="f07-wrap-1">
+            <span class="f07-currency">R$</span>
+            <span class="f07-num" id="f07-num-1">0,00</span>
+          </div>
+          <span class="f07-suffix" id="f07-suffix-1">mi</span>
+        </div>
+        <div class="f07-bar-track">
+          <div class="f07-bar-fill" id="f07-bar-1"></div>
+        </div>
+      </div>
+
+      <div class="f07-inner-card f07-metric" id="f07-metric-2">
+        <div class="f07-metric-label">Comprometido</div>
+        <div class="f07-metric-row">
+          <div class="f07-num-wrap" id="f07-wrap-2">
+            <span class="f07-currency">R$</span>
+            <span class="f07-num" id="f07-num-2">0</span>
+          </div>
+          <span class="f07-suffix" id="f07-suffix-2">mil</span>
+        </div>
+        <div class="f07-bar-track">
+          <div class="f07-bar-fill" id="f07-bar-2"></div>
+        </div>
+      </div>
+
+      <div class="f07-inner-card f07-metric" id="f07-metric-3">
+        <div class="f07-metric-label">Realizado</div>
+        <div class="f07-metric-row">
+          <div class="f07-num-wrap" id="f07-wrap-3">
+            <span class="f07-currency">R$</span>
+            <span class="f07-num" id="f07-num-3">0</span>
+          </div>
+          <span class="f07-suffix" id="f07-suffix-3">mil</span>
+        </div>
+        <div class="f07-bar-track">
+          <div class="f07-bar-fill" id="f07-bar-3"></div>
+        </div>
+      </div>
+
+      <!-- Scene 4 — approval card (final hero) -->
+      <div class="f07-inner-card f07-approval" id="f07-approval">
+        <div>
+          <div class="f07-req-title">Requisição #1042</div>
+          <div class="f07-req-meta">Materiais · R$ 12.500</div>
+        </div>
+        <div class="f07-approve-btn" id="f07-btn">Aprovar</div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      (function () {
+        window.__timelines = window.__timelines || {};
+        var tl = gsap.timeline({ paused: true });
+        window.__timelines["07-budget-aprovacao"] = tl;
+
+        var EASE = "power3.out";
+
+        /* ============ Scene 1 (0.0–2.2s) — header settles, chips pop ============ */
+        tl.fromTo(
+          "#f07-accent",
+          { scaleX: 0 },
+          { scaleX: 1, duration: 0.5, ease: EASE },
+          0.1
+        );
+        tl.fromTo(
+          "#f07-eyebrow",
+          { opacity: 0, y: 24 },
+          { opacity: 1, y: 0, duration: 0.55, ease: EASE },
+          0.18
+        );
+        tl.fromTo(
+          "#f07-h3",
+          { opacity: 0, y: 32 },
+          { opacity: 1, y: 0, duration: 0.6, ease: EASE },
+          0.3
+        );
+
+        // dashboard mock already frames the middle third, still empty
+        tl.fromTo(
+          "#f07-mock",
+          { opacity: 0, y: 70, scale: 0.985 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.8, ease: EASE },
+          0.55
+        );
+        tl.fromTo(
+          "#f07-mock-head",
+          { opacity: 0, y: 18 },
+          { opacity: 1, y: 0, duration: 0.5, ease: EASE },
+          0.85
+        );
+
+        // ERP chips — spring-pop-entrance (smooth settle, staggered group = one beat)
+        gsap.utils.toArray(".f07-chip").forEach(function (el, i) {
+          tl.fromTo(
+            el,
+            { scale: 0, opacity: 0, y: 16 },
+            { scale: 1, opacity: 1, y: 0, duration: 0.55, ease: EASE },
+            1.3 + i * 0.08
+          );
+        });
+
+        /* ============ Scene 2 (2.2–3.9s) — rules card ============ */
+        tl.fromTo(
+          "#f07-rules",
+          { opacity: 0, y: 40 },
+          { opacity: 1, y: 0, duration: 0.55, ease: EASE },
+          2.3
+        );
+
+        // dynamic-content-sequencing — row starts computed from content length,
+        // reduced once at build (no hardcoded per-item offsets), scaled to the window
+        var RULE_ROWS = gsap.utils.toArray(".f07-rule-row");
+        var RULE_CONTENT = [
+          { label: "Alçadas por valor" },
+          { label: "Centro de custo" },
+          { label: "Projeto" }
+        ];
+        var BASE_DURATION = 0.34;
+        var SEC_PER_CHAR = 0.011;
+        var cumulative = 0;
+        var RULE_TIMELINE = RULE_CONTENT.map(function (entry) {
+          var dur = BASE_DURATION + entry.label.length * SEC_PER_CHAR;
+          var start = cumulative;
+          cumulative += dur;
+          return { label: entry.label, start: start };
+        });
+        var RULES_AT = 2.52;
+        var RULES_SPAN = 1.3;
+        var scaleK = RULES_SPAN / cumulative;
+
+        RULE_ROWS.forEach(function (row, i) {
+          var at = RULES_AT + RULE_TIMELINE[i].start * scaleK;
+          tl.fromTo(
+            row,
+            { opacity: 0, x: -28 },
+            { opacity: 1, x: 0, duration: 0.45, ease: EASE },
+            at
+          );
+          // toggle flips on — knob slides, track tints cobalt
+          var knob = row.querySelector(".f07-knob");
+          var track = row.querySelector(".f07-toggle");
+          tl.fromTo(
+            knob,
+            { x: 0 },
+            { x: 26, duration: 0.32, ease: "power2.out" },
+            at + 0.16
+          );
+          tl.fromTo(
+            track,
+            { backgroundColor: "rgba(0, 153, 255, 0.15)" },
+            { backgroundColor: "#0099ff", duration: 0.32, ease: "power2.out" },
+            at + 0.16
+          );
+        });
+
+        /* ==== Scene 3 (3.9–7.4s) — counting-dynamic-scale + stat-bars-and-fills ==== */
+        // Signature move: numeral counts up + scale grows + bar fills on the SAME ease,
+        // triplicated across the three meters, each on its own word cue.
+        var COUNT_DUR = 1.3;
+        var METRICS = [
+          {
+            at: 3.95,
+            card: "#f07-metric-1",
+            wrap: "#f07-wrap-1",
+            num: "f07-num-1",
+            suffix: "#f07-suffix-1",
+            bar: "#f07-bar-1",
+            target: 1.2,
+            pct: 1.0,
+            fmt: function (v) {
+              return v.toFixed(2).replace(".", ",");
+            }
+          },
+          {
+            at: 4.8,
+            card: "#f07-metric-2",
+            wrap: "#f07-wrap-2",
+            num: "f07-num-2",
+            suffix: "#f07-suffix-2",
+            bar: "#f07-bar-2",
+            target: 780,
+            pct: 0.65,
+            fmt: function (v) {
+              return String(Math.round(v));
+            }
+          },
+          {
+            at: 5.65,
+            card: "#f07-metric-3",
+            wrap: "#f07-wrap-3",
+            num: "f07-num-3",
+            suffix: "#f07-suffix-3",
+            bar: "#f07-bar-3",
+            target: 460,
+            pct: 0.38,
+            fmt: function (v) {
+              return String(Math.round(v));
+            }
+          }
+        ];
+
+        METRICS.forEach(function (m) {
+          var numEl = document.getElementById(m.num);
+          var state = { value: 0 };
+          var countAt = m.at + 0.18;
+
+          // card pops in on its word cue
+          tl.fromTo(
+            m.card,
+            { opacity: 0, y: 56, scale: 0.97 },
+            { opacity: 1, y: 0, scale: 1, duration: 0.6, ease: EASE },
+            m.at
+          );
+
+          // count value — onUpdate writes text only (O(1))
+          tl.to(
+            state,
+            {
+              value: m.target,
+              duration: COUNT_DUR,
+              ease: EASE,
+              onUpdate: function () {
+                numEl.textContent = m.fmt(state.value);
+              }
+            },
+            countAt
+          );
+
+          // visual growth — same position, same ease as the count
+          tl.fromTo(
+            m.wrap,
+            { scale: 0.6 },
+            { scale: 1, duration: COUNT_DUR, ease: EASE },
+            countAt
+          );
+
+          // bar fill — same position, same ease, same duration (one chord)
+          tl.fromTo(
+            m.bar,
+            { scaleX: 0 },
+            { scaleX: m.pct, duration: COUNT_DUR, ease: EASE },
+            countAt
+          );
+
+          // suffix slides in AFTER the count lands — the number gets its own beat
+          tl.fromTo(
+            m.suffix,
+            { opacity: 0, y: 16 },
+            { opacity: 1, y: 0, duration: 0.42, ease: "back.out(1.7)" },
+            countAt + COUNT_DUR
+          );
+        });
+
+        /* ===== Scene 4 (7.4–10.261s) — approval slides up, flips to approved ===== */
+        tl.fromTo(
+          "#f07-approval",
+          { opacity: 0, y: 110, scale: 0.97 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.75, ease: EASE },
+          7.55
+        );
+        tl.fromTo(
+          "#f07-btn",
+          { scale: 0.5, opacity: 0 },
+          { scale: 1, opacity: 1, duration: 0.45, ease: EASE },
+          7.95
+        );
+
+        // press → release, the flip lands on the release
+        tl.to("#f07-btn", { scale: 0.93, duration: 0.14, ease: "power2.in" }, 8.86);
+        tl.to("#f07-btn", { scale: 1, duration: 0.4, ease: EASE }, 9.0);
+
+        // discrete-text-sequence — whole-state swap at a threshold, instant, seek-safe
+        var btnEl = document.getElementById("f07-btn");
+        var BTN_SEQ = [
+          { t: 0.0, s: 0 }, // "Aprovar" (pending)
+          { t: 1.62, s: 1 } // "Aprovado ✓" (approved) — abs 9.02s
+        ];
+        var SEQ_DUR = 2.861; // 7.4 → 10.261
+        var driver = { t: 0 };
+        var lastState = -1;
+        tl.to(
+          driver,
+          {
+            t: SEQ_DUR,
+            duration: SEQ_DUR,
+            ease: "none",
+            onUpdate: function () {
+              var s = 0;
+              for (var i = BTN_SEQ.length - 1; i >= 0; i--) {
+                if (driver.t >= BTN_SEQ[i].t) {
+                  s = BTN_SEQ[i].s;
+                  break;
+                }
+              }
+              if (s !== lastState) {
+                lastState = s;
+                if (s === 1) {
+                  btnEl.textContent = "Aprovado ✓";
+                  btnEl.classList.add("f07-approved");
+                } else {
+                  btnEl.textContent = "Aprovar";
+                  btnEl.classList.remove("f07-approved");
+                }
+              }
+            }
+          },
+          7.4
+        );
+        // hold on the complete dashboard through 10.261s — no exit (non-final frame)
+      })();
+    </script>
+  </div>
+</template>
