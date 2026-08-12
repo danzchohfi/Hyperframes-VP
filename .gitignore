@@ -21,3 +21,8 @@ server/projects/*
 # allow the committed example renders
 *.mp4
 !preview/*.mp4
+
+# agent skills tooling (installed per-session via `npx skills add heygen-com/hyperframes`)
+.agents/
+.claude/
+skills-lock.json

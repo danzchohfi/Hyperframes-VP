@@ -1,0 +1,221 @@
+<template>
+  <script src="vendor/gsap.min.js"></script>
+
+  <style>
+    @font-face {
+      font-family: "Montserrat";
+      src: url("assets/fonts/Montserrat-Medium.woff2") format("woff2");
+      font-weight: 500;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: "Montserrat";
+      src: url("assets/fonts/Montserrat-SemiBold.woff2") format("woff2");
+      font-weight: 600;
+      font-style: normal;
+    }
+
+    #root {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      container-type: size;
+      font-family: "Montserrat", sans-serif;
+    }
+
+    .clip {
+      position: absolute;
+      inset: 0;
+    }
+
+    /* ── full-bleed ground: deep blue gradient (brand-blue family), never on #root ── */
+    .f09-bg {
+      background:
+        radial-gradient(90cqw 55cqh at 50% 24cqh, rgba(0, 153, 255, 0.2), rgba(0, 153, 255, 0) 65%),
+        linear-gradient(180deg, #01304f 0%, #012038 50%, #010f1d 100%);
+    }
+
+    /* ── atmosphere: weak concentric closing rings + bloom glow ── */
+    .f09-ring {
+      position: absolute;
+      left: 50%;
+      top: 51cqh;
+      border-radius: 50%;
+      border: 1.5px solid;
+      will-change: transform;
+    }
+    .f09-ring-1 { width: 48.2cqw; height: 48.2cqw; border-color: rgba(140, 205, 255, 0.14); }
+    .f09-ring-2 { width: 66.7cqw; height: 66.7cqw; border-color: rgba(140, 205, 255, 0.11); }
+    .f09-ring-3 { width: 85.2cqw; height: 85.2cqw; border-color: rgba(140, 205, 255, 0.08); }
+    .f09-ring-4 { width: 103.7cqw; height: 103.7cqw; border-color: rgba(140, 205, 255, 0.06); }
+
+    #f09-glow {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(56cqw 56cqw at 50% 51cqh, rgba(0, 153, 255, 0.3), rgba(0, 153, 255, 0) 70%);
+    }
+
+    /* ── Scene 1: CTA pill — white pill, brand-blue text, the one solid element ── */
+    #f09-cta {
+      position: absolute;
+      top: 19.8cqh;
+      left: 0;
+      right: 0;
+      margin: 0 auto;
+      width: max-content;
+      background: #ffffff;
+      color: #0099ff;
+      font-weight: 600;
+      font-size: 4.1cqw;
+      letter-spacing: 0.01em;
+      padding: 2.3cqw 5.8cqw;
+      border-radius: 100px;
+      transform-origin: 50% 50%;
+      will-change: transform;
+    }
+
+    /* ── Scene 2: mission signature, writes word-by-word ── */
+    .f09-mission {
+      position: absolute;
+      top: 28.4cqh;
+      left: 11cqw;
+      right: 11cqw;
+      text-align: center;
+      color: #ffffff;
+      font-weight: 500;
+      font-size: 4.35cqw;
+      line-height: 1.38;
+      letter-spacing: -0.02em;
+    }
+    .f09-word {
+      display: inline-block;
+      will-change: transform, filter;
+    }
+
+    /* ── Scene 3: GOEVO lockup hero + signature line ── */
+    #f09-logo {
+      position: absolute;
+      top: 41.3cqh;
+      left: 0;
+      right: 0;
+      margin: 0 auto;
+      display: block;
+      width: 55.5cqw;
+      height: auto;
+      transform-origin: 50% 50%;
+      will-change: transform;
+    }
+    #f09-tag {
+      position: absolute;
+      top: 63.8cqh;
+      left: 0;
+      right: 0;
+      text-align: center;
+      color: rgba(255, 255, 255, 0.75);
+      font-weight: 600;
+      font-size: 2.2cqw;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      will-change: transform;
+    }
+  </style>
+
+  <div id="root" data-composition-id="09-cta-missao" data-start="0" data-duration="4.757" data-width="1080" data-height="1920">
+    <div class="clip f09-bg" data-start="0" data-duration="4.757" data-track-index="0"></div>
+
+    <div class="clip f09-atmo" data-start="0" data-duration="4.757" data-track-index="1">
+      <div class="f09-ring f09-ring-1"></div>
+      <div class="f09-ring f09-ring-2"></div>
+      <div class="f09-ring f09-ring-3"></div>
+      <div class="f09-ring f09-ring-4"></div>
+      <div id="f09-glow"></div>
+    </div>
+
+    <div class="clip f09-stage" data-start="0" data-duration="4.757" data-track-index="2">
+      <div id="f09-cta">Clique no link</div>
+
+      <div class="f09-mission">
+        <span class="f09-word">Visibilidade</span>
+        <span class="f09-word">para</span>
+        <span class="f09-word">comprar</span>
+        <span class="f09-word">melhor</span>
+        <span class="f09-word">e</span>
+        <span class="f09-word">governar</span>
+        <span class="f09-word">seus</span>
+        <span class="f09-word">gastos.</span>
+      </div>
+
+      <img id="f09-logo" src="assets/goevo-logo-branco.png" alt="GOEVO" />
+      <div id="f09-tag">+20 anos de mercado</div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var END = 4.757;
+      var tl = gsap.timeline({ paused: true });
+
+      /* rings: soft atmosphere entrance, clustered slightly inward (scale 0.86) */
+      var rings = document.querySelectorAll(".f09-ring");
+      rings.forEach(function (el, i) {
+        tl.fromTo(
+          el,
+          { xPercent: -50, yPercent: -50, scale: 0.86, opacity: 0 },
+          { opacity: 1, duration: 0.9, ease: "power2.out" },
+          0.05 + i * 0.06
+        );
+      });
+
+      /* Scene 1 (0.0–1.3s): CTA pill spring-pops on "Clique no link" — punctual overshoot */
+      tl.fromTo(
+        "#f09-cta",
+        { scale: 0, opacity: 0 },
+        { scale: 1, opacity: 1, duration: 0.62, ease: "back.out(1.4)" },
+        0.1
+      );
+
+      /* Scene 2 (1.3–2.9s): mission writes itself word-by-word (fade-through) —
+         dynamic-content-sequencing: offsets precomputed once from content length */
+      var WORD_BASE = 0.08;
+      var SEC_PER_CHAR = 0.018;
+      var WORD_DUR = 0.38;
+      var wt = 1.3;
+      document.querySelectorAll(".f09-word").forEach(function (el) {
+        tl.fromTo(
+          el,
+          { opacity: 0, y: 14, filter: "blur(8px)" },
+          { opacity: 1, y: 0, filter: "blur(0px)", duration: WORD_DUR, ease: "power2.out" },
+          wt
+        );
+        wt += WORD_BASE + el.textContent.length * SEC_PER_CHAR;
+      });
+
+      /* rings expand once, subtle (center-outward-expansion: out-ease only, staggered) */
+      rings.forEach(function (el, i) {
+        tl.to(el, { scale: 1, duration: 1.15, ease: "power3.out" }, 1.35 + i * 0.08);
+      });
+
+      /* Scene 3 (2.9–4.757s): the white GOEVO logo spring-BLOOMs from zero as hero,
+         glow answers it, "+20 anos de mercado" fades in — then the lockup HOLDS to the end */
+      tl.fromTo("#f09-glow", { opacity: 0 }, { opacity: 1, duration: 1.0, ease: "power2.out" }, 2.95);
+      tl.fromTo(
+        "#f09-logo",
+        { scale: 0, opacity: 0 },
+        { scale: 1, opacity: 1, duration: 0.8, ease: "power3.out" },
+        2.95
+      );
+      tl.fromTo(
+        "#f09-tag",
+        { opacity: 0, y: 16 },
+        { opacity: 1, y: 0, duration: 0.55, ease: "power2.out" },
+        3.6
+      );
+
+      /* final-frame hold: stretch the timeline to the full duration (no exit, static lockup) */
+      tl.set({}, {}, END);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["09-cta-missao"] = tl;
+    })();
+  </script>
+</template>

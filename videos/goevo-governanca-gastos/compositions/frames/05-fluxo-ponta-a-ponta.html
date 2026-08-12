@@ -1,0 +1,658 @@
+<template>
+  <script src="vendor/gsap.min.js"></script>
+
+  <style>
+    @font-face {
+      font-family: "Montserrat";
+      src: url("assets/fonts/Montserrat-Medium.woff2") format("woff2");
+      font-weight: 500;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: "Montserrat";
+      src: url("assets/fonts/Montserrat-SemiBold.woff2") format("woff2");
+      font-weight: 600;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: "Montserrat";
+      src: url("assets/fonts/Montserrat-Bold.woff2") format("woff2");
+      font-weight: 700;
+      font-style: normal;
+    }
+
+    #root {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      container-type: size;
+      font-family: "Montserrat", sans-serif;
+    }
+    #root *,
+    #root {
+      box-sizing: border-box;
+    }
+
+    /* full-bleed ground — dedicated clip, never painted on #root */
+    .f05-bg {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      background: #FFFFFF;
+    }
+
+    /* ---- viewport (the "scene" of the virtual camera) ---- */
+    .f05-stage {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      overflow: hidden;
+    }
+    /* single camera wrapper — the ONE element GSAP writes transform on */
+    #f05-world {
+      position: absolute;
+      inset: 0;
+      transform-origin: 50% 50%;
+      will-change: transform;
+    }
+    /* oversized horizontal canvas: 8 stations + terminal, pre-positioned */
+    .f05-strip {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 6840px;
+      height: 100%;
+    }
+
+    /* the process wire — thin cobalt line, middle third */
+    .f05-wire {
+      position: absolute;
+      inset: 0;
+      width: 6840px;
+      height: 100%;
+    }
+    .f05-wire path {
+      fill: none;
+      stroke: #0099FF;
+      stroke-width: 3;
+      stroke-linecap: round;
+    }
+
+    /* ---- stations ---- */
+    .f05-st {
+      position: absolute;
+      top: 0;
+      width: 460px;
+      height: 100%;
+    }
+
+    /* callout box — tinted card, pops from the triangle pointer */
+    .f05-callout {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 1124px; /* card bottom at y=796 */
+      height: 252px;
+      background: #F5FBFF; /* 4% cobalt tint flattened over the white ground */
+      border: 1.5px solid rgba(0, 153, 255, 0.2);
+      border-radius: 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      transform-origin: 50% 100%; /* pop grows out of the triangle / node */
+      will-change: transform;
+    }
+    .f05-diamond {
+      position: absolute;
+      left: 50%;
+      bottom: -15px;
+      margin-left: -13px;
+      width: 26px;
+      height: 26px;
+      background: #F5FBFF;
+      border-right: 1.5px solid rgba(0, 153, 255, 0.2);
+      border-bottom: 1.5px solid rgba(0, 153, 255, 0.2);
+      transform: rotate(45deg); /* static CSS transform — never GSAP-animated */
+    }
+    .f05-icon {
+      width: 128px;
+      height: 128px;
+    }
+    .f05-icon svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      fill: none;
+      stroke: #0099FF;
+      stroke-width: 1.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .f05-label {
+      height: 40px;
+      line-height: 40px;
+      font-size: 31px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      color: #191919;
+      white-space: nowrap;
+      text-align: center;
+    }
+
+    /* station marker on the wire */
+    .f05-node {
+      position: absolute;
+      left: 50%;
+      top: 845px;
+      margin-left: -15px;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: #FFFFFF;
+      border: 7px solid #0099FF;
+      will-change: transform;
+    }
+
+    /* step circle beneath the wire */
+    .f05-step {
+      position: absolute;
+      left: 50%;
+      top: 964px;
+      margin-left: -46px;
+      width: 92px;
+      height: 92px;
+      border-radius: 50%;
+      background: #0099FF;
+      color: #FFFFFF;
+      font-size: 34px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      will-change: transform;
+    }
+
+    /* ---- terminal callout — the focal punchline ---- */
+    #f05-terminal {
+      position: absolute;
+      left: 5880px;
+      top: 736px;
+      width: 840px;
+      height: 248px;
+      background: #F5FBFF;
+      border: 1.5px solid rgba(0, 153, 255, 0.2);
+      border-radius: 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      transform-origin: 50% 50%;
+      will-change: transform;
+    }
+    #f05-taccent {
+      display: block;
+      width: 60px;
+      height: 4px;
+      border-radius: 2px;
+      background: #0099FF;
+      transform-origin: 50% 50%;
+      will-change: transform;
+    }
+    .f05-punch {
+      font-size: 54px;
+      font-weight: 700;
+      letter-spacing: -0.015em;
+      line-height: 1.1;
+      color: #191919;
+      white-space: nowrap;
+    }
+    .f05-miniflow {
+      position: relative;
+      width: 560px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    #f05-miniline {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 50%;
+      height: 3px;
+      margin-top: -1.5px;
+      border-radius: 2px;
+      background: rgba(0, 153, 255, 0.3);
+      transform-origin: 50% 50%;
+      will-change: transform;
+    }
+    .f05-minidot {
+      position: relative;
+      display: block;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #0099FF;
+      will-change: transform;
+    }
+
+    /* ---- screen-fixed chrome ---- */
+    .f05-chrome {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+    }
+    #f05-eyebrow {
+      position: absolute;
+      top: 176px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      color: #0099FF;
+      will-change: transform;
+    }
+    #f05-accent {
+      position: absolute;
+      top: 242px;
+      left: 50%;
+      margin-left: -30px;
+      width: 60px;
+      height: 4px;
+      border-radius: 2px;
+      background: #0099FF;
+      transform-origin: left center;
+      will-change: transform;
+    }
+    #f05-counter {
+      position: absolute;
+      top: 1108px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 26px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      color: #5A6472;
+    }
+  </style>
+
+  <div id="root" data-composition-id="05-fluxo-ponta-a-ponta" data-start="0" data-duration="9.716" data-width="1080" data-height="1920">
+    <div class="clip f05-bg" data-start="0" data-duration="9.716" data-track-index="0"></div>
+
+    <div class="clip f05-stage" data-start="0" data-duration="9.716" data-track-index="1">
+      <div id="f05-world">
+        <div class="f05-strip">
+          <svg class="f05-wire" viewBox="0 0 6840 1920" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+            <path id="f05-wirepath" d="M 120 860 L 6260 860" />
+          </svg>
+
+          <!-- 1 · REQUISIÇÕES (center x=540) -->
+          <div class="f05-st" style="left: 310px;">
+            <div class="f05-callout" id="f05-card-1">
+              <i class="f05-diamond"></i>
+              <div class="f05-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="5.5" y="3.5" width="13" height="17" rx="2" />
+                  <path d="M9 9h6M9 13h6M9 17h4" />
+                </svg>
+              </div>
+              <div class="f05-label" id="f05-label-1"></div>
+            </div>
+            <div class="f05-node" id="f05-node-1"></div>
+            <div class="f05-step" id="f05-step-1">01</div>
+          </div>
+
+          <!-- 2 · COTAÇÕES (center x=1260) -->
+          <div class="f05-st" style="left: 1030px;">
+            <div class="f05-callout" id="f05-card-2">
+              <i class="f05-diamond"></i>
+              <div class="f05-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M3.5 3.5h8.2l8.8 8.8a1.8 1.8 0 0 1 0 2.5l-5.7 5.7a1.8 1.8 0 0 1-2.5 0l-8.8-8.8z" />
+                  <circle cx="8" cy="8" r="1.6" />
+                </svg>
+              </div>
+              <div class="f05-label" id="f05-label-2"></div>
+            </div>
+            <div class="f05-node" id="f05-node-2"></div>
+            <div class="f05-step" id="f05-step-2">02</div>
+          </div>
+
+          <!-- 3 · APROVAÇÕES (center x=1980) -->
+          <div class="f05-st" style="left: 1750px;">
+            <div class="f05-callout" id="f05-card-3">
+              <i class="f05-diamond"></i>
+              <div class="f05-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="12" r="8.5" />
+                  <path d="M8 12.4l2.8 2.8L16.4 9" />
+                </svg>
+              </div>
+              <div class="f05-label" id="f05-label-3"></div>
+            </div>
+            <div class="f05-node" id="f05-node-3"></div>
+            <div class="f05-step" id="f05-step-3">03</div>
+          </div>
+
+          <!-- 4 · PEDIDOS (center x=2700) -->
+          <div class="f05-st" style="left: 2470px;">
+            <div class="f05-callout" id="f05-card-4">
+              <i class="f05-diamond"></i>
+              <div class="f05-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="9.5" cy="19" r="1.6" />
+                  <circle cx="17" cy="19" r="1.6" />
+                  <path d="M3.5 4.5H6l2.2 10.5h9.6l2.2-8H7" />
+                </svg>
+              </div>
+              <div class="f05-label" id="f05-label-4"></div>
+            </div>
+            <div class="f05-node" id="f05-node-4"></div>
+            <div class="f05-step" id="f05-step-4">04</div>
+          </div>
+
+          <!-- 5 · CONTRATOS (center x=3420) -->
+          <div class="f05-st" style="left: 3190px;">
+            <div class="f05-callout" id="f05-card-5">
+              <i class="f05-diamond"></i>
+              <div class="f05-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M6.5 3.5h8l3 3v14h-11z" />
+                  <path d="M14.5 3.5v3h3" />
+                  <path d="M9.5 15.5c1-1.4 2-1.4 3 0s2 1.4 3 0" />
+                </svg>
+              </div>
+              <div class="f05-label" id="f05-label-5"></div>
+            </div>
+            <div class="f05-node" id="f05-node-5"></div>
+            <div class="f05-step" id="f05-step-5">05</div>
+          </div>
+
+          <!-- 6 · FORNECEDORES (center x=4140) -->
+          <div class="f05-st" style="left: 3910px;">
+            <div class="f05-callout" id="f05-card-6">
+              <i class="f05-diamond"></i>
+              <div class="f05-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4.5 9.5l1.5-5h12l1.5 5" />
+                  <path d="M4.5 9.5h15" />
+                  <path d="M5.5 9.5v10h13v-10" />
+                  <path d="M9.5 19.5v-6h5v6" />
+                </svg>
+              </div>
+              <div class="f05-label" id="f05-label-6"></div>
+            </div>
+            <div class="f05-node" id="f05-node-6"></div>
+            <div class="f05-step" id="f05-step-6">06</div>
+          </div>
+
+          <!-- 7 · RECEBIMENTOS (center x=4860) -->
+          <div class="f05-st" style="left: 4630px;">
+            <div class="f05-callout" id="f05-card-7">
+              <i class="f05-diamond"></i>
+              <div class="f05-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4.5 8l7.5-4 7.5 4v8.5l-7.5 4-7.5-4z" />
+                  <path d="M4.5 8l7.5 4 7.5-4" />
+                  <path d="M12 12v8.3" />
+                </svg>
+              </div>
+              <div class="f05-label" id="f05-label-7"></div>
+            </div>
+            <div class="f05-node" id="f05-node-7"></div>
+            <div class="f05-step" id="f05-step-7">07</div>
+          </div>
+
+          <!-- 8 · NOTAS FISCAIS (center x=5580) -->
+          <div class="f05-st" style="left: 5350px;">
+            <div class="f05-callout" id="f05-card-8">
+              <i class="f05-diamond"></i>
+              <div class="f05-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M6.5 3.5h11v17l-1.8-1.5-1.9 1.5-1.8-1.5-1.9 1.5-1.8-1.5-1.8 1.5z" />
+                  <path d="M9.5 8h5M9.5 11.5h5" />
+                </svg>
+              </div>
+              <div class="f05-label" id="f05-label-8"></div>
+            </div>
+            <div class="f05-node" id="f05-node-8"></div>
+            <div class="f05-step" id="f05-step-8">08</div>
+          </div>
+
+          <!-- terminal — the wide punchline callout (center x=6300) -->
+          <div id="f05-terminal">
+            <span id="f05-taccent"></span>
+            <div class="f05-punch">UM ÚNICO PROCESSO</div>
+            <div class="f05-miniflow">
+              <span id="f05-miniline"></span>
+              <i class="f05-minidot"></i><i class="f05-minidot"></i><i class="f05-minidot"></i><i class="f05-minidot"></i><i class="f05-minidot"></i><i class="f05-minidot"></i><i class="f05-minidot"></i><i class="f05-minidot"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="clip f05-chrome" data-start="0" data-duration="9.716" data-track-index="2">
+      <div id="f05-eyebrow">FLUXO DE PONTA A PONTA</div>
+      <div id="f05-accent"></div>
+      <div id="f05-counter">01 / 08</div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      window.__timelines = window.__timelines || {};
+      var tl = gsap.timeline({ paused: true });
+      var DUR = 9.216;
+
+      // ---- virtual camera (viewport-change): one cam object, one writer ----
+      var world = document.getElementById("f05-world");
+      var cam = { x: 0, scale: 1 };
+      function applyCamera() {
+        world.style.transform =
+          "translate(" + cam.x + "px, 0px) scale(" + cam.scale + ")";
+      }
+      applyCamera(); // seed frame 0 — camera opens on station 1
+
+      // Station i (0-indexed) world center = 540 + i*720 → cam.x = -i*720.
+      var STEP = 720;
+
+      // ---- Scene 2 (1.2–6.9s): sequenced pans, ~0.81s per station ----
+      var PAN_T = [];
+      for (var k = 0; k < 7; k++) PAN_T.push(1.2 + k * 0.8143);
+      PAN_T.forEach(function (t, i) {
+        tl.to(
+          cam,
+          { x: -STEP * (i + 1), duration: 0.55, ease: "power2.inOut", onUpdate: applyCamera },
+          t
+        );
+      });
+
+      // ---- Scene 3 (6.9s): final pan to the terminal (center x=6300) ----
+      tl.to(
+        cam,
+        { x: -5760, duration: 0.75, ease: "power3.inOut", onUpdate: applyCamera },
+        6.9
+      );
+      // camera locks, then a subtle push-in on the punchline.
+      // Single-wrapper camera: T = -offset × S → x follows -5760 × 1.025.
+      tl.to(
+        cam,
+        { x: -5904, scale: 1.025, duration: 0.86, ease: "sine.inOut", onUpdate: applyCamera },
+        8.35
+      );
+
+      // ---- process wire (svg-path-draw): measured length, extends ahead ----
+      var wire = document.getElementById("f05-wirepath");
+      var wlen = wire.getTotalLength();
+      wire.style.strokeDasharray = String(wlen);
+      wire.style.strokeDashoffset = String(wlen);
+      function offAt(x) {
+        return wlen - (x - 120);
+      }
+      var WIRE_SEGS = [
+        [0.15, 1440, 0.6], // Scene 1: draws ahead of station 1
+        [1.2, 2160, 0.5],
+        [2.014, 2880, 0.5],
+        [2.829, 3600, 0.5],
+        [3.643, 4320, 0.5],
+        [4.457, 5040, 0.5],
+        [5.272, 5760, 0.5],
+        [6.086, 6100, 0.5],
+        [6.9, 6260, 0.6] // the line closes into the terminal callout
+      ];
+      WIRE_SEGS.forEach(function (s) {
+        tl.to(wire, { strokeDashoffset: offAt(s[1]), duration: s[2], ease: "power2.out" }, s[0]);
+      });
+
+      // ---- station arrivals: node → callout spring-pop → step → typed label ----
+      var LABELS = [
+        "REQUISIÇÕES",
+        "COTAÇÕES",
+        "APROVAÇÕES",
+        "PEDIDOS",
+        "CONTRATOS",
+        "FORNECEDORES",
+        "RECEBIMENTOS",
+        "NOTAS FISCAIS"
+      ];
+      function typeLabel(el, text, at, d) {
+        var p = { v: 0 };
+        tl.to(
+          p,
+          {
+            v: text.length,
+            duration: d,
+            ease: "power1.inOut",
+            onUpdate: function () {
+              el.textContent = text.substring(0, Math.floor(p.v));
+            }
+          },
+          at
+        );
+      }
+      LABELS.forEach(function (text, i) {
+        var n = i + 1;
+        // Scene 1 opens on station 1 (hero visible well before 0.5s);
+        // stations 2..8 pop as the pan brings them into frame.
+        var nodeAt = i === 0 ? 0.1 : PAN_T[i - 1] + 0.26;
+        var cardAt = i === 0 ? 0.2 : PAN_T[i - 1] + 0.34;
+        var stepAt = i === 0 ? 0.34 : PAN_T[i - 1] + 0.42;
+        var labelAt = i === 0 ? 0.5 : PAN_T[i - 1] + 0.45;
+        tl.fromTo(
+          "#f05-node-" + n,
+          { scale: 0 },
+          { scale: 1, duration: 0.35, ease: "power3.out" },
+          nodeAt
+        );
+        tl.fromTo(
+          "#f05-card-" + n,
+          { scale: 0, opacity: 0 },
+          { scale: 1, opacity: 1, duration: i === 0 ? 0.55 : 0.5, ease: "power3.out" },
+          cardAt
+        );
+        tl.fromTo(
+          "#f05-step-" + n,
+          { scale: 0, opacity: 0 },
+          { scale: 1, opacity: 1, duration: 0.45, ease: "power3.out" },
+          stepAt
+        );
+        typeLabel(
+          document.getElementById("f05-label-" + n),
+          text,
+          labelAt,
+          i === 0 ? 0.34 : 0.32
+        );
+      });
+
+      // ---- screen-fixed chrome ----
+      tl.fromTo(
+        "#f05-eyebrow",
+        { y: -42, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.6, ease: "expo.out" },
+        0.05
+      );
+      tl.fromTo(
+        "#f05-accent",
+        { scaleX: 0 },
+        { scaleX: 1, duration: 0.45, ease: "power2.out" },
+        0.35
+      );
+      tl.fromTo(
+        "#f05-counter",
+        { opacity: 0 },
+        { opacity: 1, duration: 0.4, ease: "power1.out" },
+        0.55
+      );
+
+      // station counter — discrete-text-sequence (state snaps at pan landings)
+      var counterEl = document.getElementById("f05-counter");
+      var CSEQ = [
+        [0, "01 / 08"],
+        [1.75, "02 / 08"],
+        [2.56, "03 / 08"],
+        [3.38, "04 / 08"],
+        [4.19, "05 / 08"],
+        [5.01, "06 / 08"],
+        [5.82, "07 / 08"],
+        [6.64, "08 / 08"]
+      ];
+      var cd = { t: 0 };
+      tl.to(
+        cd,
+        {
+          t: DUR,
+          duration: DUR,
+          ease: "none",
+          onUpdate: function () {
+            for (var j = CSEQ.length - 1; j >= 0; j--) {
+              if (cd.t >= CSEQ[j][0]) {
+                counterEl.textContent = CSEQ[j][1];
+                return;
+              }
+            }
+          }
+        },
+        0
+      );
+
+      // ---- Scene 3: terminal punchline pops centered; eight dots condense ----
+      tl.fromTo(
+        "#f05-terminal",
+        { scale: 0, opacity: 0 },
+        { scale: 1, opacity: 1, duration: 0.6, ease: "power3.out" },
+        7.3
+      );
+      tl.fromTo(
+        "#f05-taccent",
+        { scaleX: 0 },
+        { scaleX: 1, duration: 0.4, ease: "power2.out" },
+        7.8
+      );
+      tl.fromTo(
+        "#f05-miniline",
+        { scaleX: 0 },
+        { scaleX: 1, duration: 0.5, ease: "power2.out" },
+        7.95
+      );
+      gsap.utils.toArray(".f05-minidot").forEach(function (el, i) {
+        tl.fromTo(
+          el,
+          { scale: 0, opacity: 0, x: (i - 3.5) * 30 },
+          { scale: 1, opacity: 1, x: 0, duration: 0.45, ease: "power3.out" },
+          7.95 + i * 0.055
+        );
+      });
+
+      window.__timelines["05-fluxo-ponta-a-ponta"] = tl;
+    })();
+  </script>
+</template>

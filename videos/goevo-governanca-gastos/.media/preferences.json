@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "preferences": {
+    "destination": {
+      "value": "instagram-reels",
+      "confirmed_in": [
+        "goevo-governanca-gastos"
+      ],
+      "updated_at": "2026-08-12T18:44:03.805Z"
+    },
+    "aspect": {
+      "value": "1080x1920",
+      "confirmed_in": [
+        "goevo-governanca-gastos"
+      ],
+      "updated_at": "2026-08-12T18:44:03.869Z"
+    },
+    "language": {
+      "value": "pt-BR",
+      "confirmed_in": [
+        "goevo-governanca-gastos"
+      ],
+      "updated_at": "2026-08-12T18:44:03.927Z"
+    },
+    "style_preset.product-launch-video": {
+      "value": "blue-professional",
+      "confirmed_in": [
+        "goevo-governanca-gastos"
+      ],
+      "updated_at": "2026-08-12T18:51:35.687Z"
+    }
+  },
+  "sightings": {}
+}
