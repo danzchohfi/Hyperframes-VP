@@ -1,0 +1,282 @@
+<template data-composition-id="03-virada-visibilidade" data-width="1080" data-height="1920">
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+
+  <style>
+    @font-face {
+      font-family: "Montserrat";
+      src: url("assets/fonts/Montserrat-Medium.woff2") format("woff2");
+      font-weight: 500;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: "Montserrat";
+      src: url("assets/fonts/Montserrat-SemiBold.woff2") format("woff2");
+      font-weight: 600;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: "Montserrat";
+      src: url("assets/fonts/Montserrat-ExtraBold.woff2") format("woff2");
+      font-weight: 800;
+      font-style: normal;
+    }
+
+    #root {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      container-type: size;
+      font-family: "Montserrat", sans-serif;
+    }
+
+    /* full-bleed monochrome ground — dedicated clip, never painted on #root.
+       The chromatic pause: near-black, zero color accent. */
+    .f03-bg {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      background: radial-gradient(120% 90% at 50% 42%, #1c1c1c 0%, #121212 55%, #0b0b0b 100%);
+    }
+
+    /* residual color veil — the frame DRAINS color to black and white in the
+       first beat; gone well before its clip gate closes */
+    .f03-drain {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+    }
+    #f03-drain-tint {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(85% 58% at 50% 44%, rgba(0, 153, 255, 0.16) 0%, rgba(0, 153, 255, 0) 70%);
+      will-change: opacity;
+    }
+
+    .f03-stage {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+    }
+    #f03-zoom {
+      position: absolute;
+      inset: 0;
+      transform-origin: 50% 42%;
+      will-change: transform;
+    }
+
+    /* Beat 1 — the diagnosis everyone assumes, alone on the void (h3 register,
+       inverted to white on the near-black ground) */
+    #f03-line1 {
+      position: absolute;
+      top: 33cqh;
+      left: 5cqw;
+      right: 5cqw;
+      margin: 0;
+      text-align: center;
+      font-size: 4.35cqw;
+      font-weight: 500;
+      line-height: 1.35;
+      letter-spacing: -0.01em;
+      color: rgba(255, 255, 255, 0.92);
+      will-change: transform, opacity;
+    }
+    .f03-w {
+      display: inline-block;
+      will-change: transform, opacity;
+    }
+
+    /* Beat 2 — the real diagnosis, GIANT, two stacked lines each filling ~70%
+       of the width, pure white, weight 800 */
+    #f03-g1,
+    #f03-g2 {
+      position: absolute;
+      left: 0;
+      right: 0;
+      margin: 0;
+      text-align: center;
+      font-weight: 800;
+      line-height: 1;
+      white-space: nowrap;
+      color: #ffffff;
+      will-change: transform, opacity, letter-spacing, filter;
+    }
+    #f03-g1 {
+      top: 35.5cqh;
+      font-size: 13.15cqw;
+    }
+    #f03-g2 {
+      top: 44.5cqh;
+      font-size: 9.55cqw;
+    }
+
+    /* hairline separator (accent-line geometry, rendered monochrome white) */
+    #f03-rule {
+      position: absolute;
+      top: 51.8cqh;
+      left: 0;
+      right: 0;
+      margin-inline: auto;
+      width: 60px;
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.9);
+      transform-origin: center center;
+      will-change: transform;
+    }
+
+    /* Beat 3 — the qualifier closes below in wide-tracked eyebrow register */
+    #f03-eyebrow {
+      position: absolute;
+      top: 54.8cqh;
+      left: 0;
+      right: 0;
+      margin: 0;
+      text-align: center;
+      font-size: 3.05cqw;
+      font-weight: 600;
+      letter-spacing: 0.45em;
+      padding-left: 0.45em;
+      color: rgba(255, 255, 255, 0.82);
+      white-space: nowrap;
+    }
+    .f03-e {
+      display: inline-block;
+      will-change: transform, opacity;
+    }
+  </style>
+
+  <div id="root">
+    <div class="clip f03-bg" data-start="0" data-duration="4.587" data-track-index="0"></div>
+
+    <div class="clip f03-drain" data-start="0" data-duration="1" data-track-index="1">
+      <div id="f03-drain-tint"></div>
+    </div>
+
+    <div class="clip f03-stage" data-start="0" data-duration="4.587" data-track-index="2">
+      <div id="f03-zoom">
+        <h3 id="f03-line1">
+          <span class="f03-w">O</span>
+          <span class="f03-w">problema</span>
+          <span class="f03-w">não</span>
+          <span class="f03-w">é</span>
+          <span class="f03-w">falta</span>
+          <span class="f03-w">de</span>
+          <span class="f03-w">sistema.</span>
+        </h3>
+
+        <div id="f03-g1">FALTA DE</div>
+        <div id="f03-g2">VISIBILIDADE</div>
+
+        <div id="f03-rule"></div>
+
+        <div id="f03-eyebrow">
+          <span class="f03-e">de</span>
+          <span class="f03-e">ponta</span>
+          <span class="f03-e">a</span>
+          <span class="f03-e">ponta</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      window.__timelines = window.__timelines || {};
+      var tl = gsap.timeline({ paused: true });
+
+      // dynamic-content-sequencing reduction — per-word start times pre-computed
+      // ONCE at build from content length (dur = BASE + chars * SEC_PER_CHAR),
+      // so longer words earn a longer window. Never recomputed at runtime.
+      function seqStarts(els, t0, base, perChar) {
+        var cum = t0;
+        return els.map(function (el) {
+          var s = cum;
+          cum += base + el.textContent.length * perChar;
+          return s;
+        });
+      }
+
+      // Macro camera — carries the zoom-through arrival forward, decelerating
+      // into full stillness before the held read (no idle motion after).
+      tl.fromTo("#f03-zoom", { scale: 1 }, { scale: 1.025, duration: 3.4, ease: "power2.out" }, 0);
+
+      // Scene 1 (0.0–1.6s) — the frame drains its residual color to monochrome
+      // while "O problema não é falta de sistema." settles centered, word by
+      // word, alone on the void (settle power3).
+      tl.fromTo("#f03-drain-tint", { opacity: 1 }, { opacity: 0, duration: 0.7, ease: "power2.out" }, 0.05);
+
+      var w1 = gsap.utils.toArray(".f03-w");
+      var starts1 = seqStarts(w1, 0.18, 0.055, 0.016);
+      w1.forEach(function (el, i) {
+        tl.fromTo(
+          el,
+          { y: 34, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.55, ease: "power3.out" },
+          starts1[i]
+        );
+      });
+
+      // Scene 2 (1.6–3.1s) — on the "É falta de visibilidade" cue the first
+      // line rises and dims to 30% while the giant statement arrives:
+      // letter-tracking tightens from wide to closed WHILE the line scales
+      // down to rest (gsap-effects letter-spacing tween + scale), landing
+      // heavy on the impact beat. paddingLeft mirrors the tracking so the
+      // run stays optically centered throughout the collapse.
+      tl.fromTo(
+        "#f03-line1",
+        { y: 0, opacity: 1 },
+        { y: -215, opacity: 0.3, duration: 0.6, ease: "power3.inOut" },
+        1.6
+      );
+
+      tl.fromTo(
+        "#f03-g1",
+        { opacity: 0, scale: 1.16, letterSpacing: "0.34em", paddingLeft: "0.34em", filter: "blur(14px)" },
+        {
+          opacity: 1,
+          scale: 1,
+          letterSpacing: "0.04em",
+          paddingLeft: "0.04em",
+          filter: "blur(0px)",
+          duration: 0.85,
+          ease: "power4.out"
+        },
+        1.7
+      );
+      tl.fromTo(
+        "#f03-g2",
+        { opacity: 0, scale: 1.16, letterSpacing: "0.3em", paddingLeft: "0.3em", filter: "blur(14px)" },
+        {
+          opacity: 1,
+          scale: 1,
+          letterSpacing: "0.04em",
+          paddingLeft: "0.04em",
+          filter: "blur(0px)",
+          duration: 0.9,
+          ease: "power4.out"
+        },
+        1.92
+      );
+
+      // Scene 3 (3.1–4.6s) — the hairline draws, then "de ponta a ponta"
+      // completes below in wide-tracked eyebrow register, word by word on the
+      // same content-length reduction. Then: held read, absolute stillness —
+      // the chromatic pause before the brand reveal. No further motion.
+      tl.fromTo("#f03-rule", { scaleX: 0 }, { scaleX: 1, duration: 0.45, ease: "power2.out" }, 3.04);
+
+      var w2 = gsap.utils.toArray(".f03-e");
+      var starts2 = seqStarts(w2, 3.16, 0.06, 0.02);
+      w2.forEach(function (el, i) {
+        tl.fromTo(
+          el,
+          { y: 18, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.45, ease: "power3.out" },
+          starts2[i]
+        );
+      });
+
+      window.__timelines["03-virada-visibilidade"] = tl;
+    })();
+  </script>
+</template>

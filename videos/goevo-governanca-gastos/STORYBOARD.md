@@ -99,7 +99,7 @@ Scene 4 (6.8–9.5s): "...quando o pedido já foi emitido?" — bolhas de demand
 - voiceover: "O problema não é falta de sistema. É falta de visibilidade de ponta a ponta."
 - duration: 4.587s
 - transition_in: zoom-through
-- status: outline
+- status: animated
 - src: compositions/frames/03-virada-visibilidade.html
 - type: pain_point
 - persuasion: Reenquadramento — nega o diagnóstico óbvio (falta de sistema) e nomeia o real
