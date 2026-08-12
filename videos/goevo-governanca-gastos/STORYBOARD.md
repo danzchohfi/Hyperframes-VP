@@ -72,7 +72,7 @@ Scene 4 (4.1–4.9s): held read — tudo assentado; no máximo subtle jitter (`s
 - voiceover: "Mas as solicitações ainda chegam por e-mail e WhatsApp? As propostas ficam espalhadas? E o financeiro só enxerga parte do gasto quando o pedido já foi emitido?"
 - duration: 9.451s
 - transition_in: push-slide LEFT
-- status: outline
+- status: animated
 - src: compositions/frames/02-dor-fragmentada.html
 - type: pain_point
 - persuasion: Pain validation — três perguntas retóricas que o gestor responde "sim" mentalmente
