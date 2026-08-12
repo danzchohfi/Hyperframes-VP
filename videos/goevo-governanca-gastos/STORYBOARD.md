@@ -1,6 +1,6 @@
 ---
 format: 1080x1920
-duration: 70s
+duration: 56s
 message: "O problema não é falta de sistema — é falta de visibilidade de ponta a ponta"
 arc: PAS — qualificação → dor → virada → marca → demonstração → integração → síntese → CTA
 audience: executivos B2B (CFO, diretores de compras e financeiro) de empresas maduras que já têm ERP
@@ -179,7 +179,7 @@ Scene 3 (6.9–9.2s): no cue "um único processo" — pan final: a linha complet
 - voiceover: "Enquanto o ERP registra a transação, o GOEVO organiza e governa tudo o que acontece antes, durante e depois da decisão de compra."
 - duration: 7.787s
 - transition_in: crossfade
-- status: outline
+- status: animated
 - src: compositions/frames/06-erp-e-goevo.html
 - type: feature_showcase
 - persuasion: Negative contrast sem atacar — o ERP continua essencial; o GOEVO ocupa o espaço vazio

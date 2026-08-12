@@ -1,0 +1,363 @@
+<template>
+  <script src="vendor/gsap.min.js"></script>
+
+  <style>
+    @font-face {
+      font-family: "Montserrat";
+      src: url("assets/fonts/Montserrat-Regular.woff2") format("woff2");
+      font-weight: 400;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: "Montserrat";
+      src: url("assets/fonts/Montserrat-SemiBold.woff2") format("woff2");
+      font-weight: 600;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: "Montserrat";
+      src: url("assets/fonts/Montserrat-Bold.woff2") format("woff2");
+      font-weight: 700;
+      font-style: normal;
+    }
+
+    #root {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      container-type: size;
+      font-family: "Montserrat", sans-serif;
+    }
+
+    /* full-bleed ground — dedicated clip, never painted on #root */
+    .f06-bg {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      background: #FFFFFF;
+    }
+
+    /* ambient-glow-bloom — soft cobalt radial on the LEFT side, behind the cards */
+    .f06-glow-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+    }
+    #f06-glow {
+      position: absolute;
+      left: -28cqw;
+      top: 8cqh;
+      width: 120cqw;
+      height: 66cqh;
+      background: radial-gradient(closest-side, rgba(0, 153, 255, 0.5), rgba(0, 153, 255, 0) 72%);
+      will-change: transform, opacity;
+    }
+
+    .f06-stage {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+    }
+    #f06-zoom {
+      position: absolute;
+      inset: 0;
+      transform-origin: 50% 46%;
+      will-change: transform;
+    }
+
+    /* slide-header eyebrow — cobalt uppercase chrome */
+    #f06-eyebrow {
+      position: absolute;
+      top: 7.8cqh;
+      left: 0;
+      right: 0;
+      margin-inline: auto;
+      width: fit-content;
+      font-size: 2.4cqw;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #0099FF;
+      will-change: transform;
+    }
+
+    /* split-tilt-cards stage — perspective on the wrapper is REQUIRED for rotateY.
+       transform-style stays flat on purpose: the 9:16 adaptation overlaps the two
+       tilted planes, and a shared preserve-3d space would slice them through each
+       other; flat compositing keeps the mirrored book-open read with clean z-order. */
+    .f06-cards {
+      position: absolute;
+      inset: 0;
+      perspective: 1600px;
+    }
+    .f06-card {
+      position: absolute;
+      width: 66.5cqw;
+      padding: 5cqw;
+      background: #F5FBFF; /* card-bg 4% cobalt flattened opaque over white (overlap-safe) */
+      border: 1.5px solid rgba(0, 153, 255, 0.2);
+      border-radius: 14px;
+      will-change: transform;
+    }
+    #f06-card-erp {
+      left: 5cqw;
+      top: 21.4cqh;
+      z-index: 1;
+    }
+    #f06-card-goevo {
+      left: 26.85cqw;
+      top: 40.4cqh;
+      z-index: 2;
+    }
+
+    .f06-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .f06-iconbox {
+      width: 12.2cqw;
+      height: 12.2cqw;
+      border-radius: 12px;
+      background: rgba(0, 153, 255, 0.08);
+      border: 1.5px solid rgba(0, 153, 255, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .f06-iconbox svg {
+      width: 6.4cqw;
+      height: 6.4cqw;
+      display: block;
+    }
+    .f06-logo {
+      width: 12.2cqw;
+      height: 12.2cqw;
+      border-radius: 12px;
+      border: 1.5px solid rgba(0, 153, 255, 0.2);
+      background: #FFFFFF;
+      padding: 0.6cqw;
+      object-fit: contain;
+      display: block;
+    }
+    .f06-chip {
+      background: rgba(0, 153, 255, 0.08);
+      color: #0099FF;
+      font-size: 2.05cqw;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.5cqh 2.1cqw;
+      border-radius: 100px;
+      white-space: nowrap;
+    }
+    .f06-title {
+      margin-top: 1.8cqh;
+      font-size: 6.3cqw;
+      font-weight: 600;
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+      color: #191919;
+    }
+    .f06-sub {
+      margin-top: 0.7cqh;
+      font-size: 3.3cqw;
+      font-weight: 400;
+      line-height: 1.4;
+      color: #5A6472;
+    }
+    .f06-rise {
+      will-change: transform, opacity;
+    }
+
+    /* tempo rail — thin cobalt spine linking the three badges (accent-line atom) */
+    #f06-rail {
+      position: absolute;
+      left: 26.85cqw;
+      top: 45.94cqh;
+      width: 4px;
+      height: 13.33cqh;
+      border-radius: 2px;
+      background: #0099FF;
+      transform-origin: top center;
+      z-index: 3;
+      will-change: transform;
+    }
+
+    /* the three tempos — solid cobalt pills (step-circle register), right edges
+       pinned just past the GOEVO card's inner edge so ~15-20% sits on the card */
+    .f06-badges {
+      position: absolute;
+      right: 70.7cqw;
+      top: 43.9cqh;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 2.6cqh;
+      z-index: 4;
+    }
+    .f06-badge {
+      background: #0099FF;
+      color: #FFFFFF;
+      font-size: 2.6cqw;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      line-height: 1;
+      padding: 1.3cqh 3.6cqw;
+      border-radius: 100px;
+      white-space: nowrap;
+      transform-origin: 88% 50%; /* pops grow out from the card edge they sit on */
+      will-change: transform;
+    }
+  </style>
+
+  <div id="root" data-composition-id="06-erp-e-goevo" data-start="0" data-duration="8.287" data-width="1080" data-height="1920">
+    <div class="clip f06-bg" data-start="0" data-duration="8.287" data-track-index="0"></div>
+
+    <div class="clip f06-glow-layer" data-start="0" data-duration="8.287" data-track-index="1">
+      <div id="f06-glow"></div>
+    </div>
+
+    <div class="clip f06-stage" data-start="0" data-duration="8.287" data-track-index="2">
+      <div id="f06-zoom">
+        <div id="f06-eyebrow">Complemento, não substituição</div>
+
+        <div class="f06-cards">
+          <div class="f06-card" id="f06-card-erp">
+            <div class="f06-card-top f06-rise f06-erp-a">
+              <span class="f06-iconbox">
+                <svg viewBox="0 0 48 48" aria-hidden="true">
+                  <g fill="none" stroke="#0099FF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                    <ellipse cx="24" cy="11" rx="14" ry="5.5"/>
+                    <path d="M10 11v13c0 3 6.3 5.5 14 5.5s14-2.5 14-5.5V11"/>
+                    <path d="M10 24v13c0 3 6.3 5.5 14 5.5s14-2.5 14-5.5V24"/>
+                  </g>
+                </svg>
+              </span>
+              <span class="f06-chip">Registro</span>
+            </div>
+            <div class="f06-title f06-rise f06-erp-b">ERP</div>
+            <div class="f06-sub f06-rise f06-erp-c">Registra a transação</div>
+          </div>
+
+          <div class="f06-card" id="f06-card-goevo">
+            <div class="f06-card-top f06-rise f06-gv-a">
+              <img class="f06-logo" src="assets/goevo-logo-quadrado.png" alt="">
+              <span class="f06-chip">Governança</span>
+            </div>
+            <div class="f06-title f06-rise f06-gv-b">GOEVO SCM</div>
+            <div class="f06-sub f06-rise f06-gv-c">Organiza e governa</div>
+          </div>
+        </div>
+
+        <div id="f06-rail"></div>
+
+        <div class="f06-badges">
+          <div class="f06-badge" id="f06-badge-1">ANTES</div>
+          <div class="f06-badge" id="f06-badge-2">DURANTE</div>
+          <div class="f06-badge" id="f06-badge-3">DEPOIS</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      window.__timelines = window.__timelines || {};
+      var tl = gsap.timeline({ paused: true });
+      var D = 7.787;
+
+      // Macro camera push — slow drift under the whole shot
+      tl.fromTo("#f06-zoom", { scale: 1 }, { scale: 1.028, duration: D, ease: "none" }, 0);
+
+      // ── Scene 1 (0.0–1.9s) — "Enquanto o ERP registra a transação"
+      // Eyebrow chrome settles first
+      tl.fromTo(
+        "#f06-eyebrow",
+        { y: -46, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.55, ease: "expo.out" },
+        0.08
+      );
+      // ERP card enters from its own (left) wing — split-tilt-cards signature:
+      // starts past the resting tilt (+TILT + overshoot) and pivots into place
+      tl.fromTo(
+        "#f06-card-erp",
+        { x: -420, rotateY: 21, opacity: 0 },
+        { x: 0, rotateY: 13, opacity: 1, duration: 0.85, ease: "power3.out" },
+        0.12
+      );
+      // Copy fades up DURING the card's settle, not after
+      [".f06-erp-a", ".f06-erp-b", ".f06-erp-c"].forEach(function (sel, i) {
+        tl.fromTo(
+          sel,
+          { y: 26, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.45, ease: "power2.out" },
+          0.5 + i * 0.12
+        );
+      });
+      // ambient-glow-bloom (bloom-and-hold): lands with the ERP settle as ONE beat
+      // effective center opacity 0.34 x 0.5 = 0.17 (well under the 0.45 ceiling)
+      tl.fromTo(
+        "#f06-glow",
+        { opacity: 0, scale: 0.86 },
+        { opacity: 0.34, scale: 1, duration: 0.8, ease: "power2.out" },
+        0.18
+      );
+
+      // ── Scene 2 (1.9–3.7s) — "o GOEVO organiza e governa"
+      // Mirrored wing entry (−rotateY), stretched to the voice cue per the packet;
+      // constant 1.06 scale dominance baked into both tween states
+      tl.fromTo(
+        "#f06-card-goevo",
+        { x: 420, rotateY: -21, scale: 1.06, opacity: 0 },
+        { x: 0, rotateY: -13, scale: 1.06, opacity: 1, duration: 0.85, ease: "power3.out" },
+        1.95
+      );
+      [".f06-gv-a", ".f06-gv-b", ".f06-gv-c"].forEach(function (sel, i) {
+        tl.fromTo(
+          sel,
+          { y: 26, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.45, ease: "power2.out" },
+          2.32 + i * 0.12
+        );
+      });
+
+      // ── Scene 3 (3.7–6.5s) — "antes, durante e depois"
+      // Three tempo badges spring-pop on the GOEVO card's inner edge, one per
+      // spoken word — the frame's ONLY overshoot (back.out, kept <= 2)
+      var BADGE_AT = [3.8, 4.55, 5.3];
+      ["#f06-badge-1", "#f06-badge-2", "#f06-badge-3"].forEach(function (sel, i) {
+        tl.fromTo(
+          sel,
+          { scale: 0, opacity: 0 },
+          { scale: 1, opacity: 1, duration: 0.5, ease: "back.out(1.7)" },
+          BADGE_AT[i]
+        );
+      });
+      // Each pop sends the tempo rail onward to the next slot (causal draw)
+      tl.fromTo(
+        "#f06-rail",
+        { scaleY: 0 },
+        { scaleY: 0.5, duration: 0.5, ease: "power2.out" },
+        3.95
+      );
+      tl.to("#f06-rail", { scaleY: 1, duration: 0.55, ease: "power2.out" }, 4.65);
+
+      // "da decisão de compra" — one bounded glow breath punctuates the landing
+      // (finite paired tweens, no repeat/yoyo; peak stays under the wash ceiling)
+      tl.to("#f06-glow", { opacity: 0.4, duration: 0.65, ease: "sine.inOut" }, 5.85);
+      tl.to("#f06-glow", { opacity: 0.34, duration: 0.65, ease: "sine.inOut" }, 6.5);
+
+      // ── Scene 4 (6.5–7.8s) — held; float idle in phase opposition
+      // (sine-wave-loop subtle jitter: left sin(t), right sin(t+PI), minimal
+      // amplitude, authored as finite paired tweens that settle before the end)
+      tl.to("#f06-card-erp", { y: -2.5, duration: 0.6, ease: "sine.inOut" }, 6.55);
+      tl.to("#f06-card-erp", { y: 0, duration: 0.6, ease: "sine.inOut" }, 7.15);
+      tl.to("#f06-card-goevo", { y: 2.5, duration: 0.6, ease: "sine.inOut" }, 6.55);
+      tl.to("#f06-card-goevo", { y: 0, duration: 0.6, ease: "sine.inOut" }, 7.15);
+
+      window.__timelines["06-erp-e-goevo"] = tl;
+    })();
+  </script>
+</template>
