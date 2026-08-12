@@ -1,0 +1,1486 @@
+{
+  "total_duration_s": 55.466,
+  "width": 1080,
+  "height": 1920,
+  "groups": [
+    {
+      "id": "caption-group-0",
+      "frame": 1,
+      "start": 0.07,
+      "end": 1.13,
+      "text": "Sua empresa já",
+      "words": [
+        {
+          "id": "caption-word-0-0",
+          "text": "Sua",
+          "start": 0.07,
+          "end": 0.24
+        },
+        {
+          "id": "caption-word-0-1",
+          "text": "empresa",
+          "start": 0.3,
+          "end": 0.92
+        },
+        {
+          "id": "caption-word-0-2",
+          "text": "já",
+          "start": 0.92,
+          "end": 1.06
+        }
+      ]
+    },
+    {
+      "id": "caption-group-1",
+      "frame": 1,
+      "start": 1.13,
+      "end": 1.79,
+      "text": "tem ERP,",
+      "words": [
+        {
+          "id": "caption-word-1-0",
+          "text": "tem",
+          "start": 1.13,
+          "end": 1.37
+        },
+        {
+          "id": "caption-word-1-1",
+          "text": "ERP,",
+          "start": 1.37,
+          "end": 1.67
+        }
+      ]
+    },
+    {
+      "id": "caption-group-2",
+      "frame": 1,
+      "start": 2,
+      "end": 3.08,
+      "text": "regras de aprovação",
+      "words": [
+        {
+          "id": "caption-word-2-0",
+          "text": "regras",
+          "start": 2,
+          "end": 2.28
+        },
+        {
+          "id": "caption-word-2-1",
+          "text": "de",
+          "start": 2.28,
+          "end": 2.42
+        },
+        {
+          "id": "caption-word-2-2",
+          "text": "aprovação",
+          "start": 2.42,
+          "end": 3.08
+        }
+      ]
+    },
+    {
+      "id": "caption-group-3",
+      "frame": 1,
+      "start": 3.08,
+      "end": 3.3,
+      "text": "e uma",
+      "words": [
+        {
+          "id": "caption-word-3-0",
+          "text": "e",
+          "start": 3.08,
+          "end": 3.12
+        },
+        {
+          "id": "caption-word-3-1",
+          "text": "uma",
+          "start": 3.13,
+          "end": 3.3
+        }
+      ]
+    },
+    {
+      "id": "caption-group-4",
+      "frame": 1,
+      "start": 3.3,
+      "end": 3.71,
+      "text": "equipe de",
+      "words": [
+        {
+          "id": "caption-word-4-0",
+          "text": "equipe",
+          "start": 3.3,
+          "end": 3.57
+        },
+        {
+          "id": "caption-word-4-1",
+          "text": "de",
+          "start": 3.63,
+          "end": 3.71
+        }
+      ]
+    },
+    {
+      "id": "caption-group-5",
+      "frame": 1,
+      "start": 3.71,
+      "end": 4.979,
+      "text": "compras experiente.",
+      "words": [
+        {
+          "id": "caption-word-5-0",
+          "text": "compras",
+          "start": 3.71,
+          "end": 4.1
+        },
+        {
+          "id": "caption-word-5-1",
+          "text": "experiente.",
+          "start": 4.1,
+          "end": 4.88
+        }
+      ]
+    },
+    {
+      "id": "caption-group-6",
+      "frame": 2,
+      "start": 4.979,
+      "end": 6.199,
+      "text": "Mas as solicitações",
+      "words": [
+        {
+          "id": "caption-word-6-0",
+          "text": "Mas",
+          "start": 4.979,
+          "end": 5.169
+        },
+        {
+          "id": "caption-word-6-1",
+          "text": "as",
+          "start": 5.169,
+          "end": 5.319
+        },
+        {
+          "id": "caption-word-6-2",
+          "text": "solicitações",
+          "start": 5.319,
+          "end": 6.199
+        }
+      ]
+    },
+    {
+      "id": "caption-group-7",
+      "frame": 2,
+      "start": 6.199,
+      "end": 7.229,
+      "text": "ainda chegam por",
+      "words": [
+        {
+          "id": "caption-word-7-0",
+          "text": "ainda",
+          "start": 6.199,
+          "end": 6.549
+        },
+        {
+          "id": "caption-word-7-1",
+          "text": "chegam",
+          "start": 6.589,
+          "end": 7.009
+        },
+        {
+          "id": "caption-word-7-2",
+          "text": "por",
+          "start": 7.009,
+          "end": 7.229
+        }
+      ]
+    },
+    {
+      "id": "caption-group-8",
+      "frame": 2,
+      "start": 7.229,
+      "end": 8.469,
+      "text": "e-mail e WhatsApp,",
+      "words": [
+        {
+          "id": "caption-word-8-0",
+          "text": "e-mail",
+          "start": 7.229,
+          "end": 7.559
+        },
+        {
+          "id": "caption-word-8-1",
+          "text": "e",
+          "start": 7.559,
+          "end": 7.669
+        },
+        {
+          "id": "caption-word-8-2",
+          "text": "WhatsApp,",
+          "start": 7.669,
+          "end": 8.469
+        }
+      ]
+    },
+    {
+      "id": "caption-group-9",
+      "frame": 2,
+      "start": 8.469,
+      "end": 9.619,
+      "text": "as propostas ficam",
+      "words": [
+        {
+          "id": "caption-word-9-0",
+          "text": "as",
+          "start": 8.469,
+          "end": 8.609
+        },
+        {
+          "id": "caption-word-9-1",
+          "text": "propostas",
+          "start": 8.609,
+          "end": 9.209
+        },
+        {
+          "id": "caption-word-9-2",
+          "text": "ficam",
+          "start": 9.289,
+          "end": 9.619
+        }
+      ]
+    },
+    {
+      "id": "caption-group-10",
+      "frame": 2,
+      "start": 9.619,
+      "end": 10.219,
+      "text": "espalhadas",
+      "words": [
+        {
+          "id": "caption-word-10-0",
+          "text": "espalhadas",
+          "start": 9.619,
+          "end": 10.099
+        }
+      ]
+    },
+    {
+      "id": "caption-group-11",
+      "frame": 2,
+      "start": 10.419,
+      "end": 10.509,
+      "text": "e o",
+      "words": [
+        {
+          "id": "caption-word-11-0",
+          "text": "e",
+          "start": 10.419,
+          "end": 10.449
+        },
+        {
+          "id": "caption-word-11-1",
+          "text": "o",
+          "start": 10.449,
+          "end": 10.509
+        }
+      ]
+    },
+    {
+      "id": "caption-group-12",
+      "frame": 2,
+      "start": 10.509,
+      "end": 11.759,
+      "text": "financeiro só enxerga",
+      "words": [
+        {
+          "id": "caption-word-12-0",
+          "text": "financeiro",
+          "start": 10.509,
+          "end": 11.179
+        },
+        {
+          "id": "caption-word-12-1",
+          "text": "só",
+          "start": 11.209,
+          "end": 11.309
+        },
+        {
+          "id": "caption-word-12-2",
+          "text": "enxerga",
+          "start": 11.309,
+          "end": 11.759
+        }
+      ]
+    },
+    {
+      "id": "caption-group-13",
+      "frame": 2,
+      "start": 11.759,
+      "end": 12.219,
+      "text": "parte do",
+      "words": [
+        {
+          "id": "caption-word-13-0",
+          "text": "parte",
+          "start": 11.759,
+          "end": 12.089
+        },
+        {
+          "id": "caption-word-13-1",
+          "text": "do",
+          "start": 12.089,
+          "end": 12.139
+        }
+      ]
+    },
+    {
+      "id": "caption-group-14",
+      "frame": 2,
+      "start": 12.219,
+      "end": 12.949,
+      "text": "gasto quando",
+      "words": [
+        {
+          "id": "caption-word-14-0",
+          "text": "gasto",
+          "start": 12.219,
+          "end": 12.549
+        },
+        {
+          "id": "caption-word-14-1",
+          "text": "quando",
+          "start": 12.549,
+          "end": 12.949
+        }
+      ]
+    },
+    {
+      "id": "caption-group-15",
+      "frame": 2,
+      "start": 12.949,
+      "end": 13.419,
+      "text": "o pedido",
+      "words": [
+        {
+          "id": "caption-word-15-0",
+          "text": "o",
+          "start": 12.949,
+          "end": 12.999
+        },
+        {
+          "id": "caption-word-15-1",
+          "text": "pedido",
+          "start": 13.159,
+          "end": 13.299
+        }
+      ]
+    },
+    {
+      "id": "caption-group-16",
+      "frame": 2,
+      "start": 13.419,
+      "end": 14.43,
+      "text": "já foi emitido.",
+      "words": [
+        {
+          "id": "caption-word-16-0",
+          "text": "já",
+          "start": 13.419,
+          "end": 13.509
+        },
+        {
+          "id": "caption-word-16-1",
+          "text": "foi",
+          "start": 13.509,
+          "end": 13.829
+        },
+        {
+          "id": "caption-word-16-2",
+          "text": "emitido.",
+          "start": 13.829,
+          "end": 14.349
+        }
+      ]
+    },
+    {
+      "id": "caption-group-17",
+      "frame": 3,
+      "start": 14.43,
+      "end": 15.06,
+      "text": "O problema",
+      "words": [
+        {
+          "id": "caption-word-17-0",
+          "text": "O",
+          "start": 14.43,
+          "end": 14.47
+        },
+        {
+          "id": "caption-word-17-1",
+          "text": "problema",
+          "start": 14.47,
+          "end": 15.06
+        }
+      ]
+    },
+    {
+      "id": "caption-group-18",
+      "frame": 3,
+      "start": 15.06,
+      "end": 15.4,
+      "text": "não é",
+      "words": [
+        {
+          "id": "caption-word-18-0",
+          "text": "não",
+          "start": 15.06,
+          "end": 15.27
+        },
+        {
+          "id": "caption-word-18-1",
+          "text": "é",
+          "start": 15.27,
+          "end": 15.4
+        }
+      ]
+    },
+    {
+      "id": "caption-group-19",
+      "frame": 3,
+      "start": 15.4,
+      "end": 16.6,
+      "text": "falta de sistema,",
+      "words": [
+        {
+          "id": "caption-word-19-0",
+          "text": "falta",
+          "start": 15.4,
+          "end": 15.72
+        },
+        {
+          "id": "caption-word-19-1",
+          "text": "de",
+          "start": 15.72,
+          "end": 15.86
+        },
+        {
+          "id": "caption-word-19-2",
+          "text": "sistema,",
+          "start": 15.86,
+          "end": 16.6
+        }
+      ]
+    },
+    {
+      "id": "caption-group-20",
+      "frame": 3,
+      "start": 16.6,
+      "end": 16.98,
+      "text": "é falta",
+      "words": [
+        {
+          "id": "caption-word-20-0",
+          "text": "é",
+          "start": 16.6,
+          "end": 16.66
+        },
+        {
+          "id": "caption-word-20-1",
+          "text": "falta",
+          "start": 16.66,
+          "end": 16.98
+        }
+      ]
+    },
+    {
+      "id": "caption-group-21",
+      "frame": 3,
+      "start": 16.98,
+      "end": 18,
+      "text": "de visibilidade de",
+      "words": [
+        {
+          "id": "caption-word-21-0",
+          "text": "de",
+          "start": 16.98,
+          "end": 17.11
+        },
+        {
+          "id": "caption-word-21-1",
+          "text": "visibilidade",
+          "start": 17.11,
+          "end": 17.87
+        },
+        {
+          "id": "caption-word-21-2",
+          "text": "de",
+          "start": 17.87,
+          "end": 18
+        }
+      ]
+    },
+    {
+      "id": "caption-group-22",
+      "frame": 3,
+      "start": 18,
+      "end": 19.017,
+      "text": "ponta a ponta.",
+      "words": [
+        {
+          "id": "caption-word-22-0",
+          "text": "ponta",
+          "start": 18,
+          "end": 18.32
+        },
+        {
+          "id": "caption-word-22-1",
+          "text": "a",
+          "start": 18.32,
+          "end": 18.35
+        },
+        {
+          "id": "caption-word-22-2",
+          "text": "ponta.",
+          "start": 18.41,
+          "end": 18.91
+        }
+      ]
+    },
+    {
+      "id": "caption-group-23",
+      "frame": 4,
+      "start": 19.017,
+      "end": 20.417,
+      "text": "Conheça o GOEVO",
+      "words": [
+        {
+          "id": "caption-word-23-0",
+          "text": "Conheça",
+          "start": 19.017,
+          "end": 19.757
+        },
+        {
+          "id": "caption-word-23-1",
+          "text": "o",
+          "start": 19.757,
+          "end": 19.867
+        },
+        {
+          "id": "caption-word-23-2",
+          "text": "GOEVO",
+          "start": 19.867,
+          "end": 20.417
+        }
+      ]
+    },
+    {
+      "id": "caption-group-24",
+      "frame": 4,
+      "start": 20.417,
+      "end": 20.894,
+      "text": "SCM.",
+      "words": [
+        {
+          "id": "caption-word-24-0",
+          "text": "SCM.",
+          "start": 20.417,
+          "end": 20.787
+        }
+      ]
+    },
+    {
+      "id": "caption-group-25",
+      "frame": 5,
+      "start": 20.894,
+      "end": 21.604,
+      "text": "Uma plataforma",
+      "words": [
+        {
+          "id": "caption-word-25-0",
+          "text": "Uma",
+          "start": 20.894,
+          "end": 21.024
+        },
+        {
+          "id": "caption-word-25-1",
+          "text": "plataforma",
+          "start": 21.024,
+          "end": 21.604
+        }
+      ]
+    },
+    {
+      "id": "caption-group-26",
+      "frame": 5,
+      "start": 21.604,
+      "end": 22.974,
+      "text": "que conecta requisições,",
+      "words": [
+        {
+          "id": "caption-word-26-0",
+          "text": "que",
+          "start": 21.604,
+          "end": 21.754
+        },
+        {
+          "id": "caption-word-26-1",
+          "text": "conecta",
+          "start": 21.834,
+          "end": 22.184
+        },
+        {
+          "id": "caption-word-26-2",
+          "text": "requisições,",
+          "start": 22.184,
+          "end": 22.974
+        }
+      ]
+    },
+    {
+      "id": "caption-group-27",
+      "frame": 5,
+      "start": 22.974,
+      "end": 23.864,
+      "text": "cotações,",
+      "words": [
+        {
+          "id": "caption-word-27-0",
+          "text": "cotações,",
+          "start": 22.974,
+          "end": 23.744
+        }
+      ]
+    },
+    {
+      "id": "caption-group-28",
+      "frame": 5,
+      "start": 23.884,
+      "end": 24.774,
+      "text": "aprovações,",
+      "words": [
+        {
+          "id": "caption-word-28-0",
+          "text": "aprovações,",
+          "start": 23.884,
+          "end": 24.654
+        }
+      ]
+    },
+    {
+      "id": "caption-group-29",
+      "frame": 5,
+      "start": 24.784,
+      "end": 25.444,
+      "text": "pedidos,",
+      "words": [
+        {
+          "id": "caption-word-29-0",
+          "text": "pedidos,",
+          "start": 24.784,
+          "end": 25.354
+        }
+      ]
+    },
+    {
+      "id": "caption-group-30",
+      "frame": 5,
+      "start": 25.444,
+      "end": 26.224,
+      "text": "contratos,",
+      "words": [
+        {
+          "id": "caption-word-30-0",
+          "text": "contratos,",
+          "start": 25.444,
+          "end": 26.224
+        }
+      ]
+    },
+    {
+      "id": "caption-group-31",
+      "frame": 5,
+      "start": 26.224,
+      "end": 27.094,
+      "text": "fornecedores,",
+      "words": [
+        {
+          "id": "caption-word-31-0",
+          "text": "fornecedores,",
+          "start": 26.224,
+          "end": 27.064
+        }
+      ]
+    },
+    {
+      "id": "caption-group-32",
+      "frame": 5,
+      "start": 27.094,
+      "end": 28.214,
+      "text": "recebimentos e notas",
+      "words": [
+        {
+          "id": "caption-word-32-0",
+          "text": "recebimentos",
+          "start": 27.094,
+          "end": 27.834
+        },
+        {
+          "id": "caption-word-32-1",
+          "text": "e",
+          "start": 27.834,
+          "end": 27.844
+        },
+        {
+          "id": "caption-word-32-2",
+          "text": "notas",
+          "start": 27.934,
+          "end": 28.214
+        }
+      ]
+    },
+    {
+      "id": "caption-group-33",
+      "frame": 5,
+      "start": 28.214,
+      "end": 28.794,
+      "text": "fiscais em",
+      "words": [
+        {
+          "id": "caption-word-33-0",
+          "text": "fiscais",
+          "start": 28.214,
+          "end": 28.664
+        },
+        {
+          "id": "caption-word-33-1",
+          "text": "em",
+          "start": 28.664,
+          "end": 28.794
+        }
+      ]
+    },
+    {
+      "id": "caption-group-34",
+      "frame": 5,
+      "start": 28.794,
+      "end": 29.994,
+      "text": "um único processo.",
+      "words": [
+        {
+          "id": "caption-word-34-0",
+          "text": "um",
+          "start": 28.794,
+          "end": 28.924
+        },
+        {
+          "id": "caption-word-34-1",
+          "text": "único",
+          "start": 28.924,
+          "end": 29.184
+        },
+        {
+          "id": "caption-word-34-2",
+          "text": "processo.",
+          "start": 29.314,
+          "end": 29.874
+        }
+      ]
+    },
+    {
+      "id": "caption-group-35",
+      "frame": 6,
+      "start": 30.11,
+      "end": 30.77,
+      "text": "Enquanto o",
+      "words": [
+        {
+          "id": "caption-word-35-0",
+          "text": "Enquanto",
+          "start": 30.11,
+          "end": 30.69
+        },
+        {
+          "id": "caption-word-35-1",
+          "text": "o",
+          "start": 30.69,
+          "end": 30.77
+        }
+      ]
+    },
+    {
+      "id": "caption-group-36",
+      "frame": 6,
+      "start": 30.77,
+      "end": 31.64,
+      "text": "ERP registra",
+      "words": [
+        {
+          "id": "caption-word-36-0",
+          "text": "ERP",
+          "start": 30.77,
+          "end": 30.99
+        },
+        {
+          "id": "caption-word-36-1",
+          "text": "registra",
+          "start": 30.99,
+          "end": 31.56
+        }
+      ]
+    },
+    {
+      "id": "caption-group-37",
+      "frame": 6,
+      "start": 31.64,
+      "end": 32.64,
+      "text": "a transação,",
+      "words": [
+        {
+          "id": "caption-word-37-0",
+          "text": "a",
+          "start": 31.64,
+          "end": 31.69
+        },
+        {
+          "id": "caption-word-37-1",
+          "text": "transação,",
+          "start": 31.69,
+          "end": 32.62
+        }
+      ]
+    },
+    {
+      "id": "caption-group-38",
+      "frame": 6,
+      "start": 32.64,
+      "end": 33.01,
+      "text": "o GOEVO",
+      "words": [
+        {
+          "id": "caption-word-38-0",
+          "text": "o",
+          "start": 32.64,
+          "end": 32.69
+        },
+        {
+          "id": "caption-word-38-1",
+          "text": "GOEVO",
+          "start": 32.69,
+          "end": 32.94
+        }
+      ]
+    },
+    {
+      "id": "caption-group-39",
+      "frame": 6,
+      "start": 33.01,
+      "end": 34.2,
+      "text": "organiza e governa",
+      "words": [
+        {
+          "id": "caption-word-39-0",
+          "text": "organiza",
+          "start": 33.01,
+          "end": 33.6
+        },
+        {
+          "id": "caption-word-39-1",
+          "text": "e",
+          "start": 33.6,
+          "end": 33.66
+        },
+        {
+          "id": "caption-word-39-2",
+          "text": "governa",
+          "start": 33.66,
+          "end": 34.08
+        }
+      ]
+    },
+    {
+      "id": "caption-group-40",
+      "frame": 6,
+      "start": 34.2,
+      "end": 34.47,
+      "text": "tudo o",
+      "words": [
+        {
+          "id": "caption-word-40-0",
+          "text": "tudo",
+          "start": 34.2,
+          "end": 34.4
+        },
+        {
+          "id": "caption-word-40-1",
+          "text": "o",
+          "start": 34.4,
+          "end": 34.42
+        }
+      ]
+    },
+    {
+      "id": "caption-group-41",
+      "frame": 6,
+      "start": 34.47,
+      "end": 35.79,
+      "text": "que acontece antes,",
+      "words": [
+        {
+          "id": "caption-word-41-0",
+          "text": "que",
+          "start": 34.47,
+          "end": 34.52
+        },
+        {
+          "id": "caption-word-41-1",
+          "text": "acontece",
+          "start": 34.52,
+          "end": 35.12
+        },
+        {
+          "id": "caption-word-41-2",
+          "text": "antes,",
+          "start": 35.12,
+          "end": 35.76
+        }
+      ]
+    },
+    {
+      "id": "caption-group-42",
+      "frame": 6,
+      "start": 35.79,
+      "end": 36.23,
+      "text": "durante e",
+      "words": [
+        {
+          "id": "caption-word-42-0",
+          "text": "durante",
+          "start": 35.79,
+          "end": 36.13
+        },
+        {
+          "id": "caption-word-42-1",
+          "text": "e",
+          "start": 36.2,
+          "end": 36.23
+        }
+      ]
+    },
+    {
+      "id": "caption-group-43",
+      "frame": 6,
+      "start": 36.23,
+      "end": 36.7,
+      "text": "depois da",
+      "words": [
+        {
+          "id": "caption-word-43-0",
+          "text": "depois",
+          "start": 36.23,
+          "end": 36.52
+        },
+        {
+          "id": "caption-word-43-1",
+          "text": "da",
+          "start": 36.62,
+          "end": 36.7
+        }
+      ]
+    },
+    {
+      "id": "caption-group-44",
+      "frame": 6,
+      "start": 36.7,
+      "end": 37.92,
+      "text": "decisão de compra.",
+      "words": [
+        {
+          "id": "caption-word-44-0",
+          "text": "decisão",
+          "start": 36.7,
+          "end": 37.07
+        },
+        {
+          "id": "caption-word-44-1",
+          "text": "de",
+          "start": 37.15,
+          "end": 37.22
+        },
+        {
+          "id": "caption-word-44-2",
+          "text": "compra.",
+          "start": 37.22,
+          "end": 37.8
+        }
+      ]
+    },
+    {
+      "id": "caption-group-45",
+      "frame": 7,
+      "start": 37.937,
+      "end": 38.937,
+      "text": "Com integração aos",
+      "words": [
+        {
+          "id": "caption-word-45-0",
+          "text": "Com",
+          "start": 37.937,
+          "end": 38.067
+        },
+        {
+          "id": "caption-word-45-1",
+          "text": "integração",
+          "start": 38.067,
+          "end": 38.647
+        },
+        {
+          "id": "caption-word-45-2",
+          "text": "aos",
+          "start": 38.767,
+          "end": 38.917
+        }
+      ]
+    },
+    {
+      "id": "caption-group-46",
+      "frame": 7,
+      "start": 38.937,
+      "end": 39.987,
+      "text": "principais ERPs,",
+      "words": [
+        {
+          "id": "caption-word-46-0",
+          "text": "principais",
+          "start": 38.937,
+          "end": 39.487
+        },
+        {
+          "id": "caption-word-46-1",
+          "text": "ERPs,",
+          "start": 39.597,
+          "end": 39.987
+        }
+      ]
+    },
+    {
+      "id": "caption-group-47",
+      "frame": 7,
+      "start": 39.987,
+      "end": 41.707,
+      "text": "regras personalizáveis e visão",
+      "words": [
+        {
+          "id": "caption-word-47-0",
+          "text": "regras",
+          "start": 39.987,
+          "end": 40.347
+        },
+        {
+          "id": "caption-word-47-1",
+          "text": "personalizáveis",
+          "start": 40.347,
+          "end": 41.297
+        },
+        {
+          "id": "caption-word-47-2",
+          "text": "e",
+          "start": 41.297,
+          "end": 41.367
+        },
+        {
+          "id": "caption-word-47-3",
+          "text": "visão",
+          "start": 41.367,
+          "end": 41.707
+        }
+      ]
+    },
+    {
+      "id": "caption-group-48",
+      "frame": 7,
+      "start": 41.707,
+      "end": 42.677,
+      "text": "de orçado,",
+      "words": [
+        {
+          "id": "caption-word-48-0",
+          "text": "de",
+          "start": 41.707,
+          "end": 41.877
+        },
+        {
+          "id": "caption-word-48-1",
+          "text": "orçado,",
+          "start": 41.967,
+          "end": 42.677
+        }
+      ]
+    },
+    {
+      "id": "caption-group-49",
+      "frame": 7,
+      "start": 42.677,
+      "end": 44.527,
+      "text": "comprometido e realizado,",
+      "words": [
+        {
+          "id": "caption-word-49-0",
+          "text": "comprometido",
+          "start": 42.677,
+          "end": 43.347
+        },
+        {
+          "id": "caption-word-49-1",
+          "text": "e",
+          "start": 43.417,
+          "end": 43.437
+        },
+        {
+          "id": "caption-word-49-2",
+          "text": "realizado,",
+          "start": 43.437,
+          "end": 44.437
+        }
+      ]
+    },
+    {
+      "id": "caption-group-50",
+      "frame": 7,
+      "start": 44.527,
+      "end": 45.077,
+      "text": "cada gestor",
+      "words": [
+        {
+          "id": "caption-word-50-0",
+          "text": "cada",
+          "start": 44.527,
+          "end": 44.717
+        },
+        {
+          "id": "caption-word-50-1",
+          "text": "gestor",
+          "start": 44.717,
+          "end": 44.967
+        }
+      ]
+    },
+    {
+      "id": "caption-group-51",
+      "frame": 7,
+      "start": 45.077,
+      "end": 45.427,
+      "text": "sabe o",
+      "words": [
+        {
+          "id": "caption-word-51-0",
+          "text": "sabe",
+          "start": 45.077,
+          "end": 45.217
+        },
+        {
+          "id": "caption-word-51-1",
+          "text": "o",
+          "start": 45.217,
+          "end": 45.427
+        }
+      ]
+    },
+    {
+      "id": "caption-group-52",
+      "frame": 7,
+      "start": 45.427,
+      "end": 46.547,
+      "text": "que está acontecendo",
+      "words": [
+        {
+          "id": "caption-word-52-0",
+          "text": "que",
+          "start": 45.427,
+          "end": 45.587
+        },
+        {
+          "id": "caption-word-52-1",
+          "text": "está",
+          "start": 45.587,
+          "end": 45.837
+        },
+        {
+          "id": "caption-word-52-2",
+          "text": "acontecendo",
+          "start": 45.837,
+          "end": 46.537
+        }
+      ]
+    },
+    {
+      "id": "caption-group-53",
+      "frame": 7,
+      "start": 46.547,
+      "end": 46.667,
+      "text": "e o",
+      "words": [
+        {
+          "id": "caption-word-53-0",
+          "text": "e",
+          "start": 46.547,
+          "end": 46.607
+        },
+        {
+          "id": "caption-word-53-1",
+          "text": "o",
+          "start": 46.607,
+          "end": 46.667
+        }
+      ]
+    },
+    {
+      "id": "caption-group-54",
+      "frame": 7,
+      "start": 46.667,
+      "end": 47.957,
+      "text": "que precisa decidir.",
+      "words": [
+        {
+          "id": "caption-word-54-0",
+          "text": "que",
+          "start": 46.667,
+          "end": 46.857
+        },
+        {
+          "id": "caption-word-54-1",
+          "text": "precisa",
+          "start": 46.857,
+          "end": 47.307
+        },
+        {
+          "id": "caption-word-54-2",
+          "text": "decidir.",
+          "start": 47.307,
+          "end": 47.837
+        }
+      ]
+    },
+    {
+      "id": "caption-group-55",
+      "frame": 8,
+      "start": 48.178,
+      "end": 49.318,
+      "text": "Pare de reconstruir",
+      "words": [
+        {
+          "id": "caption-word-55-0",
+          "text": "Pare",
+          "start": 48.178,
+          "end": 48.408
+        },
+        {
+          "id": "caption-word-55-1",
+          "text": "de",
+          "start": 48.408,
+          "end": 48.548
+        },
+        {
+          "id": "caption-word-55-2",
+          "text": "reconstruir",
+          "start": 48.548,
+          "end": 49.318
+        }
+      ]
+    },
+    {
+      "id": "caption-group-56",
+      "frame": 8,
+      "start": 49.318,
+      "end": 50.018,
+      "text": "o histórico",
+      "words": [
+        {
+          "id": "caption-word-56-0",
+          "text": "o",
+          "start": 49.318,
+          "end": 49.388
+        },
+        {
+          "id": "caption-word-56-1",
+          "text": "histórico",
+          "start": 49.388,
+          "end": 50.018
+        }
+      ]
+    },
+    {
+      "id": "caption-group-57",
+      "frame": 8,
+      "start": 50.018,
+      "end": 50.769,
+      "text": "dos gastos.",
+      "words": [
+        {
+          "id": "caption-word-57-0",
+          "text": "dos",
+          "start": 50.018,
+          "end": 50.228
+        },
+        {
+          "id": "caption-word-57-1",
+          "text": "gastos.",
+          "start": 50.228,
+          "end": 50.708
+        }
+      ]
+    },
+    {
+      "id": "caption-group-58",
+      "frame": 9,
+      "start": 50.769,
+      "end": 51.269,
+      "text": "Clique no",
+      "words": [
+        {
+          "id": "caption-word-58-0",
+          "text": "Clique",
+          "start": 50.769,
+          "end": 51.129
+        },
+        {
+          "id": "caption-word-58-1",
+          "text": "no",
+          "start": 51.129,
+          "end": 51.269
+        }
+      ]
+    },
+    {
+      "id": "caption-group-59",
+      "frame": 9,
+      "start": 51.269,
+      "end": 51.669,
+      "text": "link e",
+      "words": [
+        {
+          "id": "caption-word-59-0",
+          "text": "link",
+          "start": 51.269,
+          "end": 51.549
+        },
+        {
+          "id": "caption-word-59-1",
+          "text": "e",
+          "start": 51.549,
+          "end": 51.559
+        }
+      ]
+    },
+    {
+      "id": "caption-group-60",
+      "frame": 9,
+      "start": 51.669,
+      "end": 52.679,
+      "text": "conheça uma nova",
+      "words": [
+        {
+          "id": "caption-word-60-0",
+          "text": "conheça",
+          "start": 51.669,
+          "end": 52.109
+        },
+        {
+          "id": "caption-word-60-1",
+          "text": "uma",
+          "start": 52.109,
+          "end": 52.319
+        },
+        {
+          "id": "caption-word-60-2",
+          "text": "nova",
+          "start": 52.319,
+          "end": 52.559
+        }
+      ]
+    },
+    {
+      "id": "caption-group-61",
+      "frame": 9,
+      "start": 52.699,
+      "end": 53.189,
+      "text": "forma de",
+      "words": [
+        {
+          "id": "caption-word-61-0",
+          "text": "forma",
+          "start": 52.699,
+          "end": 53.009
+        },
+        {
+          "id": "caption-word-61-1",
+          "text": "de",
+          "start": 53.009,
+          "end": 53.099
+        }
+      ]
+    },
+    {
+      "id": "caption-group-62",
+      "frame": 9,
+      "start": 53.189,
+      "end": 54.039,
+      "text": "comprar melhor",
+      "words": [
+        {
+          "id": "caption-word-62-0",
+          "text": "comprar",
+          "start": 53.189,
+          "end": 53.589
+        },
+        {
+          "id": "caption-word-62-1",
+          "text": "melhor",
+          "start": 53.589,
+          "end": 53.929
+        }
+      ]
+    },
+    {
+      "id": "caption-group-63",
+      "frame": 9,
+      "start": 54.039,
+      "end": 54.639,
+      "text": "e governar",
+      "words": [
+        {
+          "id": "caption-word-63-0",
+          "text": "e",
+          "start": 54.039,
+          "end": 54.059
+        },
+        {
+          "id": "caption-word-63-1",
+          "text": "governar",
+          "start": 54.059,
+          "end": 54.629
+        }
+      ]
+    },
+    {
+      "id": "caption-group-64",
+      "frame": 9,
+      "start": 54.639,
+      "end": 55.549,
+      "text": "seus gastos.",
+      "words": [
+        {
+          "id": "caption-word-64-0",
+          "text": "seus",
+          "start": 54.639,
+          "end": 54.929
+        },
+        {
+          "id": "caption-word-64-1",
+          "text": "gastos.",
+          "start": 54.929,
+          "end": 55.429
+        }
+      ]
+    }
+  ]
+}

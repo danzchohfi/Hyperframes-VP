@@ -1,0 +1,70 @@
+{
+  "lines": [
+    {
+      "id": "01",
+      "sfx": [
+        "whoosh-short",
+        "click-soft"
+      ]
+    },
+    {
+      "id": "02",
+      "sfx": [
+        "pop",
+        "riser"
+      ]
+    },
+    {
+      "id": "03",
+      "sfx": [
+        "impact-bass-1"
+      ]
+    },
+    {
+      "id": "04",
+      "sfx": [
+        "sparkle"
+      ]
+    },
+    {
+      "id": "05",
+      "sfx": [
+        "click-soft",
+        "whoosh-short",
+        "chime"
+      ]
+    },
+    {
+      "id": "06",
+      "sfx": [
+        "whoosh",
+        "click-soft"
+      ]
+    },
+    {
+      "id": "07",
+      "sfx": [
+        "click",
+        "typing",
+        "chime"
+      ]
+    },
+    {
+      "id": "08",
+      "sfx": [
+        "impact-bass-2"
+      ]
+    },
+    {
+      "id": "09",
+      "sfx": [
+        "riser",
+        "whoosh-cinematic"
+      ]
+    }
+  ],
+  "bgm": {
+    "mode": "generate",
+    "query": "confident minimal tech underscore, discreet corporate electronic pulse, voice-dominant"
+  }
+}
