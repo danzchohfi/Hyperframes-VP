@@ -152,7 +152,7 @@ Scene 3 (1.1–1.9s): no cue "SCM" — um tag-pill branco translúcido "SCM · S
 - voiceover: "Uma plataforma que conecta requisições, cotações, aprovações, pedidos, contratos, fornecedores, recebimentos e notas fiscais em um único processo."
 - duration: 9.216s
 - transition_in: push-slide LEFT
-- status: outline
+- status: animated
 - src: compositions/frames/05-fluxo-ponta-a-ponta.html
 - type: feature_showcase
 - persuasion: Show-don't-tell — o "ponta a ponta" da tese vira um desenho concreto
