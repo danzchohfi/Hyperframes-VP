@@ -1,0 +1,678 @@
+<template data-composition-id="02-dor-fragmentada" data-width="1080" data-height="1920">
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+
+  <style>
+    @font-face {
+      font-family: "Montserrat";
+      src: url("assets/fonts/Montserrat-Regular.woff2") format("woff2");
+      font-weight: 400;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: "Montserrat";
+      src: url("assets/fonts/Montserrat-Medium.woff2") format("woff2");
+      font-weight: 500;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: "Montserrat";
+      src: url("assets/fonts/Montserrat-SemiBold.woff2") format("woff2");
+      font-weight: 600;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: "Montserrat";
+      src: url("assets/fonts/Montserrat-Bold.woff2") format("woff2");
+      font-weight: 700;
+      font-style: normal;
+    }
+
+    #root {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      container-type: size;
+      font-family: "Montserrat", sans-serif;
+    }
+
+    /* full-bleed ground — dedicated clip, never painted on #root */
+    .f02-bg {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      background: #FFFFFF;
+    }
+
+    .f02-stage {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+    }
+
+    /* ============ depth-of-field layers (blur via --dof, HF seek clock) ============ */
+    .f02-dof {
+      --dof: 0px;
+      filter: blur(var(--dof));
+      will-change: filter, transform;
+    }
+
+    /* ============ Scene 1 — triptych mocks ============ */
+
+    /* e-mail window — the hero + the morph card of the signature move */
+    #f02-mail {
+      position: absolute;
+      left: 22.25cqw;
+      top: 28.15cqh;
+      width: 55.5cqw;
+      height: 22.9cqh;
+      background: #FFFFFF;
+      border: 1.5px solid rgba(25, 25, 25, 0.1);
+      border-radius: 14px;
+      overflow: hidden;
+      z-index: 6;
+      will-change: transform;
+    }
+    #f02-mail-inner {
+      position: absolute;
+      inset: 0;
+    }
+    .f02-titlebar {
+      height: 3.05cqh;
+      display: flex;
+      align-items: center;
+      gap: 0.8cqw;
+      padding: 0 2.2cqw;
+      border-bottom: 1px solid rgba(25, 25, 25, 0.08);
+    }
+    .f02-titlebar i {
+      display: block;
+      width: 1.05cqw;
+      height: 1.05cqw;
+      border-radius: 50%;
+      background: rgba(25, 25, 25, 0.13);
+    }
+    .f02-applabel {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 0.9cqw;
+      font-size: 1.8cqw;
+      font-weight: 600;
+      color: #5A6472;
+    }
+    .f02-applabel svg {
+      width: 2.1cqw;
+      height: 2.1cqw;
+      display: block;
+    }
+    .f02-mailbody {
+      padding: 2.4cqw 2.7cqw;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25cqh;
+    }
+    .f02-subject {
+      width: 60%;
+      height: 1.15cqh;
+      border-radius: 100px;
+      background: rgba(25, 25, 25, 0.14);
+    }
+    .f02-line {
+      height: 0.68cqh;
+      border-radius: 100px;
+      background: rgba(25, 25, 25, 0.07);
+    }
+
+    /* WhatsApp panel — upper-left flank (~0.86 size, baked) */
+    #f02-wa {
+      position: absolute;
+      left: 7.9cqw;
+      top: 15.1cqh;
+      width: 30.5cqw;
+      height: 11.4cqh;
+      background: #FFFFFF;
+      border: 1.5px solid rgba(25, 25, 25, 0.1);
+      border-radius: 14px;
+      padding: 1.9cqw;
+      display: flex;
+      flex-direction: column;
+      gap: 0.85cqh;
+      z-index: 2;
+    }
+    .f02-mockhead {
+      display: flex;
+      align-items: center;
+      gap: 1cqw;
+      font-size: 1.7cqw;
+      font-weight: 600;
+      color: #5A6472;
+    }
+    .f02-mockhead svg {
+      width: 2.2cqw;
+      height: 2.2cqw;
+      display: block;
+    }
+    .f02-bub-in {
+      width: 72%;
+      align-self: flex-start;
+      background: rgba(0, 153, 255, 0.08);
+      border-radius: 10px 10px 10px 3px;
+      padding: 1.2cqw 1.5cqw;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5cqh;
+    }
+    .f02-bub-out {
+      width: 58%;
+      align-self: flex-end;
+      background: rgba(0, 153, 255, 0.15);
+      border-radius: 10px 10px 3px 10px;
+      padding: 1.2cqw 1.5cqw;
+    }
+    .f02-chatline {
+      height: 0.55cqh;
+      border-radius: 100px;
+      background: rgba(25, 25, 25, 0.11);
+    }
+
+    /* spreadsheet panel — lower-right flank */
+    #f02-sheet {
+      position: absolute;
+      left: 61.8cqw;
+      top: 53.4cqh;
+      width: 33cqw;
+      height: 13cqh;
+      background: #FFFFFF;
+      border: 1.5px solid rgba(25, 25, 25, 0.1);
+      border-radius: 14px;
+      padding: 1.9cqw;
+      display: flex;
+      flex-direction: column;
+      gap: 0.8cqh;
+      z-index: 2;
+    }
+    .f02-table {
+      flex: 1;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      grid-auto-rows: 1fr;
+      gap: 1px;
+      background: rgba(25, 25, 25, 0.1);
+      border: 1px solid rgba(25, 25, 25, 0.1);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .f02-table > div {
+      background: #FFFFFF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .f02-table > div.h {
+      background: rgba(0, 153, 255, 0.07);
+    }
+    .f02-table > div.b::after {
+      content: "";
+      display: block;
+      width: 60%;
+      height: 0.42cqh;
+      border-radius: 100px;
+      background: rgba(25, 25, 25, 0.1);
+    }
+
+    /* ============ Scene 2 — scattered proposal / quote cards (density markers) ============ */
+    .f02-file {
+      position: absolute;
+      display: flex;
+      align-items: center;
+      gap: 1.1cqw;
+      padding: 1.5cqw 2.1cqw;
+      background: #FFFFFF;
+      border: 1.5px solid rgba(0, 153, 255, 0.2);
+      border-radius: 12px;
+      white-space: nowrap;
+      font-size: 1.75cqw;
+      font-weight: 600;
+      color: #5A6472;
+    }
+    .f02-file svg {
+      width: 2.2cqw;
+      height: 2.2cqw;
+      display: block;
+      flex: none;
+    }
+    .f02-badge {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.45cqh;
+      padding: 1.5cqw 2.3cqw;
+      background: #FFFFFF;
+      border: 1.5px solid rgba(0, 153, 255, 0.2);
+      border-radius: 12px;
+      font-size: 2.1cqw;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: #0099FF;
+    }
+    .f02-badge svg {
+      width: 2.6cqw;
+      height: 2.6cqw;
+      display: block;
+    }
+    #f02-c1 { left: 16.7cqw; top: 8.1cqh;  z-index: 4; }
+    #f02-c2 { left: 79.6cqw; top: 20cqh;   z-index: 3; }
+    #f02-c3 { left: 14.8cqw; top: 59.6cqh; z-index: 3; }
+    #f02-c4 { left: 5.6cqw;  top: 38.8cqh; z-index: 1; }
+    #f02-c5 { left: 55.6cqw; top: 72.1cqh; z-index: 4; }
+    #f02-c6 { left: 85.6cqw; top: 7.6cqh;  z-index: 1; }
+
+    /* ============ Scene 3 — the FINANCEIRO card revealed under the morph ============ */
+    #f02-fin {
+      position: absolute;
+      left: 20.35cqw;
+      top: 29.7cqh;
+      width: 59.3cqw;
+      height: 19.8cqh;
+      background: rgba(0, 153, 255, 0.04);
+      border: 1.5px solid rgba(0, 153, 255, 0.2);
+      border-radius: 14px;
+      padding: 2.3cqh 4.2cqw;
+      display: flex;
+      flex-direction: column;
+      opacity: 0; /* fades in as the morph card fades out (card-morph-anchor handoff) */
+      z-index: 5;
+    }
+    .f02-finhead {
+      display: flex;
+      align-items: center;
+      gap: 2.4cqw;
+    }
+    #f02-fin-avatar {
+      width: 7cqw;
+      aspect-ratio: 1;
+      flex: none;
+      border-radius: 50%;
+      background: #0099FF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      will-change: transform;
+    }
+    #f02-fin-avatar svg {
+      width: 3.7cqw;
+      height: 3.7cqw;
+      display: block;
+    }
+    #f02-fin-label {
+      font-size: 2.7cqw;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: #0099FF;
+      will-change: transform;
+    }
+    #f02-barzone {
+      position: relative;
+      margin-top: auto;
+      height: 6.3cqh;
+    }
+    #f02-ghostbar {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 1.1cqh;
+      height: 1.46cqh;
+      border-radius: 6px;
+      border: 1.5px dashed rgba(0, 153, 255, 0.35);
+      background: rgba(0, 153, 255, 0.05);
+      transform-origin: left center;
+      will-change: transform;
+    }
+    #f02-window {
+      position: absolute;
+      right: 2.9cqw;
+      bottom: 0.32cqh;
+      width: 13cqw;
+      height: 3.2cqh;
+      background: #FFFFFF;
+      border: 2px solid #0099FF;
+      border-radius: 10px;
+      overflow: hidden;
+      will-change: transform;
+    }
+    #f02-slice {
+      position: absolute;
+      left: 0.75cqw;
+      right: 0.75cqw;
+      top: 0.42cqh;
+      bottom: 0.42cqh;
+      background: #0099FF;
+      border-radius: 6px;
+      will-change: transform;
+    }
+    #f02-eye {
+      position: absolute;
+      right: 7.6cqw;
+      bottom: 3.85cqh;
+      width: 3.2cqw;
+      will-change: transform;
+    }
+    #f02-eye svg {
+      width: 100%;
+      display: block;
+    }
+
+    /* ============ Scene 4 — demand bubbles closing radially over the card ============ */
+    .f02-bub {
+      position: absolute;
+      padding: 1.75cqw 3.1cqw;
+      background: #FFFFFF;
+      border: 1.5px solid rgba(0, 153, 255, 0.28);
+      border-radius: 100px;
+      font-size: 2.6cqw;
+      font-weight: 600;
+      color: #191919;
+      white-space: nowrap;
+      z-index: 8;
+      will-change: transform;
+    }
+    #f02-b1 { left: 14.8cqw; top: 25.3cqh; }
+    #f02-b2 { left: 67.6cqw; top: 26.5cqh; color: #0099FF; font-weight: 700; }
+    #f02-b3 { left: 14.4cqw; top: 50.9cqh; }
+    #f02-b4 { left: 58.8cqw; top: 50.7cqh; }
+  </style>
+
+  <div id="root">
+    <div class="clip f02-bg" data-start="0" data-duration="9.451" data-track-index="0"></div>
+
+    <div class="clip f02-stage" data-start="0" data-duration="9.451" data-track-index="1">
+
+      <!-- Scene 2 — back / mid / front density layers (scattered proposals) -->
+      <div class="f02-badge f02-dof" id="f02-c4" data-depth="3">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v15H6z" fill="none" stroke="#0099FF" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 2v5h5" fill="none" stroke="#0099FF" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        <span>PDF</span>
+      </div>
+      <div class="f02-badge f02-dof" id="f02-c6" data-depth="3">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v15H6z" fill="none" stroke="#0099FF" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 2v5h5" fill="none" stroke="#0099FF" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        <span>PDF</span>
+      </div>
+
+      <!-- Scene 1 — flanking mocks -->
+      <div class="f02-dof" id="f02-wa" data-depth="1">
+        <div class="f02-mockhead">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v12H9l-5 5z" fill="none" stroke="#0099FF" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          <span>WhatsApp</span>
+        </div>
+        <div class="f02-bub-in">
+          <div class="f02-chatline" style="width: 92%"></div>
+          <div class="f02-chatline" style="width: 68%"></div>
+        </div>
+        <div class="f02-bub-out">
+          <div class="f02-chatline" style="width: 84%"></div>
+        </div>
+      </div>
+
+      <div class="f02-dof" id="f02-sheet" data-depth="1">
+        <div class="f02-mockhead">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4z M4 10h16 M10 4v16" fill="none" stroke="#0099FF" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          <span>Planilha</span>
+        </div>
+        <div class="f02-table">
+          <div class="h"></div><div class="h"></div><div class="h"></div><div class="h"></div><div class="h"></div>
+          <div class="b"></div><div></div><div class="b"></div><div></div><div class="b"></div>
+          <div></div><div class="b"></div><div></div><div class="b"></div><div></div>
+          <div class="b"></div><div></div><div class="b"></div><div class="b"></div><div></div>
+        </div>
+      </div>
+
+      <div class="f02-badge f02-dof" id="f02-c2" data-depth="2">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v15H6z" fill="none" stroke="#0099FF" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 2v5h5" fill="none" stroke="#0099FF" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        <span>XLS</span>
+      </div>
+      <div class="f02-file f02-dof" id="f02-c3" data-depth="2">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v15H6z" fill="none" stroke="#0099FF" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 2v5h5" fill="none" stroke="#0099FF" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        <span>Orçamento_revisado.pdf</span>
+      </div>
+      <div class="f02-file f02-dof" id="f02-c1" data-depth="2">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v15H6z" fill="none" stroke="#0099FF" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 2v5h5" fill="none" stroke="#0099FF" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        <span>Proposta_v3_final.pdf</span>
+      </div>
+      <div class="f02-file f02-dof" id="f02-c5" data-depth="2">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v15H6z" fill="none" stroke="#0099FF" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 2v5h5" fill="none" stroke="#0099FF" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        <span>Cotação_fornecedores.xlsx</span>
+      </div>
+
+      <!-- Scene 3 — the anchor rendered BEHIND the morph card (DOM order = stacking) -->
+      <div id="f02-fin">
+        <div class="f02-finhead">
+          <div id="f02-fin-avatar">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="#FFFFFF"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" fill="#FFFFFF"/></svg>
+          </div>
+          <div id="f02-fin-label">FINANCEIRO</div>
+        </div>
+        <div id="f02-barzone">
+          <div id="f02-ghostbar"></div>
+          <div id="f02-eye">
+            <svg viewBox="0 0 32 20" aria-hidden="true"><path d="M2 10 C8 2.5, 24 2.5, 30 10 C24 17.5, 8 17.5, 2 10 Z" fill="#FFFFFF" stroke="#0099FF" stroke-width="2"/><circle cx="16" cy="10" r="3.4" fill="#0099FF"/></svg>
+          </div>
+          <div id="f02-window">
+            <div id="f02-slice"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene 1 hero / Scene 3 morph card — on top of the anchor -->
+      <div id="f02-mail">
+        <div id="f02-mail-inner">
+          <div class="f02-titlebar">
+            <i></i><i></i><i></i>
+            <div class="f02-applabel">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="#0099FF" stroke-width="1.8"/><path d="M3 7l9 6 9-6" fill="none" stroke="#0099FF" stroke-width="1.8" stroke-linejoin="round"/></svg>
+              <span>E-mail</span>
+            </div>
+          </div>
+          <div class="f02-mailbody">
+            <div class="f02-subject"></div>
+            <div class="f02-line" style="width: 94%"></div>
+            <div class="f02-line" style="width: 86%"></div>
+            <div class="f02-line" style="width: 90%"></div>
+            <div class="f02-line" style="width: 57%"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene 4 — demand bubbles -->
+      <div class="f02-bub" id="f02-b1">Pedido emitido</div>
+      <div class="f02-bub" id="f02-b2">Urgente!</div>
+      <div class="f02-bub" id="f02-b3">NF chegou</div>
+      <div class="f02-bub" id="f02-b4">Quem aprovou?</div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      window.__timelines = window.__timelines || {};
+      var tl = gsap.timeline({ paused: true });
+
+      // ============ Scene 1 (0.0–2.0s) — triptych settles in stagger ============
+      // spring-pop-entrance, smooth register (power3.out, no overshoot)
+      tl.fromTo(
+        "#f02-mail",
+        { scale: 0, opacity: 0 },
+        { scale: 1, opacity: 1, duration: 0.65, ease: "power3.out" },
+        0.05
+      );
+      tl.fromTo(
+        "#f02-wa",
+        { scale: 0, opacity: 0, y: 20 },
+        { scale: 1, opacity: 1, y: 0, duration: 0.6, ease: "power3.out" },
+        0.5
+      );
+      tl.fromTo(
+        "#f02-sheet",
+        { scale: 0, opacity: 0, y: 20 },
+        { scale: 1, opacity: 1, y: 0, duration: 0.6, ease: "power3.out" },
+        0.9
+      );
+
+      // low-amplitude float (sine-wave-loop, authored as finite sequential tweens —
+      // no repeat/yoyo; staggered periods; every float lands at y:0 before the morph)
+      var FLOATS = [
+        ["#f02-mail", 3, 0.85, 0.8],
+        ["#f02-wa", 3, 1.25, 0.72],
+        ["#f02-sheet", 3, 1.6, 0.66]
+      ];
+      FLOATS.forEach(function (f) {
+        for (var j = 0; j < 4; j++) {
+          tl.to(
+            f[0],
+            { y: j % 2 === 0 ? -f[1] : 0, duration: f[3], ease: "sine.inOut" },
+            f[2] + j * f[3]
+          );
+        }
+      });
+
+      // ============ Scene 2 (2.0–4.1s) — proposals scatter, density rises (3 layers) ============
+      var CARDS = [
+        ["#f02-c1", 2.05, -5, 1, 1],
+        ["#f02-c2", 2.25, 7, 0.92, 0.95],
+        ["#f02-c3", 2.45, 4, 0.92, 0.95],
+        ["#f02-c4", 2.65, -8, 0.84, 0.9],
+        ["#f02-c6", 2.85, -10, 0.84, 0.9],
+        ["#f02-c5", 3.1, -3, 1, 1]
+      ];
+      CARDS.forEach(function (c) {
+        tl.fromTo(
+          c[0],
+          { scale: 0, opacity: 0, rotation: c[2] },
+          { scale: c[3], opacity: c[4], rotation: c[2], duration: 0.55, ease: "power3.out" },
+          c[1]
+        );
+      });
+
+      // ============ Scene 3 (4.1–6.8s) — signature move: card-morph-anchor ============
+      // old content fades during the first ~40% of the morph
+      tl.to("#f02-mail-inner", { opacity: 0, duration: 0.36, ease: "power1.in" }, 4.3);
+
+      // one tween, all channels: scaleX/scaleY reshape + paint-only surface change
+      // (600x440 mail -> 640x380 financeiro card; shared center, so scale about 50/50)
+      tl.to(
+        "#f02-mail",
+        {
+          scaleX: 1.068,
+          scaleY: 0.864,
+          backgroundColor: "rgba(0, 153, 255, 0.04)",
+          borderColor: "rgba(0, 153, 255, 0.2)",
+          borderRadius: "15px",
+          duration: 0.9,
+          ease: "power2.inOut"
+        },
+        4.3
+      );
+
+      // depth-of-field-blur — neighbors recede (blur via --dof + dim), focal card stays sharp
+      gsap.utils.toArray(".f02-dof").forEach(function (el) {
+        var depth = Number(el.dataset.depth) || 1;
+        tl.to(
+          el,
+          {
+            "--dof": 3 + depth * 2 + "px",
+            opacity: [0.6, 0.5, 0.42][depth - 1],
+            duration: 0.85,
+            ease: "power2.inOut"
+          },
+          4.35
+        );
+      });
+
+      // handoff — morph card fades out over the pixel-matched anchor behind it
+      tl.to(
+        "#f02-mail",
+        { opacity: 0, duration: 0.3, ease: "power1.in", immediateRender: false },
+        5.05
+      );
+      tl.fromTo(
+        "#f02-fin",
+        { opacity: 0 },
+        { opacity: 1, duration: 0.3, ease: "power1.out", immediateRender: false },
+        5.05
+      );
+
+      // financeiro identity lands
+      tl.fromTo(
+        "#f02-fin-avatar",
+        { scale: 0.5, opacity: 0 },
+        { scale: 1, opacity: 1, duration: 0.5, ease: "power3.out" },
+        5.15
+      );
+      tl.fromTo(
+        "#f02-fin-label",
+        { y: 16, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.45, ease: "power3.out" },
+        5.3
+      );
+
+      // the spend bar, cut — ghost total draws, then only the final slice is visible
+      // through the narrow window (clip estreito)
+      tl.fromTo(
+        "#f02-ghostbar",
+        { scaleX: 0, opacity: 0 },
+        { scaleX: 1, opacity: 1, duration: 0.5, ease: "power2.out" },
+        5.55
+      );
+      tl.fromTo(
+        "#f02-window",
+        { scale: 0.6, opacity: 0 },
+        { scale: 1, opacity: 1, duration: 0.5, ease: "power3.out" },
+        5.85
+      );
+      tl.fromTo(
+        "#f02-eye",
+        { scale: 0, opacity: 0 },
+        { scale: 1, opacity: 1, duration: 0.4, ease: "power3.out" },
+        5.95
+      );
+      tl.fromTo(
+        "#f02-slice",
+        { x: -150 },
+        { x: 0, duration: 0.55, ease: "power3.out" },
+        6.15
+      );
+
+      // ============ Scene 4 (6.8–9.45s) — demand bubbles close radially ============
+      // pre-fixed cos/sin positions; radial stagger in; the card does NOT move
+      var DIST = 250;
+      var BUBS = [
+        ["#f02-b1", -2.32, 6.85],
+        ["#f02-b2", -0.64, 7.03],
+        ["#f02-b3", 2.39, 7.21],
+        ["#f02-b4", 0.8, 7.39]
+      ];
+      BUBS.forEach(function (b) {
+        var dx = Math.cos(b[1]) * DIST;
+        var dy = Math.sin(b[1]) * DIST;
+        tl.fromTo(
+          b[0],
+          { x: dx, y: dy, scale: 0.7, opacity: 0 },
+          { x: 0, y: 0, scale: 1, opacity: 1, duration: 0.62, ease: "power3.out" },
+          b[2]
+        );
+        // the surround tightens once more — still closing, never zooming
+        tl.to(
+          b[0],
+          {
+            x: -Math.cos(b[1]) * 16,
+            y: -Math.sin(b[1]) * 16,
+            duration: 0.55,
+            ease: "power2.inOut"
+          },
+          8.35
+        );
+      });
+      // hold in the crowded state to the end (deliberate hold, no exit)
+
+      window.__timelines["02-dor-fragmentada"] = tl;
+    })();
+  </script>
+</template>
