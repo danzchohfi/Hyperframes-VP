@@ -1,8 +1,10 @@
 {
   "duration": 10.5,
   "assertions": [
+    { "kind": "appearsBy", "selector": "#brand", "bySec": 0.3 },
     { "kind": "appearsBy", "selector": "#hw1", "bySec": 0.4 },
     { "kind": "appearsBy", "selector": "#hw5", "bySec": 1.0 },
+    { "kind": "appearsBy", "selector": "#hook-sub", "bySec": 1.05 },
     { "kind": "appearsBy", "selector": "#crm-panel", "bySec": 1.6 },
     { "kind": "appearsBy", "selector": "#ghost", "bySec": 2.9 },
     { "kind": "appearsBy", "selector": "#card-placed", "bySec": 3.95 },
@@ -15,7 +17,7 @@
     { "kind": "appearsBy", "selector": "#msg-in", "bySec": 8.9 },
     { "kind": "appearsBy", "selector": "#wa-status", "bySec": 9.35 },
     { "kind": "before", "a": "#chat-panel", "b": "#outro-title" },
-    { "kind": "appearsBy", "selector": "#wordmark", "bySec": 10.4 },
+    { "kind": "appearsBy", "selector": "#outro-cta", "bySec": 10.3 },
     { "kind": "keepsMoving", "withinSelector": "#root", "maxStaticSec": 1.5 }
   ]
 }

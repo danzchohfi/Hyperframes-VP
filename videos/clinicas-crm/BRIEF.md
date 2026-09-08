@@ -35,7 +35,11 @@ por WhatsApp integradas ao sistema — fechando com "Tudo em um só lugar" e a U
 
 - Corrente do filme: ESQUERDA (cut-the-curve). Vetor reservado "para cima" gasto
   só na conclusão (chat → lockup final).
-- Fontes embutidas pelo compilador: Montserrat (display/UI) + IBM Plex Mono
-  (kickers, metadados, horários). Sem emoji (ícones em SVG inline).
-- Paleta: canvas teal-escuro, cards de UI claros, um acento teal; verde do
-  WhatsApp apenas na cena do chat.
+- Visual espelhado da página /clinicas (screenshot enviado pelo cliente):
+  canvas off-white, títulos em serifa editorial (Instrument Serif), Inter no
+  corpo e na UI, um único verde-escuro (#0f5c4a) como acento, pílulas mint com
+  horários, cards cinza-claro e botões pill verdes com seta. Wordmark
+  "vitamina." persistente no topo, como na navegação do site.
+- Copy: kicker "Solução de Marketing para Saúde"; fechamento com a frase da
+  página "Redes sociais, anúncios, atendimento e retorno. Uma operação só."
+- Sem emoji (ícones em SVG inline).
