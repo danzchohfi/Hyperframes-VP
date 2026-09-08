@@ -1,0 +1,1551 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1080, height=1920">
+    <title>Clínicas — CRM, paciente e WhatsApp</title>
+    <!-- Montserrat + IBM Plex Mono are bundled by the HyperFrames compiler (deterministic, offline). -->
+    <script src="vendor/gsap.min.js"></script>
+    <style>
+      :root {
+        --canvas-deep: #071417;
+        --canvas: #0b1d22;
+        --accent: #19c6a5;
+        --accent-mid: #0e8f79;
+        --accent-deep: #0b6b5b;
+        --fg: #f2faf8;
+        --fg-soft: #bfe9e1;
+        --muted: #9db8b3;
+
+        --ui-surface: #f6fbfa;
+        --ui-card: #ffffff;
+        --ui-ink: #0e2a2e;
+        --ui-muted: #567472;
+        --ui-border: #dce9e6;
+        --ui-soft: #e9f1ef;
+
+        --wa-bar: #008069;
+        --wa-btn: #25d366;
+        --wa-btn-ink: #0b3d2e;
+        --wa-bg: #efeae2;
+        --wa-out: #d9fdd3;
+        --wa-ink: #111b21;
+        --wa-time: #4b5c64;
+        --wa-tick: #53bdeb;
+        --wa-grey: #667781;
+
+        --stage-new: #3b82f6;
+        --stage-contact: #f59e0b;
+        --stage-sched: #14b8a6;
+
+        --chip-blue-bg: #dbeafe;
+        --chip-blue-fg: #1e40af;
+        --chip-amber-bg: #fef3c7;
+        --chip-amber-fg: #92400e;
+        --chip-teal-bg: #d5f5ee;
+        --chip-teal-fg: #0b6b5b;
+        --chip-grey-bg: #e9f1ef;
+        --chip-grey-fg: #0e2a2e;
+        --chip-green-bg: #dcfce7;
+        --chip-green-fg: #166534;
+
+        --display: "Montserrat", sans-serif;
+        --mono: "IBM Plex Mono", monospace;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 1080px;
+        height: 1920px;
+        overflow: hidden;
+        background: var(--canvas-deep);
+        font-family: var(--display);
+        color: var(--fg);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* ---------- stage ---------- */
+      #root {
+        position: relative;
+        width: 1080px;
+        height: 1920px;
+        overflow: hidden;
+        background: var(--canvas-deep); /* opaque stage ground (white-flash guard) */
+      }
+      .clip {
+        position: absolute;
+        inset: 0;
+        width: 1080px;
+        height: 1920px;
+        z-index: 1;
+      }
+      .hero {
+        position: absolute;
+        inset: 0;
+        will-change: transform, filter;
+      }
+
+      /* ---------- background layers ---------- */
+      #bg {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        overflow: hidden;
+        pointer-events: none;
+      }
+      .glow {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(70px);
+        will-change: transform;
+      }
+      .glow-a {
+        left: -260px;
+        top: -240px;
+        width: 1100px;
+        height: 1100px;
+        background: radial-gradient(circle, rgba(25, 198, 165, 0.42) 0%, rgba(25, 198, 165, 0.1) 45%, transparent 68%);
+      }
+      .glow-b {
+        left: 380px;
+        top: 1180px;
+        width: 1000px;
+        height: 1000px;
+        background: radial-gradient(circle, rgba(14, 143, 121, 0.36) 0%, rgba(14, 143, 121, 0.08) 45%, transparent 68%);
+      }
+      .grid {
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(191, 233, 225, 0.075) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(191, 233, 225, 0.075) 1px, transparent 1px);
+        background-size: 96px 96px;
+        background-position: 12px 12px;
+      }
+      .vignette {
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(ellipse 80% 70% at 50% 45%, transparent 55%, rgba(4, 12, 14, 0.7) 100%);
+      }
+
+      /* ---------- type ---------- */
+      .kicker {
+        font-family: var(--mono);
+        font-weight: 700;
+        font-size: 26px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--accent);
+        white-space: nowrap;
+      }
+      .kicker::before {
+        content: "";
+        display: inline-block;
+        width: 34px;
+        height: 4px;
+        margin-right: 18px;
+        vertical-align: middle;
+        background: var(--accent);
+        border-radius: 2px;
+      }
+
+      /* hook */
+      #hook-kicker {
+        position: absolute;
+        left: 72px;
+        top: 676px;
+        opacity: 0;
+      }
+      .hook-title {
+        position: absolute;
+        left: 72px;
+        top: 740px;
+        width: 936px;
+        font-size: 108px;
+        font-weight: 900;
+        line-height: 0.98;
+        letter-spacing: -0.03em;
+        color: var(--fg);
+      }
+      .hook-title .line {
+        display: block;
+        white-space: nowrap;
+      }
+      .hook-title .w {
+        display: inline-block;
+        opacity: 0;
+        will-change: transform;
+      }
+      .hook-title .w.accent {
+        color: var(--accent);
+      }
+      .rule {
+        position: absolute;
+        left: 72px;
+        top: 1218px;
+        width: 260px;
+        height: 6px;
+        border-radius: 3px;
+        background: var(--accent);
+        transform-origin: 0% 50%;
+      }
+
+      /* beat label */
+      .label {
+        position: absolute;
+        left: 72px;
+        top: 196px;
+        width: 936px;
+      }
+      .beat-title {
+        margin-top: 14px;
+        font-size: 60px;
+        font-weight: 900;
+        line-height: 1.1;
+        letter-spacing: -0.03em;
+        color: var(--fg);
+        white-space: nowrap;
+      }
+
+      /* ---------- shared UI panel ---------- */
+      .panel {
+        position: absolute;
+        left: 48px;
+        top: 400px;
+        width: 984px;
+        height: 1000px;
+        border-radius: 40px;
+        background: var(--ui-surface);
+        color: var(--ui-ink);
+        overflow: hidden;
+        box-shadow:
+          0 48px 120px rgba(0, 0, 0, 0.55),
+          0 0 0 2px rgba(255, 255, 255, 0.08);
+      }
+      .topbar {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 984px;
+        height: 96px;
+        padding: 0 32px;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        border-bottom: 2px solid var(--ui-border);
+        background: var(--ui-card);
+      }
+      .logo-mark {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        background: var(--accent-deep);
+        position: relative;
+        flex: 0 0 auto;
+      }
+      .logo-mark::before,
+      .logo-mark::after {
+        content: "";
+        position: absolute;
+        background: #fff;
+        border-radius: 2px;
+        left: 50%;
+        top: 50%;
+      }
+      .logo-mark::before {
+        width: 22px;
+        height: 5px;
+        margin: -2.5px 0 0 -11px;
+      }
+      .logo-mark::after {
+        width: 5px;
+        height: 22px;
+        margin: -11px 0 0 -2.5px;
+      }
+      .topbar-title {
+        font-size: 28px;
+        font-weight: 800;
+        color: var(--ui-ink);
+        white-space: nowrap;
+        flex: 1 1 auto;
+      }
+      .btn-primary {
+        font-size: 22px;
+        font-weight: 700;
+        color: #fff;
+        background: var(--accent-deep);
+        padding: 14px 24px;
+        border-radius: 999px;
+        white-space: nowrap;
+      }
+
+      /* chips */
+      .chip {
+        display: inline-block;
+        font-size: 20px;
+        font-weight: 800;
+        line-height: 1;
+        padding: 9px 14px;
+        border-radius: 999px;
+        white-space: nowrap;
+      }
+      .chip.blue { background: var(--chip-blue-bg); color: var(--chip-blue-fg); }
+      .chip.amber { background: var(--chip-amber-bg); color: var(--chip-amber-fg); }
+      .chip.teal { background: var(--chip-teal-bg); color: var(--chip-teal-fg); }
+      .chip.grey { background: var(--chip-grey-bg); color: var(--chip-grey-fg); }
+      .chip.green { background: var(--chip-green-bg); color: var(--chip-green-fg); }
+
+      /* ---------- CRM board ---------- */
+      .board {
+        position: absolute;
+        left: 0;
+        top: 128px;
+        width: 984px;
+        height: 720px;
+      }
+      .col {
+        position: absolute;
+        top: 0;
+        width: 296px;
+        height: 720px;
+      }
+      .col-head {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 296px;
+        height: 56px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 6px;
+      }
+      .dot {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        flex: 0 0 auto;
+      }
+      .col-name {
+        font-size: 24px;
+        font-weight: 800;
+        color: var(--ui-ink);
+        white-space: nowrap;
+        flex: 1 1 auto;
+      }
+      .count {
+        font-family: var(--mono);
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--ui-ink);
+        background: var(--ui-soft);
+        padding: 5px 12px;
+        border-radius: 8px;
+      }
+      .card {
+        position: absolute;
+        left: 0;
+        width: 296px;
+        height: 128px;
+        padding: 16px 20px;
+        border-radius: 18px;
+        background: var(--ui-card);
+        border: 2px solid var(--ui-border);
+        box-shadow: 0 6px 18px rgba(14, 42, 46, 0.06);
+        will-change: transform, opacity;
+      }
+      .card .name {
+        font-size: 25px;
+        font-weight: 800;
+        color: var(--ui-ink);
+        white-space: nowrap;
+        line-height: 1.1;
+      }
+      .card .proc {
+        margin-top: 5px;
+        font-size: 20px;
+        font-weight: 500;
+        color: var(--ui-muted);
+        white-space: nowrap;
+        line-height: 1.15;
+      }
+      .card .row {
+        margin-top: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        font-family: var(--mono);
+        white-space: nowrap;
+      }
+      .card .val {
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--ui-ink);
+      }
+      .card .time {
+        font-size: 18px;
+        font-weight: 400;
+        color: var(--ui-muted);
+      }
+      .card.hero-card {
+        border-color: var(--stage-contact);
+      }
+      .card.ghost {
+        position: absolute;
+        left: 344px;
+        top: 64px;
+        opacity: 0;
+        visibility: hidden;
+        border-color: var(--stage-sched);
+        box-shadow: 0 30px 60px rgba(14, 42, 46, 0.32);
+        pointer-events: none;
+        z-index: 5;
+      }
+      .slot-placeholder {
+        position: absolute;
+        left: 344px;
+        top: 64px;
+        width: 296px;
+        height: 128px;
+        border-radius: 18px;
+        border: 3px dashed rgba(86, 116, 114, 0.45);
+        background: rgba(233, 241, 239, 0.6);
+        opacity: 0;
+        visibility: hidden;
+      }
+      .card.placed {
+        opacity: 0;
+        border-color: var(--stage-sched);
+      }
+      .toast {
+        position: absolute;
+        left: 32px;
+        top: 872px;
+        width: 920px;
+        height: 96px;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 0 24px;
+        border-radius: 22px;
+        background: var(--ui-card);
+        border: 2px solid var(--ui-border);
+        box-shadow: 0 16px 40px rgba(14, 42, 46, 0.14);
+        opacity: 0;
+      }
+      .toast .ico {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: var(--accent-deep);
+        color: #fff;
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+      }
+      .toast .ico svg {
+        width: 28px;
+        height: 28px;
+      }
+      .toast .t1 {
+        font-size: 24px;
+        font-weight: 800;
+        color: var(--ui-ink);
+        white-space: nowrap;
+        line-height: 1.15;
+      }
+      .toast .t2 {
+        font-size: 20px;
+        font-weight: 500;
+        color: var(--ui-muted);
+        white-space: nowrap;
+        line-height: 1.15;
+        margin-top: 4px;
+      }
+
+      /* ---------- patient page ---------- */
+      .pt-header {
+        position: absolute;
+        left: 32px;
+        top: 32px;
+        width: 920px;
+        height: 128px;
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        opacity: 0;
+      }
+      .avatar {
+        width: 96px;
+        height: 96px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--accent-deep), var(--accent-mid));
+        color: #fff;
+        font-size: 34px;
+        font-weight: 800;
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+      }
+      .pt-name {
+        font-size: 38px;
+        font-weight: 900;
+        letter-spacing: -0.02em;
+        color: var(--ui-ink);
+        white-space: nowrap;
+        line-height: 1.1;
+      }
+      .pt-sub {
+        margin-top: 8px;
+        font-family: var(--mono);
+        font-size: 21px;
+        color: var(--ui-muted);
+        white-space: nowrap;
+      }
+      .pt-status {
+        margin-left: auto;
+        font-size: 22px;
+        padding: 12px 18px;
+      }
+      .pt-tags {
+        position: absolute;
+        left: 32px;
+        top: 184px;
+        display: flex;
+        gap: 12px;
+      }
+      .pt-tags .chip {
+        font-size: 22px;
+        padding: 12px 18px;
+        opacity: 0;
+        will-change: transform;
+      }
+      .kpi {
+        position: absolute;
+        top: 260px;
+        width: 292px;
+        height: 124px;
+        padding: 20px 24px;
+        border-radius: 22px;
+        background: var(--ui-card);
+        border: 2px solid var(--ui-border);
+        opacity: 0;
+        will-change: transform;
+      }
+      .kpi .num {
+        font-size: 40px;
+        font-weight: 900;
+        letter-spacing: -0.02em;
+        color: var(--ui-ink);
+        white-space: nowrap;
+        line-height: 1;
+      }
+      .kpi .lbl {
+        margin-top: 12px;
+        font-family: var(--mono);
+        font-size: 19px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ui-muted);
+        white-space: nowrap;
+      }
+      .section {
+        position: absolute;
+        left: 32px;
+        top: 416px;
+        opacity: 0;
+        font-family: var(--mono);
+        font-size: 19px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--ui-muted);
+        white-space: nowrap;
+      }
+      .tl-line {
+        position: absolute;
+        left: 51px;
+        top: 470px;
+        width: 4px;
+        height: 292px;
+        border-radius: 2px;
+        background: var(--ui-border);
+        transform-origin: 50% 0%;
+      }
+      .tl-row {
+        position: absolute;
+        left: 32px;
+        width: 920px;
+        height: 92px;
+        padding: 14px 20px 14px 68px;
+        border-radius: 20px;
+        opacity: 0;
+        will-change: transform;
+      }
+      .tl-row.hot {
+        background: var(--chip-teal-bg);
+      }
+      .tl-row .tdot {
+        position: absolute;
+        left: 12px;
+        top: 32px;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--ui-ink);
+        box-shadow: 0 0 0 4px var(--ui-surface);
+      }
+      .tl-row.hot .tdot {
+        background: var(--accent-deep);
+        box-shadow: 0 0 0 4px var(--chip-teal-bg);
+      }
+      .tl-row .t1 {
+        font-size: 25px;
+        font-weight: 800;
+        color: var(--ui-ink);
+        white-space: nowrap;
+        line-height: 1.15;
+      }
+      .tl-row .t2 {
+        margin-top: 6px;
+        font-family: var(--mono);
+        font-size: 20px;
+        color: var(--ui-muted);
+        white-space: nowrap;
+      }
+      .tl-row.hot .t2 {
+        color: var(--chip-teal-fg);
+        font-weight: 700;
+      }
+      .actions {
+        position: absolute;
+        left: 32px;
+        top: 884px;
+        width: 920px;
+        height: 84px;
+        display: flex;
+        gap: 24px;
+        opacity: 0;
+        will-change: transform;
+      }
+      .btn-outline {
+        flex: 0 0 440px;
+        height: 84px;
+        border-radius: 22px;
+        border: 3px solid var(--ui-ink);
+        color: var(--ui-ink);
+        font-size: 26px;
+        font-weight: 800;
+        display: grid;
+        place-items: center;
+        white-space: nowrap;
+      }
+      .btn-wa {
+        flex: 0 0 456px;
+        height: 84px;
+        border-radius: 22px;
+        background: var(--wa-btn);
+        color: var(--wa-btn-ink);
+        font-size: 26px;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        white-space: nowrap;
+        will-change: transform;
+      }
+      .btn-wa svg {
+        width: 34px;
+        height: 34px;
+      }
+      .ripple {
+        position: absolute;
+        left: 724px;
+        top: 926px;
+        width: 120px;
+        height: 120px;
+        margin: -60px 0 0 -60px;
+        border-radius: 50%;
+        border: 4px solid rgba(37, 211, 102, 0.95);
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      /* ---------- WhatsApp chat ---------- */
+      .wa-panel {
+        background: var(--wa-bg);
+      }
+      .wa-bar {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 984px;
+        height: 100px;
+        background: var(--wa-bar);
+        color: #fff;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 0 28px;
+      }
+      .wa-bar svg.back {
+        width: 30px;
+        height: 30px;
+        flex: 0 0 auto;
+      }
+      .wa-bar .avatar {
+        width: 60px;
+        height: 60px;
+        font-size: 22px;
+        background: rgba(255, 255, 255, 0.22);
+      }
+      .wa-name {
+        font-size: 26px;
+        font-weight: 800;
+        white-space: nowrap;
+        line-height: 1.1;
+      }
+      .wa-online {
+        font-size: 20px;
+        font-weight: 700;
+        white-space: nowrap;
+        margin-top: 2px;
+      }
+      .wa-crm {
+        margin-left: auto;
+        font-family: var(--mono);
+        font-size: 19px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: rgba(0, 0, 0, 0.26);
+        color: #fff;
+        white-space: nowrap;
+      }
+      .wa-body {
+        position: absolute;
+        left: 0;
+        top: 100px;
+        width: 984px;
+        height: 900px;
+        background-image: radial-gradient(rgba(17, 27, 33, 0.07) 1.5px, transparent 1.6px);
+        background-size: 26px 26px;
+      }
+      .wa-date {
+        position: absolute;
+        left: 50%;
+        top: 28px;
+        margin-left: -60px;
+        width: 120px;
+        text-align: center;
+        font-family: var(--mono);
+        font-size: 19px;
+        font-weight: 700;
+        color: #54656f;
+        background: rgba(255, 255, 255, 0.9);
+        padding: 9px 0;
+        border-radius: 10px;
+        opacity: 0;
+        will-change: transform;
+      }
+      .wa-auto {
+        position: absolute;
+        left: 50%;
+        top: 84px;
+        margin-left: -250px;
+        width: 500px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        font-family: var(--mono);
+        font-size: 19px;
+        font-weight: 700;
+        color: #fff;
+        background: var(--accent-deep);
+        padding: 11px 0;
+        border-radius: 999px;
+        white-space: nowrap;
+        opacity: 0;
+        will-change: transform;
+      }
+      .wa-auto svg {
+        width: 20px;
+        height: 20px;
+      }
+      .bubble {
+        position: absolute;
+        max-width: 720px;
+        padding: 18px 22px 14px;
+        border-radius: 22px;
+        font-size: 27px;
+        font-weight: 500;
+        line-height: 1.35;
+        color: var(--wa-ink);
+        box-shadow: 0 2px 4px rgba(17, 27, 33, 0.12);
+        opacity: 0;
+        will-change: transform;
+      }
+      .bubble.out {
+        right: 32px;
+        top: 150px;
+        background: var(--wa-out);
+        border-bottom-right-radius: 6px;
+        transform-origin: 100% 100%;
+      }
+      .bubble.in {
+        left: 32px;
+        top: 352px;
+        background: #fff;
+        border-bottom-left-radius: 6px;
+        transform-origin: 0% 100%;
+      }
+      .bubble .meta {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 8px;
+        margin-top: 8px;
+        font-family: var(--mono);
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--wa-time);
+        white-space: nowrap;
+      }
+      .bubble .ticks {
+        width: 30px;
+        height: 20px;
+        color: var(--wa-grey);
+      }
+      .typing {
+        position: absolute;
+        left: 32px;
+        top: 352px;
+        width: 128px;
+        height: 76px;
+        border-radius: 22px;
+        border-bottom-left-radius: 6px;
+        background: #fff;
+        box-shadow: 0 2px 4px rgba(17, 27, 33, 0.12);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        opacity: 0;
+        transform-origin: 0% 100%;
+      }
+      .typing i {
+        display: block;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #8696a0;
+        will-change: transform;
+      }
+      .wa-status {
+        position: absolute;
+        left: 32px;
+        top: 600px;
+        width: 920px;
+        height: 100px;
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        padding: 0 26px;
+        border-radius: 24px;
+        background: var(--accent-deep);
+        color: #fff;
+        box-shadow: 0 18px 44px rgba(11, 107, 91, 0.35);
+        opacity: 0;
+        will-change: transform;
+      }
+      .wa-status .ico {
+        width: 52px;
+        height: 52px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.18);
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+      }
+      .wa-status .ico svg {
+        width: 30px;
+        height: 30px;
+      }
+      .wa-status .s1 {
+        font-size: 25px;
+        font-weight: 800;
+        white-space: nowrap;
+        line-height: 1.15;
+      }
+      .wa-status .s2 {
+        margin-top: 4px;
+        font-size: 20px;
+        font-weight: 700;
+        white-space: nowrap;
+        line-height: 1.15;
+      }
+      .wa-quick {
+        position: absolute;
+        left: 32px;
+        top: 728px;
+        display: flex;
+        gap: 12px;
+      }
+      .wa-quick .chip {
+        font-size: 21px;
+        font-weight: 700;
+        padding: 14px 20px;
+        background: #fff;
+        color: var(--wa-ink);
+        box-shadow: 0 2px 4px rgba(17, 27, 33, 0.12);
+      }
+      .wa-input {
+        position: absolute;
+        left: 32px;
+        top: 808px;
+        width: 920px;
+        height: 68px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+      .wa-field {
+        flex: 1 1 auto;
+        height: 68px;
+        border-radius: 999px;
+        background: #fff;
+        display: flex;
+        align-items: center;
+        padding: 0 28px;
+        font-size: 24px;
+        font-weight: 500;
+        color: var(--wa-grey);
+        white-space: nowrap;
+      }
+      .wa-send {
+        width: 68px;
+        height: 68px;
+        border-radius: 50%;
+        background: var(--wa-bar);
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+      }
+      .wa-send svg {
+        width: 30px;
+        height: 30px;
+      }
+
+      /* ---------- outro ---------- */
+      .outro-kicker {
+        position: absolute;
+        left: 0;
+        width: 1080px;
+        top: 690px;
+        text-align: center;
+      }
+      .outro-kicker::before {
+        display: none;
+      }
+      .outro-title {
+        position: absolute;
+        left: 72px;
+        width: 936px;
+        top: 740px;
+        text-align: center;
+        font-size: 96px;
+        font-weight: 900;
+        line-height: 1.02;
+        letter-spacing: -0.03em;
+        color: var(--fg);
+      }
+      .outro-title .line {
+        display: block;
+        white-space: nowrap;
+      }
+      .outro-chips {
+        position: absolute;
+        left: 0;
+        width: 1080px;
+        top: 990px;
+        display: flex;
+        justify-content: center;
+        gap: 16px;
+      }
+      .outro-chips .chip {
+        font-size: 26px;
+        font-weight: 800;
+        padding: 16px 26px;
+        color: var(--fg-soft);
+        border: 3px solid rgba(25, 198, 165, 0.55);
+        background: rgba(25, 198, 165, 0.08);
+        opacity: 0;
+        will-change: transform;
+      }
+      .wordmark {
+        position: absolute;
+        left: 0;
+        width: 1080px;
+        top: 1500px;
+        text-align: center;
+        font-family: var(--mono);
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: 0.3em;
+        text-transform: uppercase;
+        color: var(--muted);
+        opacity: 0;
+        will-change: transform;
+      }
+
+      /* ---------- persistent: footer, carrier, cursor ---------- */
+      #footer {
+        position: absolute;
+        left: 50%;
+        top: 1588px;
+        margin-left: -300px;
+        width: 600px;
+        height: 64px;
+        z-index: 5;
+        display: grid;
+        place-items: center;
+        border-radius: 999px;
+        border: 2px solid rgba(25, 198, 165, 0.5);
+        background: rgba(7, 20, 23, 0.6);
+        font-family: var(--mono);
+        font-size: 24px;
+        font-weight: 700;
+        color: var(--fg-soft);
+        white-space: nowrap;
+        opacity: 0;
+        will-change: transform;
+      }
+      #fly-card {
+        position: absolute;
+        left: 704px;
+        top: 592px;
+        z-index: 8;
+        opacity: 0;
+        visibility: hidden;
+        border-color: var(--stage-sched);
+        box-shadow: 0 30px 70px rgba(0, 0, 0, 0.45);
+        transform-origin: 0% 0%;
+      }
+      #cursor {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 104px;
+        height: 104px;
+        z-index: 20;
+        transform-origin: 0 0;
+        filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.35));
+        pointer-events: none;
+        will-change: transform;
+      }
+      #cursor svg {
+        display: block;
+        width: 104px;
+        height: 104px;
+        margin: -14px 0 0 -24px;
+      }
+    </style>
+  </head>
+  <body>
+    <div data-hf-id="hf-qd44" id="root" data-composition-id="main" data-start="0" data-duration="10.5" data-fps="30" data-width="1080" data-height="1920">
+      <!-- background -->
+      <div data-hf-id="hf-575x" id="bg" data-layout-ignore="true">
+        <div data-hf-id="hf-h087" class="glow glow-a" id="glow-a"></div>
+        <div data-hf-id="hf-uw5b" class="glow glow-b" id="glow-b"></div>
+        <div data-hf-id="hf-kxq8" class="grid"></div>
+        <div data-hf-id="hf-q7bi" class="vignette"></div>
+      </div>
+
+      <!-- ===== HOOK ===== -->
+      <section data-hf-id="hf-nped" id="hook" class="clip" data-start="0" data-duration="1.35" data-track-index="1">
+        <div data-hf-id="hf-c5ir" id="hook-hero" class="hero" data-layout-allow-overflow="true">
+          <div data-hf-id="hf-i8cs" id="hook-kicker" class="kicker">Sistema para clínicas</div>
+          <h1 data-hf-id="hf-wcoo" id="hook-title" class="hook-title">
+            <div data-hf-id="hf-np12" class="line"><span data-hf-id="hf-xwav" class="w" id="hw1">Nenhum</span></div>
+            <div data-hf-id="hf-sogq" class="line"><span data-hf-id="hf-fqza" class="w" id="hw2">paciente</span></div>
+            <div data-hf-id="hf-t2rr" class="line"><span data-hf-id="hf-w5k5" class="w" id="hw3">fica</span> <span data-hf-id="hf-xujo" class="w" id="hw4">pra</span></div>
+            <div data-hf-id="hf-th2s" class="line"><span data-hf-id="hf-zmsw" class="w accent" id="hw5">trás.</span></div>
+          </h1>
+          <div data-hf-id="hf-2ygw" id="hook-rule" class="rule"></div>
+        </div>
+      </section>
+
+      <!-- ===== BEAT 1 — CRM ===== -->
+      <section data-hf-id="hf-scs8" id="crm" class="clip" data-start="1.35" data-duration="3" data-track-index="2">
+        <div data-hf-id="hf-iup6" id="crm-hero" class="hero" data-layout-allow-overflow="true">
+          <div data-hf-id="hf-x0aa" class="label">
+            <div data-hf-id="hf-wv5x" class="kicker">01 · CRM</div>
+            <h2 data-hf-id="hf-zfgx" class="beat-title">Funil de pacientes</h2>
+          </div>
+
+          <div data-hf-id="hf-70u1" class="panel" id="crm-panel">
+            <div data-hf-id="hf-mndw" class="topbar">
+              <div data-hf-id="hf-visd" class="logo-mark"></div>
+              <div data-hf-id="hf-vebu" class="topbar-title">Pipeline de pacientes</div>
+              <div data-hf-id="hf-w5h8" class="btn-primary">+ Novo lead</div>
+            </div>
+
+            <div data-hf-id="hf-jnwh" class="board" id="crm-board">
+              <!-- col 1: Novo lead -->
+              <div data-hf-id="hf-kycb" class="col" id="col-new" style="left: 32px">
+                <div data-hf-id="hf-m9zl" class="col-head">
+                  <span data-hf-id="hf-ew6z" class="dot" style="background: var(--stage-new)"></span>
+                  <span data-hf-id="hf-s0k3" class="col-name">Novo lead</span>
+                  <span data-hf-id="hf-cs1w" class="count" id="count-new">4</span>
+                </div>
+                <div data-hf-id="hf-5zsv" class="card" style="top: 64px">
+                  <div data-hf-id="hf-6ydl" class="name">Carla Menezes</div>
+                  <div data-hf-id="hf-wcfi" class="proc">Harmonização facial</div>
+                  <div data-hf-id="hf-thy4" class="row"><span data-hf-id="hf-cpgw" class="val">R$ 2.400</span><span data-hf-id="hf-jg84" class="time">há 12 min</span></div>
+                </div>
+                <div data-hf-id="hf-o0yz" class="card" style="top: 206px">
+                  <div data-hf-id="hf-m2rh" class="name">Rafael Lima</div>
+                  <div data-hf-id="hf-qraf" class="proc">Avaliação</div>
+                  <div data-hf-id="hf-lt04" class="row"><span data-hf-id="hf-j5zu" class="val">Instagram</span><span data-hf-id="hf-z1jn" class="time">há 40 min</span></div>
+                </div>
+                <div data-hf-id="hf-eakw" class="card" style="top: 348px">
+                  <div data-hf-id="hf-1jd0" class="name">Bianca Rocha</div>
+                  <div data-hf-id="hf-z24h" class="proc">Limpeza de pele</div>
+                  <div data-hf-id="hf-km31" class="row"><span data-hf-id="hf-623e" class="val">R$ 280</span><span data-hf-id="hf-wqdu" class="time">há 1 h</span></div>
+                </div>
+                <div data-hf-id="hf-rfqo" class="card" style="top: 490px">
+                  <div data-hf-id="hf-nzaz" class="name">Diego Martins</div>
+                  <div data-hf-id="hf-03tp" class="proc">Preenchimento</div>
+                  <div data-hf-id="hf-l0e2" class="row"><span data-hf-id="hf-nz4p" class="val">R$ 1.800</span><span data-hf-id="hf-8zav" class="time">há 2 h</span></div>
+                </div>
+              </div>
+
+              <!-- col 2: Em contato -->
+              <div data-hf-id="hf-4hep" class="col" id="col-contact" style="left: 344px">
+                <div data-hf-id="hf-q1dx" class="col-head">
+                  <span data-hf-id="hf-2a2h" class="dot" style="background: var(--stage-contact)"></span>
+                  <span data-hf-id="hf-im4v" class="col-name">Em contato</span>
+                  <span data-hf-id="hf-ammi" class="count" id="count-contact">4</span>
+                </div>
+                <div data-hf-id="hf-gd47" class="card hero-card" id="card-hero" style="top: 64px">
+                  <div data-hf-id="hf-01xk" class="name">Mariana Souza</div>
+                  <div data-hf-id="hf-yaq2" class="proc">Botox</div>
+                  <div data-hf-id="hf-mzx7" class="row"><span data-hf-id="hf-or1n" class="val">R$ 1.200</span><span data-hf-id="hf-b6qm" class="time">há 5 min</span></div>
+                </div>
+                <div data-hf-id="hf-piii" class="card ec-shift" style="top: 206px">
+                  <div data-hf-id="hf-fyds" class="name">Pedro Alves</div>
+                  <div data-hf-id="hf-9v14" class="proc">Preenchimento labial</div>
+                  <div data-hf-id="hf-ne88" class="row"><span data-hf-id="hf-kui5" class="val">R$ 1.800</span><span data-hf-id="hf-1fso" class="time">há 30 min</span></div>
+                </div>
+                <div data-hf-id="hf-hmmh" class="card ec-shift" style="top: 348px">
+                  <div data-hf-id="hf-mqyn" class="name">Júlia Castro</div>
+                  <div data-hf-id="hf-05ct" class="proc">Retorno</div>
+                  <div data-hf-id="hf-m7b5" class="row"><span data-hf-id="hf-9w25" class="val">Consulta</span><span data-hf-id="hf-0lw7" class="time">ontem</span></div>
+                </div>
+                <div data-hf-id="hf-l5dh" class="card ec-shift" style="top: 490px">
+                  <div data-hf-id="hf-wudc" class="name">Thiago Nunes</div>
+                  <div data-hf-id="hf-8nm3" class="proc">Microagulhamento</div>
+                  <div data-hf-id="hf-mlm6" class="row"><span data-hf-id="hf-g357" class="val">R$ 650</span><span data-hf-id="hf-6ndj" class="time">ontem</span></div>
+                </div>
+              </div>
+
+              <!-- col 3: Agendado -->
+              <div data-hf-id="hf-eq40" class="col" id="col-sched" style="left: 656px">
+                <div data-hf-id="hf-r8b0" class="col-head">
+                  <span data-hf-id="hf-57s6" class="dot" style="background: var(--stage-sched)"></span>
+                  <span data-hf-id="hf-54iy" class="col-name">Agendado</span>
+                  <span data-hf-id="hf-f97z" class="count" id="count-sched">2</span>
+                </div>
+                <div data-hf-id="hf-sy00" class="card placed" id="card-placed" style="top: 64px">
+                  <div data-hf-id="hf-piyo" class="name">Mariana Souza</div>
+                  <div data-hf-id="hf-ub2m" class="proc">Botox</div>
+                  <div data-hf-id="hf-ol5b" class="row"><span data-hf-id="hf-d5dy" class="val">15/09 · 14:00</span><span data-hf-id="hf-gt0q" class="time">agora</span></div>
+                </div>
+                <div data-hf-id="hf-7plg" class="card ag-shift" style="top: 64px">
+                  <div data-hf-id="hf-ozbv" class="name">Lucas Prado</div>
+                  <div data-hf-id="hf-qlar" class="proc">Consulta</div>
+                  <div data-hf-id="hf-ozgc" class="row"><span data-hf-id="hf-zg1f" class="val">12/09 · 09:00</span><span data-hf-id="hf-2xxo" class="time">ok</span></div>
+                </div>
+                <div data-hf-id="hf-vffm" class="card ag-shift" style="top: 206px">
+                  <div data-hf-id="hf-9hqg" class="name">Ana Beatriz</div>
+                  <div data-hf-id="hf-updn" class="proc">Botox</div>
+                  <div data-hf-id="hf-oq7g" class="row"><span data-hf-id="hf-as87" class="val">12/09 · 11:30</span><span data-hf-id="hf-22qs" class="time">ok</span></div>
+                </div>
+              </div>
+
+              <!-- drag ghost (clone of the hero card, at the hero card position) -->
+              <div data-hf-id="hf-4vzg" class="card ghost" id="ghost" data-layout-allow-occlusion="true">
+                <div data-hf-id="hf-rkcs" class="name" data-layout-allow-overlap="true">Mariana Souza</div>
+                <div data-hf-id="hf-3tq4" class="proc" data-layout-allow-overlap="true">Botox</div>
+                <div data-hf-id="hf-obwf" class="row"><span data-hf-id="hf-h86h" class="val" data-layout-allow-overlap="true">R$ 1.200</span><span data-hf-id="hf-wu44" class="time" data-layout-allow-overlap="true">há 5 min</span></div>
+              </div>
+              <!-- empty slot left behind while the card is carried -->
+              <div data-hf-id="hf-v07m" class="slot-placeholder" id="slot-placeholder"></div>
+            </div>
+
+            <div data-hf-id="hf-61nf" class="toast" id="crm-toast">
+              <div data-hf-id="hf-5hk7" class="ico">
+                <svg data-hf-id="hf-cku8" viewBox="0 0 24 24" aria-hidden="true"><path data-hf-id="hf-qz4e" d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" /></svg>
+              </div>
+              <div data-hf-id="hf-yeow">
+                <div data-hf-id="hf-w6h1" class="t1">Mariana Souza movida para Agendado</div>
+                <div data-hf-id="hf-vdbu" class="t2">Confirmação enviada pelo WhatsApp</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== BEAT 2 — PÁGINA DO PACIENTE ===== -->
+      <section data-hf-id="hf-4ku8" id="patient" class="clip" data-start="4.35" data-duration="2.73" data-track-index="1">
+        <div data-hf-id="hf-cfz3" id="patient-hero" class="hero" data-layout-allow-overflow="true">
+          <div data-hf-id="hf-wwom" class="label">
+            <div data-hf-id="hf-5pxy" class="kicker">02 · Página do paciente</div>
+            <h2 data-hf-id="hf-0ngt" class="beat-title">Histórico completo</h2>
+          </div>
+
+          <div data-hf-id="hf-3fme" class="panel" id="patient-panel">
+            <div data-hf-id="hf-vjxu" class="pt-header" id="pt-header">
+              <div data-hf-id="hf-rbdf" class="avatar">MS</div>
+              <div data-hf-id="hf-y7yw">
+                <div data-hf-id="hf-ai4z" class="pt-name">Mariana Souza</div>
+                <div data-hf-id="hf-mohl" class="pt-sub">(11) 99876-5432 · desde 2023</div>
+              </div>
+              <span data-hf-id="hf-smk1" class="chip teal pt-status">Agendado</span>
+            </div>
+
+            <div data-hf-id="hf-jug2" class="pt-tags" id="pt-tags">
+              <span data-hf-id="hf-zdhr" class="chip teal">Botox</span>
+              <span data-hf-id="hf-usni" class="chip amber">Retorno 30d</span>
+              <span data-hf-id="hf-tdh8" class="chip blue">VIP</span>
+              <span data-hf-id="hf-8qxz" class="chip grey">Indicação</span>
+            </div>
+
+            <div data-hf-id="hf-gqw0" class="kpi" style="left: 32px"><div data-hf-id="hf-tn5f" class="num">12</div><div data-hf-id="hf-cpwe" class="lbl">consultas</div></div>
+            <div data-hf-id="hf-x4xw" class="kpi" style="left: 346px"><div data-hf-id="hf-ifxz" class="num">R$ 8,4k</div><div data-hf-id="hf-t9ng" class="lbl">investidos</div></div>
+            <div data-hf-id="hf-fffx" class="kpi" style="left: 660px"><div data-hf-id="hf-zwe4" class="num">12/08</div><div data-hf-id="hf-cl35" class="lbl">última visita</div></div>
+
+            <div data-hf-id="hf-twgh" class="section" id="pt-section">Histórico</div>
+            <div data-hf-id="hf-zyjs" class="tl-line" id="tl-line"></div>
+            <div data-hf-id="hf-l98d" class="tl-row" style="top: 456px">
+              <span data-hf-id="hf-f524" class="tdot"></span>
+              <div data-hf-id="hf-bl7z" class="t1">Consulta · Botox full face</div>
+              <div data-hf-id="hf-k8r5" class="t2">12/08 · Dra. Camila</div>
+            </div>
+            <div data-hf-id="hf-l4rf" class="tl-row" style="top: 560px">
+              <span data-hf-id="hf-2nv8" class="tdot"></span>
+              <div data-hf-id="hf-hpgm" class="t1">Pagamento · R$ 1.200 via Pix</div>
+              <div data-hf-id="hf-7rjw" class="t2">12/08 · quitado</div>
+            </div>
+            <div data-hf-id="hf-yle3" class="tl-row hot" style="top: 664px">
+              <span data-hf-id="hf-1gy5" class="tdot"></span>
+              <div data-hf-id="hf-p8l8" class="t1">Próxima consulta</div>
+              <div data-hf-id="hf-n0zu" class="t2">15/09 · 14:00 · retorno</div>
+            </div>
+
+            <div data-hf-id="hf-i7sx" class="actions" id="pt-actions">
+              <div data-hf-id="hf-gofd" class="btn-outline">Agendar</div>
+              <div data-hf-id="hf-45cu" class="btn-wa" id="btn-wa">
+                <svg data-hf-id="hf-0whk" viewBox="0 0 24 24" aria-hidden="true">
+                  <path data-hf-id="hf-cyxn" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+                  <path data-hf-id="hf-rakb" d="M8.5 8.2c.2-.5.5-.5.8-.5h.6c.2 0 .4.1.5.4l.7 1.7c.1.2 0 .4-.1.6l-.5.6c.6 1.2 1.6 2.2 2.8 2.8l.6-.5c.2-.2.4-.2.6-.1l1.7.7c.3.1.4.3.4.5v.6c0 .3-.1.6-.5.8-.6.4-1.5.6-2.6.2-1.5-.6-3.5-2.4-4.3-4-.6-1.2-.4-2.2.3-2.8z" fill="currentColor" />
+                </svg>
+                <span data-hf-id="hf-6k6r">WhatsApp</span>
+              </div>
+            </div>
+            <div data-hf-id="hf-2vsv" class="ripple" id="ripple" data-layout-ignore="true"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== BEAT 3 — WHATSAPP ===== -->
+      <section data-hf-id="hf-iuhn" id="chat" class="clip" data-start="7.08" data-duration="2.37" data-track-index="2">
+        <div data-hf-id="hf-6njq" id="chat-hero" class="hero" data-layout-allow-overflow="true">
+          <div data-hf-id="hf-xazn" class="label">
+            <div data-hf-id="hf-vad3" class="kicker">03 · WhatsApp</div>
+            <h2 data-hf-id="hf-v4mr" class="beat-title">Conversas no WhatsApp</h2>
+          </div>
+
+          <div data-hf-id="hf-8qcq" class="panel wa-panel" id="chat-panel">
+            <div data-hf-id="hf-itto" class="wa-bar">
+              <svg data-hf-id="hf-9rsq" class="back" viewBox="0 0 24 24" aria-hidden="true"><path data-hf-id="hf-jg5o" d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
+              <div data-hf-id="hf-v5wz" class="avatar">MS</div>
+              <div data-hf-id="hf-x11t">
+                <div data-hf-id="hf-y0ur" class="wa-name">Mariana Souza</div>
+                <div data-hf-id="hf-fg5r" class="wa-online">online</div>
+              </div>
+              <div data-hf-id="hf-rn2p" class="wa-crm">VIA CRM</div>
+            </div>
+
+            <div data-hf-id="hf-pfux" class="wa-body">
+              <div data-hf-id="hf-qzck" class="wa-date" id="wa-date">HOJE</div>
+              <div data-hf-id="hf-nw4y" class="wa-auto" id="wa-auto">
+                <svg data-hf-id="hf-zpkh" viewBox="0 0 24 24" aria-hidden="true"><path data-hf-id="hf-spre" d="M13 2L4 14h7l-1 8 9-12h-7z" fill="currentColor" /></svg>
+                <span data-hf-id="hf-wzwy">Lembrete automático · enviado pelo CRM</span>
+              </div>
+
+              <div data-hf-id="hf-fmqv" class="bubble out" id="msg-out">
+                Oi, Mariana! Passando para confirmar sua consulta de amanhã às 14h com a Dra. Camila. Tudo certo?
+                <div data-hf-id="hf-puvz" class="meta">
+                  <span data-hf-id="hf-sznw">14:02</span>
+                  <svg data-hf-id="hf-4e3k" class="ticks" id="ticks" viewBox="0 0 30 20" aria-hidden="true">
+                    <path data-hf-id="hf-ivqm" d="M2 11l4.5 4.5L15 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" />
+                    <path data-hf-id="hf-m42a" d="M12 11l4.5 4.5L25 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </div>
+              </div>
+
+              <div data-hf-id="hf-0fee" class="typing" id="typing"><i data-hf-id="hf-wt6k"></i><i data-hf-id="hf-zeb8"></i><i data-hf-id="hf-y7e5"></i></div>
+
+              <div data-hf-id="hf-c5lz" class="bubble in" id="msg-in">
+                Confirmado! Até amanhã
+                <div data-hf-id="hf-zjfj" class="meta"><span data-hf-id="hf-slcv">14:03</span></div>
+              </div>
+
+              <div data-hf-id="hf-onfc" class="wa-status" id="wa-status">
+                <div data-hf-id="hf-xvbb" class="ico">
+                  <svg data-hf-id="hf-03vi" viewBox="0 0 24 24" aria-hidden="true"><path data-hf-id="hf-z2aa" d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                </div>
+                <div data-hf-id="hf-xfcu">
+                  <div data-hf-id="hf-67s5" class="s1">Consulta confirmada</div>
+                  <div data-hf-id="hf-48iz" class="s2">Status atualizado no CRM automaticamente</div>
+                </div>
+              </div>
+
+              <div data-hf-id="hf-tluq" class="wa-quick">
+                <span data-hf-id="hf-jd9i" class="chip">Confirmar</span>
+                <span data-hf-id="hf-82sw" class="chip">Remarcar</span>
+                <span data-hf-id="hf-xewx" class="chip">Enviar endereço</span>
+              </div>
+              <div data-hf-id="hf-k5bf" class="wa-input">
+                <div data-hf-id="hf-lcr4" class="wa-field">Mensagem</div>
+                <div data-hf-id="hf-r09z" class="wa-send">
+                  <svg data-hf-id="hf-ywyf" viewBox="0 0 24 24" aria-hidden="true"><path data-hf-id="hf-6zf6" d="M3 11.5l18-8.5-8.5 18-2-7.5z" fill="#fff" /></svg>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== OUTRO ===== -->
+      <section data-hf-id="hf-czuu" id="outro" class="clip" data-start="9.45" data-duration="1.05" data-track-index="1">
+        <div data-hf-id="hf-g0lt" id="outro-hero" class="hero" data-layout-allow-overflow="true">
+          <div data-hf-id="hf-oncy" class="kicker outro-kicker">Sistema para clínicas</div>
+          <h2 data-hf-id="hf-ipxx" class="outro-title" id="outro-title">
+            <span data-hf-id="hf-8mtd" class="line">Tudo em</span>
+            <span data-hf-id="hf-al1o" class="line">um só lugar.</span>
+          </h2>
+          <div data-hf-id="hf-f8x4" class="outro-chips" id="outro-chips">
+            <span data-hf-id="hf-nx5x" class="chip">CRM</span>
+            <span data-hf-id="hf-3teh" class="chip">Página do paciente</span>
+            <span data-hf-id="hf-vfuh" class="chip">WhatsApp</span>
+          </div>
+          <div data-hf-id="hf-zx1k" class="wordmark" id="wordmark">Vitamina Publicitária</div>
+        </div>
+      </section>
+
+      <!-- persistent layers -->
+      <div data-hf-id="hf-w3fc" id="footer">vitaminapublicitaria.com.br/clinicas</div>
+
+      <div data-hf-id="hf-xvly" id="fly-card" class="card" data-layout-allow-occlusion="true">
+        <div data-hf-id="hf-tcro" class="name" data-layout-allow-overlap="true">Mariana Souza</div>
+        <div data-hf-id="hf-iw1g" class="proc" data-layout-allow-overlap="true">Botox</div>
+        <div data-hf-id="hf-nxle" class="row"><span data-hf-id="hf-0q14" class="val" data-layout-allow-overlap="true">15/09 · 14:00</span><span data-hf-id="hf-e6vw" class="time" data-layout-allow-overlap="true">agora</span></div>
+      </div>
+
+      <div data-hf-id="hf-2182" id="cursor" data-layout-ignore="true">
+        <svg data-hf-id="hf-zb9g" viewBox="0 0 24 24" aria-hidden="true">
+          <path data-hf-id="hf-o6cg" d="M5.5 3.2 L5.5 17.6 L9.1 14.2 L11.8 20.2 L14.5 19 L11.9 13.2 L16.9 13.2 Z" fill="#1c1c1c" stroke="#ffffff" stroke-width="1.4" stroke-linejoin="round" />
+        </svg>
+      </div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+
+      // ---------- clock (seconds) ----------
+      const CUT_A = 1.35; // hook → CRM
+      const CUT_B = 4.35; // CRM → paciente
+      const CUT_C = 7.08; // paciente → WhatsApp (click-ignited)
+      const CUT_D = 9.45; // WhatsApp → outro (elevation)
+      const END = 10.5;
+      const F = 1 / 30;
+
+      // ---------- layout constants (frame px) — must match the CSS ----------
+      const CARD_PITCH = 142;
+      const HERO_TIP = { x: 436, y: 652 }; // cursor tip on the "Mariana Souza" card
+      const DRAG_DX = 312; // Em contato → Agendado column
+      const WA_TIP = { x: 772, y: 1326 }; // cursor tip on the WhatsApp button
+      const OFF_Y = 1990; // off-screen below the frame
+
+      // lazy:false — GSAP's lazy first render defers value writes to the next tick, which a
+      // seek-and-screenshot renderer never gets to before capturing the frame (1-frame pops at cuts).
+      const tl = gsap.timeline({ paused: true, defaults: { lazy: false } });
+
+      // fromTo that never renders early (safe for later-scene elements under seek)
+      const ft = (target, from, to, at) => tl.fromTo(target, from, { ...to, immediateRender: false }, at);
+
+      // cut-the-curve seam halves (partial travel ±230px, mirrored power4 eases)
+      // The seam lives on the inner .hero wrapper (never on the clip element itself):
+      // motion + blur in one tween, the fade in its own tween, and a hard kill at the cut.
+      function exitCurve(hero, cut, axis) {
+        tl.to(hero, { [axis]: -230, filter: "blur(8px)", duration: 0.33, ease: "power4.in" }, cut - 0.33);
+        tl.to(hero, { opacity: 0, duration: 0.31, ease: "power2.in" }, cut - 0.31);
+        tl.set(hero, { opacity: 0 }, cut);
+      }
+      function enterCurve(hero, cut, axis) {
+        ft(hero, { [axis]: 230, filter: "blur(8px)", opacity: 0.35 }, { [axis]: 0, filter: "blur(0px)", opacity: 1, duration: 0.42, ease: "power4.out" }, cut);
+      }
+
+      // ---------- base state ----------
+      // incoming heroes rest in their seam "from" pose until their entry tween owns them
+      tl.set(["#crm-hero", "#patient-hero", "#chat-hero"], { x: 230, filter: "blur(8px)", opacity: 0.35 }, 0);
+      tl.set("#outro-hero", { y: 230, filter: "blur(8px)", opacity: 0.35 }, 0);
+      tl.set("#cursor", { x: HERO_TIP.x, y: OFF_Y }, 0);
+      tl.set("#ripple", { scale: 0 }, 0);
+      tl.set("#tl-line", { scaleY: 0 }, 0);
+
+      // background current: one slow leftward pan (no idle wobble)
+      tl.fromTo("#glow-a", { x: 0 }, { x: -150, duration: END, ease: "none" }, 0);
+      tl.fromTo("#glow-b", { x: 0 }, { x: -90, duration: END, ease: "none" }, 0);
+
+      // ================= HOOK (0 → 1.35) =================
+      tl.set("#hook-kicker", { opacity: 1, y: 34 }, 0.05);
+      tl.to("#hook-kicker", { y: 0, duration: 0.2, ease: "power4.out" }, 0.05);
+
+      // waterfall entry — binary reveal, whip from below, weights vary
+      let t = 0.12;
+      tl.set("#hw1", { opacity: 1, y: 80 }, t);
+      tl.to("#hw1", { y: 0, duration: 0.2, ease: "power4.out" }, t);
+      t += 0.2 + 2 * F;
+      tl.set("#hw2", { opacity: 1, y: 50 }, t);
+      tl.to("#hw2", { y: 0, duration: 0.16, ease: "power4.out" }, t);
+      t += 0.16 - F;
+      tl.set("#hw3", { opacity: 1, y: 45 }, t);
+      tl.to("#hw3", { y: 0, duration: 0.14, ease: "power4.out" }, t);
+      t += 0.14 - F;
+      tl.set("#hw4", { opacity: 1, y: 40 }, t);
+      tl.to("#hw4", { y: 0, duration: 0.13, ease: "power4.out" }, t);
+      t += 0.13 - F;
+      tl.set("#hw5", { opacity: 1, y: 72 }, t);
+      tl.to("#hw5", { y: 0, duration: 0.18, ease: "power4.out" }, t);
+
+      ft("#hook-rule", { scaleX: 0 }, { scaleX: 1, duration: 0.45, ease: "power3.out" }, 0.78);
+
+      // seam A — hook exits left, CRM enters left
+      exitCurve("#hook-hero", CUT_A, "x");
+      enterCurve("#crm-hero", CUT_A, "x");
+      ft("#footer", { x: 230, opacity: 0 }, { x: 0, opacity: 1, duration: 0.5, ease: "power4.out" }, CUT_A + 0.06);
+
+      // ================= BEAT 1 — CRM (1.35 → 4.35) =================
+      // cursor enters from below on one vector, lands its tip on the hero card
+      ft("#cursor", { x: HERO_TIP.x, y: OFF_Y }, { x: HERO_TIP.x, y: HERO_TIP.y, duration: 0.7, ease: "power3.out" }, 1.75);
+
+      // grab: press dip on cursor + card together, source dims, ghost lifts
+      const GRAB = 2.55;
+      tl.to("#cursor", { scale: 0.84, duration: 0.1, ease: "power2.in" }, GRAB);
+      tl.to("#cursor", { scale: 1, duration: 0.22, ease: "power2.out" }, GRAB + 0.1);
+      tl.to("#card-hero", { scale: 0.96, duration: 0.1, ease: "power2.in" }, GRAB);
+      tl.set("#card-hero", { autoAlpha: 0 }, GRAB + 0.1);
+      tl.set("#slot-placeholder", { autoAlpha: 1 }, GRAB + 0.1);
+      tl.set("#ghost", { autoAlpha: 1 }, GRAB + 0.1);
+      ft("#ghost", { scale: 0.96 }, { scale: 1.04, duration: 0.18, ease: "power2.out" }, GRAB + 0.1);
+
+      // travel: ghost and cursor in lockstep (same position, duration, ease)
+      const TRAVEL = 2.85;
+      const TRAVEL_DUR = 0.8;
+      ft("#ghost", { x: 0 }, { x: DRAG_DX, duration: TRAVEL_DUR, ease: "power2.inOut" }, TRAVEL);
+      ft("#cursor", { x: HERO_TIP.x, y: HERO_TIP.y }, { x: HERO_TIP.x + DRAG_DX, y: HERO_TIP.y, duration: TRAVEL_DUR, ease: "power2.inOut" }, TRAVEL);
+
+      // neighbours make room as the ghost crosses into the column
+      ft(".ag-shift", { y: 0 }, { y: CARD_PITCH, duration: 0.3, ease: "power3.out" }, 3.12);
+
+      // drop = state commit
+      const DROP = TRAVEL + TRAVEL_DUR; // 3.65
+      tl.set("#ghost", { autoAlpha: 0 }, DROP);
+      tl.set("#slot-placeholder", { autoAlpha: 0 }, DROP);
+      ft("#card-placed", { opacity: 0, scale: 0.92 }, { opacity: 1, scale: 1, duration: 0.26, ease: "power3.out" }, DROP);
+      ft(".ec-shift", { y: 0 }, { y: -CARD_PITCH, duration: 0.34, ease: "power3.out" }, DROP);
+      tl.set("#count-contact", { innerText: 3 }, DROP);
+      tl.set("#count-sched", { innerText: 3 }, DROP);
+      tl.to("#cursor", { scale: 0.9, duration: 0.08, ease: "power2.in" }, DROP);
+      tl.to("#cursor", { scale: 1, duration: 0.2, ease: "power2.out" }, DROP + 0.08);
+
+      // toast (stillness before the seam)
+      ft("#crm-toast", { opacity: 0, y: 26, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.36, ease: "power3.out" }, 3.85);
+
+      // cursor leaves the frame physically (down), before the cut
+      ft("#cursor", { x: HERO_TIP.x + DRAG_DX, y: HERO_TIP.y }, { x: HERO_TIP.x + DRAG_DX + 40, y: OFF_Y, duration: 0.55, ease: "power2.in" }, 3.78);
+
+      // seam B — CRM exits left, patient page enters left; the placed card is the carrier
+      exitCurve("#crm-hero", CUT_B, "x");
+      tl.set("#card-placed", { autoAlpha: 0 }, CUT_B - 0.33);
+      tl.set("#fly-card", { autoAlpha: 1, x: 0, y: 0, scale: 1 }, CUT_B - 0.33);
+      ft("#fly-card", { x: 0, y: 0, scale: 1 }, { x: -624, y: -160, scale: 1.15, duration: 0.55, ease: "power2.inOut" }, CUT_B - 0.33);
+      tl.to("#fly-card", { autoAlpha: 0, duration: 0.12, ease: "power2.in" }, CUT_B + 0.13);
+      enterCurve("#patient-hero", CUT_B, "x");
+
+      // ================= BEAT 2 — PÁGINA DO PACIENTE (4.35 → 7.08) =================
+      // staged reveals — the frame keeps gaining information until the cursor returns
+      ft("#pt-header", { opacity: 0, scale: 0.96 }, { opacity: 1, scale: 1, duration: 0.28, ease: "power3.out" }, CUT_B + 0.1);
+      ft("#pt-tags .chip", { opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1, duration: 0.26, ease: "power3.out", stagger: 0.05 }, CUT_B + 0.3);
+      ft(".kpi", { opacity: 0, y: 26 }, { opacity: 1, y: 0, duration: 0.34, ease: "power3.out", stagger: 0.06 }, CUT_B + 0.5);
+      ft("#pt-section", { opacity: 0, x: 24 }, { opacity: 1, x: 0, duration: 0.3, ease: "power3.out" }, CUT_B + 0.7);
+      ft("#tl-line", { scaleY: 0 }, { scaleY: 1, duration: 0.5, ease: "power2.out" }, CUT_B + 0.72);
+      ft(".tl-row", { opacity: 0, x: 36 }, { opacity: 1, x: 0, duration: 0.32, ease: "power3.out", stagger: 0.16 }, CUT_B + 0.76);
+      ft("#pt-actions", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.35, ease: "power3.out" }, CUT_B + 1.3);
+
+      // cursor re-enters from below, lands on the WhatsApp button, clicks
+      ft("#cursor", { x: WA_TIP.x, y: OFF_Y }, { x: WA_TIP.x, y: WA_TIP.y, duration: 0.6, ease: "power3.out" }, 6.05);
+      const CLICK = CUT_C - 0.33; // 6.75 — the click ignites the seam on the same frame
+      tl.to("#cursor", { scale: 0.84, duration: 0.1, ease: "power2.in" }, CLICK);
+      tl.to("#cursor", { scale: 1, duration: 0.22, ease: "power2.out" }, CLICK + 0.1);
+      tl.to("#btn-wa", { scale: 0.94, duration: 0.1, ease: "power2.in" }, CLICK);
+      tl.to("#btn-wa", { scale: 1, duration: 0.22, ease: "power2.out" }, CLICK + 0.1);
+      tl.set("#ripple", { opacity: 0.9 }, CLICK);
+      ft("#ripple", { scale: 0 }, { scale: 3.6, opacity: 0, duration: 0.6, ease: "power2.out" }, CLICK);
+
+      // seam C — patient page exits left on the click frame, chat enters left
+      exitCurve("#patient-hero", CUT_C, "x");
+      ft("#cursor", { x: WA_TIP.x, y: WA_TIP.y }, { x: WA_TIP.x, y: OFF_Y, duration: 0.45, ease: "power2.in" }, CLICK + 0.15);
+      enterCurve("#chat-hero", CUT_C, "x");
+
+      // ================= BEAT 3 — WHATSAPP (7.08 → 9.45) =================
+      ft("#wa-date", { opacity: 0, scale: 0.8 }, { opacity: 1, scale: 1, duration: 0.24, ease: "power3.out" }, CUT_C + 0.34);
+      ft("#wa-auto", { opacity: 0, scale: 0.8 }, { opacity: 1, scale: 1, duration: 0.26, ease: "power3.out" }, CUT_C + 0.42);
+      ft("#msg-out", { opacity: 0, scale: 0.9, y: 14 }, { opacity: 1, scale: 1, y: 0, duration: 0.32, ease: "power3.out" }, CUT_C + 0.54);
+
+      const TYPING = CUT_C + 0.9; // 7.98
+      ft("#typing", { opacity: 0, scale: 0.85 }, { opacity: 1, scale: 1, duration: 0.24, ease: "power3.out" }, TYPING);
+      ft("#typing i", { y: 0 }, { y: -8, duration: 0.16, ease: "sine.inOut", yoyo: true, repeat: 3, stagger: 0.09 }, TYPING + 0.08);
+      tl.set("#ticks", { color: "#53bdeb" }, TYPING + 0.38); // read receipt turns blue
+
+      const REPLY = CUT_C + 1.42; // 8.5
+      tl.set("#typing", { autoAlpha: 0 }, REPLY);
+      ft("#msg-in", { opacity: 0, scale: 0.9, y: 14 }, { opacity: 1, scale: 1, y: 0, duration: 0.3, ease: "power3.out" }, REPLY);
+
+      // payoff: the reply updates the CRM
+      ft("#wa-status", { opacity: 0, y: 36 }, { opacity: 1, y: 0, duration: 0.38, ease: "power3.out" }, CUT_C + 1.82);
+
+      // seam D — elevation: chat exits UP, the closing lockup rises from below
+      exitCurve("#chat-hero", CUT_D, "y");
+      enterCurve("#outro-hero", CUT_D, "y");
+
+      // ================= OUTRO (9.45 → 10.5) =================
+      ft("#outro-chips .chip", { opacity: 0, scale: 0.7 }, { opacity: 1, scale: 1, duration: 0.3, ease: "power3.out", stagger: 0.08 }, CUT_D + 0.35);
+      ft("#wordmark", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.3, ease: "power3.out" }, CUT_D + 0.6);
+
+      tl.seek(0);
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

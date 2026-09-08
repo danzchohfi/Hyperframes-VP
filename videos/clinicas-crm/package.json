@@ -1,0 +1,11 @@
+{
+  "name": "clinicas-crm",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npx --yes hyperframes@0.8.31 preview",
+    "check": "npx --yes hyperframes@0.8.31 check",
+    "render": "npx --yes hyperframes@0.8.31 render --quality high --output renders/clinicas-crm.mp4",
+    "publish": "npx --yes hyperframes@0.8.31 publish"
+  }
+}

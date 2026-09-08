@@ -1,0 +1,21 @@
+{
+  "duration": 10.5,
+  "assertions": [
+    { "kind": "appearsBy", "selector": "#hw1", "bySec": 0.4 },
+    { "kind": "appearsBy", "selector": "#hw5", "bySec": 1.0 },
+    { "kind": "appearsBy", "selector": "#crm-panel", "bySec": 1.6 },
+    { "kind": "appearsBy", "selector": "#ghost", "bySec": 2.9 },
+    { "kind": "appearsBy", "selector": "#card-placed", "bySec": 3.95 },
+    { "kind": "appearsBy", "selector": "#crm-toast", "bySec": 4.3 },
+    { "kind": "before", "a": "#crm-panel", "b": "#patient-panel" },
+    { "kind": "appearsBy", "selector": "#pt-header", "bySec": 4.85 },
+    { "kind": "appearsBy", "selector": "#pt-actions", "bySec": 6.3 },
+    { "kind": "before", "a": "#patient-panel", "b": "#chat-panel" },
+    { "kind": "appearsBy", "selector": "#msg-out", "bySec": 8.0 },
+    { "kind": "appearsBy", "selector": "#msg-in", "bySec": 8.9 },
+    { "kind": "appearsBy", "selector": "#wa-status", "bySec": 9.35 },
+    { "kind": "before", "a": "#chat-panel", "b": "#outro-title" },
+    { "kind": "appearsBy", "selector": "#wordmark", "bySec": 10.4 },
+    { "kind": "keepsMoving", "withinSelector": "#root", "maxStaticSec": 1.5 }
+  ]
+}
