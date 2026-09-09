@@ -1,0 +1,26 @@
+{
+  "fps": 30,
+  "seams": [
+    {
+      "id": "crm→patient (fly-card carrier)",
+      "cut": 2.0,
+      "technique": "cut-the-curve LEFT + shared-element morph (#fly-card)",
+      "exit": { "selector": "#crm-hero", "axis": "x", "dir": -1 },
+      "entry": { "selector": "#patient-hero", "axis": "x", "dir": -1 }
+    },
+    {
+      "id": "patient→chat (click-ignited)",
+      "cut": 3.7,
+      "technique": "cut-the-curve LEFT",
+      "exit": { "selector": "#patient-hero", "axis": "x", "dir": -1 },
+      "entry": { "selector": "#chat-hero", "axis": "x", "dir": -1 }
+    },
+    {
+      "id": "chat→outro (elevation)",
+      "cut": 5.3,
+      "technique": "cut-the-curve UP",
+      "exit": { "selector": "#chat-hero", "axis": "y", "dir": -1 },
+      "entry": { "selector": "#outro-hero", "axis": "y", "dir": -1 }
+    }
+  ]
+}
