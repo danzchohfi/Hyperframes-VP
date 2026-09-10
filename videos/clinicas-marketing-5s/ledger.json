@@ -1,0 +1,19 @@
+{
+  "fps": 30,
+  "seams": [
+    {
+      "id": "marketing→atendimento (CTA carrier)",
+      "cut": 1.9,
+      "technique": "cut-the-curve LEFT + shared-element morph (#fly-cta: ad CTA → WhatsApp bar)",
+      "exit": { "selector": "#mkt-hero", "axis": "x", "dir": -1 },
+      "entry": { "selector": "#atd-hero", "axis": "x", "dir": -1 }
+    },
+    {
+      "id": "atendimento→operação (elevation)",
+      "cut": 3.4,
+      "technique": "cut-the-curve UP",
+      "exit": { "selector": "#atd-hero", "axis": "y", "dir": -1 },
+      "entry": { "selector": "#op-hero", "axis": "y", "dir": -1 }
+    }
+  ]
+}

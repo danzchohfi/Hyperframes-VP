@@ -1,0 +1,24 @@
+{
+  "category": "webpage",
+  "duration_s": 6,
+  "fps": 30,
+  "canvas": { "w": 1080, "h": 1920, "aspect": "9:16" },
+  "style": "Corte de 6 s do clinicas-crm: espelho da página /clinicas (off-white editorial, Instrument Serif + Inter, verde-escuro como acento); mock-ups de UI conduzidos por cursor superdimensionado; pouco texto.",
+  "palette": ["#f7f8f8", "#141414", "#4b5563", "#0f5c4a", "#deebe4", "#f0f2f1", "#e3e6e5"],
+  "font": "Instrument Serif + Inter",
+  "beats": [2.0, 3.7, 5.3],
+  "export": "mp4",
+  "asset_needs": [],
+  "note": "URL capture of vitaminapublicitaria.com.br/clinicas was blocked by the session network policy; the UI is hand-built mock UI.",
+  "content": {
+    "url": "https://vitaminapublicitaria.com.br/clinicas",
+    "capture": "blocked — mock UI",
+    "highlights": [
+      { "region": "crm-board", "label": "CRM de pacientes (drag Mariana Souza: Em contato → Agendado)" },
+      { "region": "patient-page", "label": "Página do paciente (staged reveals, click WhatsApp)" },
+      { "region": "whatsapp-chat", "label": "Conversas no WhatsApp (auto reminder → reply)" },
+      { "region": "outro", "label": "Uma operação só. + chips + URL" }
+    ]
+  },
+  "seams": "see ledger.json — current LEFT (cut-the-curve) ×2, UP reserved for the conclusion"
+}
