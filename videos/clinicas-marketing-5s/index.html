@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1080, height=1920">
+    <title>Clínicas — Marketing, atendimento, operação (5 s)</title>
+    <!-- Instrument Serif + Inter are resolved and embedded by the HyperFrames compiler (deterministic). -->
+    <script src="vendor/gsap.min.js"></script>
+    <style>
+      :root {
+        /* Brand system mirrored from vitaminapublicitaria.com.br/clinicas:
+           off-white canvas, near-black ink, one deep green accent, mint highlight pills,
+           editorial serif display + Inter UI. Swap here to retune. */
+        --canvas: #f7f8f8;
+        --ink: #141414;
+        --body: #4b5563;
+        --eyebrow: #5f6b78;
+        --line: #e3e6e5;
+        --card: #f0f2f1;
+        --white: #ffffff;
+        --green: #0f5c4a;
+        --green-deep: #0b4a3b;
+        --mint: #deebe4;
+        --mint-ink: #0f5c4a;
+
+        --ui-ink: #141414;
+        --ui-muted: #506764;
+        --ui-soft: #e6e9e8;
+
+        --wa-bar: #008069;
+        --wa-bg: #efeae2;
+        --wa-out: #d9fdd3;
+        --wa-ink: #111b21;
+        --wa-time: #4b5c64;
+        --wa-grey: #667781;
+
+        --serif: "Instrument Serif", serif;
+        --sans: "Inter", sans-serif;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 1080px;
+        height: 1920px;
+        overflow: hidden;
+        background: var(--canvas);
+        font-family: var(--sans);
+        color: var(--ink);
+        -webkit-font-smoothing: antialiased;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ---------- stage ---------- */
+      #root {
+        position: relative;
+        width: 1080px;
+        height: 1920px;
+        overflow: hidden;
+        background: var(--canvas); /* opaque stage ground */
+      }
+      .clip {
+        position: absolute;
+        inset: 0;
+        width: 1080px;
+        height: 1920px;
+        z-index: 1;
+      }
+      .hero {
+        position: absolute;
+        inset: 0;
+        will-change: transform, filter;
+      }
+
+      /* ---------- background ---------- */
+      #bg {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        overflow: hidden;
+        pointer-events: none;
+      }
+      .wash {
+        position: absolute;
+        left: -200px;
+        top: -300px;
+        width: 1300px;
+        height: 1300px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(15, 92, 74, 0.09) 0%, rgba(15, 92, 74, 0.03) 45%, transparent 68%);
+        filter: blur(60px);
+      }
+
+      /* ---------- type ---------- */
+      .eyebrow {
+        font-family: var(--sans);
+        font-weight: 600;
+        font-size: 22px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--eyebrow);
+        white-space: nowrap;
+      }
+      .serif {
+        font-family: var(--serif);
+        font-weight: 400;
+        letter-spacing: -0.025em;
+        color: var(--ink);
+      }
+      .green {
+        color: var(--green);
+      }
+
+      /* persistent header lockup (mirrors the site nav): wordmark + kicker */
+      #brand {
+        position: absolute;
+        left: 72px;
+        top: 84px;
+        z-index: 5;
+        font-family: var(--sans);
+        font-weight: 800;
+        font-size: 46px;
+        letter-spacing: -0.045em;
+        color: var(--ink);
+        white-space: nowrap;
+        opacity: 0;
+        will-change: transform;
+      }
+      #brand .dot {
+        color: var(--green);
+      }
+      #kicker {
+        position: absolute;
+        left: 72px;
+        top: 154px;
+        z-index: 5;
+        opacity: 0;
+        will-change: transform;
+      }
+
+      /* hero words — the three words are the heroes; same slot in every screen */
+      .hero-word {
+        position: absolute;
+        left: 72px;
+        top: 232px;
+        width: 936px;
+        font-size: 150px;
+        line-height: 1;
+        white-space: nowrap;
+        will-change: transform;
+      }
+      #mkt-word {
+        opacity: 0; /* first screen: waterfall opening */
+      }
+      .chips {
+        position: absolute;
+        left: 72px;
+        top: 418px;
+        display: flex;
+        gap: 12px;
+      }
+      .chip {
+        display: inline-block;
+        font-size: 25px;
+        font-weight: 600;
+        line-height: 1;
+        padding: 14px 22px;
+        border-radius: 999px;
+        white-space: nowrap;
+        background: var(--mint);
+        color: var(--mint-ink);
+      }
+      .chip.line {
+        background: var(--white);
+        color: var(--green);
+        border: 2px solid var(--line);
+      }
+      .chips .chip {
+        opacity: 0;
+        will-change: transform;
+      }
+
+      /* time pills — the /clinicas timeline copy */
+      .tpill {
+        position: absolute;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 21px;
+        font-weight: 600;
+        line-height: 1;
+        padding: 12px 18px;
+        border-radius: 999px;
+        background: var(--mint);
+        color: var(--mint-ink);
+        white-space: nowrap;
+        opacity: 0;
+        will-change: transform;
+      }
+      .tpill b {
+        font-family: var(--serif);
+        font-weight: 400;
+        font-size: 27px;
+        letter-spacing: -0.01em;
+      }
+
+      /* ---------- generic card ---------- */
+      .card {
+        position: absolute;
+        background: var(--white);
+        border: 2px solid var(--line);
+        border-radius: 24px;
+        box-shadow: 0 24px 60px rgba(20, 20, 20, 0.08);
+        overflow: hidden;
+        will-change: transform, opacity;
+      }
+      .avatar {
+        border-radius: 50%;
+        background: var(--green);
+        color: #fff;
+        font-weight: 700;
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+      }
+
+      /* ---------- social post (reel) ---------- */
+      #social {
+        left: 72px;
+        top: 540px;
+        width: 600px;
+        height: 560px;
+        z-index: 2;
+        transform: rotate(-2.5deg);
+        opacity: 0;
+      }
+      .s-head {
+        position: absolute;
+        left: 24px;
+        top: 20px;
+        width: 552px;
+        height: 52px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+      .s-head .avatar {
+        width: 48px;
+        height: 48px;
+        font-size: 18px;
+      }
+      .s-name {
+        font-size: 22px;
+        font-weight: 700;
+        color: var(--ui-ink);
+        white-space: nowrap;
+        line-height: 1.1;
+      }
+      .s-sub {
+        margin-top: 3px;
+        font-size: 18px;
+        font-weight: 400;
+        color: var(--ui-muted);
+        white-space: nowrap;
+      }
+      .s-more {
+        margin-left: auto;
+        font-size: 24px;
+        font-weight: 700;
+        color: var(--ui-muted);
+        letter-spacing: 0.1em;
+      }
+      .s-media {
+        position: absolute;
+        left: 24px;
+        top: 92px;
+        width: 552px;
+        height: 336px;
+        border-radius: 18px;
+        background: linear-gradient(135deg, #cfe3d9 0%, #6aa394 55%, #0f5c4a 100%);
+        overflow: hidden;
+      }
+      .s-media .play {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 96px;
+        height: 96px;
+        margin: -48px 0 0 -48px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.92);
+        display: grid;
+        place-items: center;
+      }
+      .s-media .play svg {
+        width: 40px;
+        height: 40px;
+        margin-left: 6px;
+      }
+      .s-tag {
+        position: absolute;
+        left: 18px;
+        top: 18px;
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #fff;
+        background: rgba(17, 27, 33, 0.72);
+        padding: 9px 14px;
+        border-radius: 999px;
+      }
+      .s-progress {
+        position: absolute;
+        left: 18px;
+        right: 18px;
+        bottom: 16px;
+        height: 6px;
+        border-radius: 3px;
+        background: rgba(255, 255, 255, 0.35);
+        overflow: hidden;
+      }
+      #reel-fill {
+        position: absolute;
+        inset: 0;
+        background: #fff;
+        transform-origin: 0% 50%;
+      }
+      .s-actions {
+        position: absolute;
+        left: 24px;
+        top: 446px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+      }
+      .s-actions svg {
+        width: 32px;
+        height: 32px;
+        color: var(--ui-ink);
+      }
+      .s-likes {
+        margin-left: 6px;
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--ui-ink);
+        white-space: nowrap;
+      }
+      #social-pill {
+        left: 24px;
+        top: 496px;
+      }
+
+      /* ---------- ad card ---------- */
+      #ad {
+        left: 440px;
+        top: 1000px;
+        width: 568px;
+        height: 480px;
+        z-index: 3;
+        opacity: 0;
+      }
+      .ad-row {
+        position: absolute;
+        left: 32px;
+        top: 30px;
+        width: 504px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .ad-eyebrow {
+        font-size: 19px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--green);
+        white-space: nowrap;
+      }
+      .ad-platforms {
+        font-size: 19px;
+        font-weight: 500;
+        color: var(--ui-muted);
+        white-space: nowrap;
+      }
+      .ad-headline {
+        position: absolute;
+        left: 32px;
+        top: 80px;
+        font-size: 36px;
+        font-weight: 800;
+        letter-spacing: -0.025em;
+        color: var(--ui-ink);
+        white-space: nowrap;
+        line-height: 1.1;
+      }
+      .ad-sub {
+        position: absolute;
+        left: 32px;
+        top: 132px;
+        font-size: 22px;
+        font-weight: 400;
+        color: var(--ui-muted);
+        white-space: nowrap;
+      }
+      .ad-stats {
+        position: absolute;
+        left: 32px;
+        top: 190px;
+        width: 504px;
+        display: flex;
+        gap: 40px;
+      }
+      .ad-stats .num {
+        font-size: 28px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        color: var(--ui-ink);
+        white-space: nowrap;
+        line-height: 1;
+      }
+      .ad-stats .lbl {
+        margin-top: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--ui-muted);
+        white-space: nowrap;
+      }
+      .cta {
+        position: absolute;
+        left: 32px;
+        top: 292px;
+        width: 380px;
+        height: 72px;
+        border-radius: 36px;
+        background: var(--green);
+        color: #fff;
+        font-size: 24px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        white-space: nowrap;
+        will-change: transform;
+      }
+      .cta svg {
+        width: 30px;
+        height: 30px;
+      }
+      #ad-pill {
+        left: 32px;
+        top: 394px;
+      }
+
+      /* ---------- WhatsApp chat ---------- */
+      #chat {
+        left: 72px;
+        top: 540px;
+        width: 936px;
+        height: 520px;
+        z-index: 2;
+        background: var(--wa-bg);
+      }
+      .wa-bar {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 936px;
+        height: 88px;
+        background: var(--wa-bar);
+        color: #fff;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 0 26px;
+      }
+      .wa-bar svg.back {
+        width: 28px;
+        height: 28px;
+        flex: 0 0 auto;
+      }
+      .wa-bar .avatar {
+        width: 54px;
+        height: 54px;
+        font-size: 20px;
+        background: rgba(255, 255, 255, 0.22);
+      }
+      .wa-name {
+        font-size: 25px;
+        font-weight: 700;
+        white-space: nowrap;
+        line-height: 1.1;
+      }
+      .wa-online {
+        font-size: 19px;
+        font-weight: 600;
+        white-space: nowrap;
+        margin-top: 2px;
+      }
+      .wa-crm {
+        margin-left: auto;
+        font-size: 18px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        padding: 9px 14px;
+        border-radius: 999px;
+        background: rgba(0, 0, 0, 0.26);
+        color: #fff;
+        white-space: nowrap;
+      }
+      .wa-body {
+        position: absolute;
+        left: 0;
+        top: 88px;
+        width: 936px;
+        height: 432px;
+        background-image: radial-gradient(rgba(17, 27, 33, 0.07) 1.5px, transparent 1.6px);
+        background-size: 26px 26px;
+      }
+      .bubble {
+        position: absolute;
+        max-width: 700px;
+        padding: 16px 20px 12px;
+        border-radius: 22px;
+        font-size: 26px;
+        font-weight: 400;
+        line-height: 1.35;
+        color: var(--wa-ink);
+        box-shadow: 0 2px 4px rgba(17, 27, 33, 0.12);
+        opacity: 0;
+        will-change: transform;
+      }
+      .bubble.in {
+        left: 24px;
+        top: 24px;
+        background: #fff;
+        border-bottom-left-radius: 6px;
+        transform-origin: 0% 100%;
+      }
+      .bubble.out {
+        right: 24px;
+        top: 176px;
+        background: var(--wa-out);
+        border-bottom-right-radius: 6px;
+        transform-origin: 100% 100%;
+      }
+      .bubble .meta {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 8px;
+        margin-top: 6px;
+        font-size: 19px;
+        font-weight: 600;
+        color: var(--wa-time);
+        white-space: nowrap;
+      }
+      .bubble .ticks {
+        width: 28px;
+        height: 19px;
+        color: #53bdeb;
+      }
+      #chat-pill {
+        left: 24px;
+        top: 340px;
+      }
+
+      /* ---------- CRM card ---------- */
+      #crm {
+        left: 72px;
+        top: 1100px;
+        width: 936px;
+        height: 300px;
+        z-index: 2;
+        background: var(--card);
+      }
+      .topbar {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 936px;
+        height: 80px;
+        padding: 0 28px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        border-bottom: 2px solid var(--line);
+      }
+      .logo-mark {
+        width: 40px;
+        height: 40px;
+        border-radius: 11px;
+        background: var(--green);
+        position: relative;
+        flex: 0 0 auto;
+      }
+      .logo-mark::before,
+      .logo-mark::after {
+        content: "";
+        position: absolute;
+        background: #fff;
+        border-radius: 2px;
+        left: 50%;
+        top: 50%;
+      }
+      .logo-mark::before {
+        width: 20px;
+        height: 5px;
+        margin: -2.5px 0 0 -10px;
+      }
+      .logo-mark::after {
+        width: 5px;
+        height: 20px;
+        margin: -10px 0 0 -2.5px;
+      }
+      .topbar-title {
+        font-size: 25px;
+        font-weight: 600;
+        color: var(--ui-ink);
+        white-space: nowrap;
+        flex: 1 1 auto;
+      }
+      .topbar .tag {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--ui-muted);
+        background: var(--ui-soft);
+        padding: 8px 14px;
+        border-radius: 999px;
+        white-space: nowrap;
+      }
+      .lead {
+        position: absolute;
+        left: 28px;
+        top: 100px;
+        height: 76px;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+      }
+      .lead .avatar {
+        width: 68px;
+        height: 68px;
+        font-size: 24px;
+      }
+      .lead-name {
+        font-size: 28px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: var(--ui-ink);
+        white-space: nowrap;
+        line-height: 1.1;
+      }
+      .lead-sub {
+        margin-top: 5px;
+        font-size: 21px;
+        font-weight: 400;
+        color: var(--ui-muted);
+        white-space: nowrap;
+      }
+      .status {
+        position: absolute;
+        right: 28px;
+        top: 116px;
+        font-size: 22px;
+        font-weight: 600;
+        line-height: 1;
+        padding: 13px 20px;
+        border-radius: 999px;
+        white-space: nowrap;
+        transform-origin: 100% 50%;
+        will-change: transform;
+      }
+      #st-new {
+        background: var(--ui-soft);
+        color: #374151;
+      }
+      #st-sched {
+        background: var(--mint);
+        color: var(--mint-ink);
+        opacity: 0;
+      }
+      .stages {
+        position: absolute;
+        left: 28px;
+        top: 212px;
+        width: 880px;
+        display: flex;
+        gap: 12px;
+      }
+      .stage {
+        flex: 1 1 0;
+      }
+      .seg {
+        height: 12px;
+        border-radius: 6px;
+        background: var(--ui-soft);
+        overflow: hidden;
+      }
+      .seg-fill {
+        width: 100%;
+        height: 100%;
+        background: var(--green);
+        transform-origin: 0% 50%;
+      }
+      .stage .lbl {
+        margin-top: 12px;
+        font-size: 18px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ui-muted);
+        white-space: nowrap;
+      }
+
+      /* ---------- closing lockup ---------- */
+      #op-title {
+        top: 820px;
+      }
+      #op-title .w {
+        display: inline-block;
+        will-change: transform;
+      }
+      #w-uma,
+      #w-so {
+        opacity: 0;
+      }
+      #op-chips {
+        top: 1010px;
+      }
+
+      /* ---------- persistent: footer, carrier ---------- */
+      #footer {
+        position: absolute;
+        left: 50%;
+        top: 1588px;
+        margin-left: -300px;
+        width: 600px;
+        height: 64px;
+        z-index: 5;
+        display: grid;
+        place-items: center;
+        border-radius: 999px;
+        border: 2px solid var(--line);
+        background: var(--white);
+        box-shadow: 0 10px 30px rgba(20, 20, 20, 0.06);
+        font-size: 24px;
+        font-weight: 600;
+        color: var(--green);
+        white-space: nowrap;
+        opacity: 0;
+        will-change: transform;
+      }
+      #fly-cta {
+        position: absolute;
+        left: 472px;
+        top: 1292px;
+        width: 380px;
+        height: 72px;
+        border-radius: 36px;
+        z-index: 8;
+        background: var(--green);
+        color: #fff;
+        font-size: 24px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        white-space: nowrap;
+        box-shadow: 0 24px 60px rgba(15, 92, 74, 0.28);
+        opacity: 0;
+        visibility: hidden;
+        overflow: hidden;
+      }
+      #fly-cta svg {
+        width: 30px;
+        height: 30px;
+        flex: 0 0 auto;
+      }
+      #fly-cta .lbl {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div data-hf-id="hf-bo11" id="root" data-composition-id="main" data-start="0" data-duration="5" data-fps="30" data-width="1080" data-height="1920">
+      <div data-hf-id="hf-575x" id="bg" data-layout-ignore="true"><div data-hf-id="hf-7h0d" class="wash"></div></div>
+
+      <!-- ===== 1 — MARKETING ===== -->
+      <section data-hf-id="hf-mo0d" id="mkt" class="clip" data-start="0" data-duration="1.9" data-track-index="1">
+        <div data-hf-id="hf-pbqa" id="mkt-hero" class="hero" data-layout-allow-overflow="true">
+          <h1 data-hf-id="hf-jhf5" class="hero-word serif" id="mkt-word">Marketing.</h1>
+          <div data-hf-id="hf-9yjv" class="chips" id="mkt-chips">
+            <span data-hf-id="hf-idkz" class="chip">Redes sociais</span>
+            <span data-hf-id="hf-aha6" class="chip">Anúncios</span>
+          </div>
+
+          <!-- reel / social post -->
+          <div data-hf-id="hf-4x5t" class="card" id="social">
+            <div data-hf-id="hf-ql4q" class="s-head">
+              <div data-hf-id="hf-gkm2" class="avatar">DC</div>
+              <div data-hf-id="hf-yeow">
+                <div data-hf-id="hf-ltp2" class="s-name">clinica.dracamila</div>
+                <div data-hf-id="hf-fir3" class="s-sub">Reels · há 2 h</div>
+              </div>
+              <div data-hf-id="hf-frxi" class="s-more">···</div>
+            </div>
+            <div data-hf-id="hf-cwlk" class="s-media">
+              <div data-hf-id="hf-kued" class="s-tag">Reels</div>
+              <div data-hf-id="hf-24ou" class="play">
+                <svg data-hf-id="hf-cku8" viewBox="0 0 24 24" aria-hidden="true"><path data-hf-id="hf-fbef" d="M7 4.5v15l12-7.5z" fill="#0f5c4a" /></svg>
+              </div>
+              <div data-hf-id="hf-9okt" class="s-progress"><div data-hf-id="hf-atmh" id="reel-fill"></div></div>
+            </div>
+            <div data-hf-id="hf-aoj9" class="s-actions">
+              <svg data-hf-id="hf-0whk" viewBox="0 0 24 24" aria-hidden="true"><path data-hf-id="hf-khiq" d="M12 20.5s-7.5-4.6-7.5-10A4 4 0 0 1 12 8a4 4 0 0 1 7.5 2.5c0 5.4-7.5 10-7.5 10z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" /></svg>
+              <svg data-hf-id="hf-zpkh" viewBox="0 0 24 24" aria-hidden="true"><path data-hf-id="hf-hlkr" d="M4 5h16v11H9l-5 4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" /></svg>
+              <svg data-hf-id="hf-03vi" viewBox="0 0 24 24" aria-hidden="true"><path data-hf-id="hf-hi48" d="M3 11.5l18-8.5-8.5 18-2-7.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" /></svg>
+              <span data-hf-id="hf-jpnp" class="s-likes">1.284 curtidas</span>
+            </div>
+            <div data-hf-id="hf-41ji" class="tpill" id="social-pill"><b data-hf-id="hf-bddf">19:40</b><span data-hf-id="hf-rn5r">Ela vê o vídeo</span></div>
+          </div>
+
+          <!-- ad card -->
+          <div data-hf-id="hf-yjof" class="card" id="ad" data-layout-allow-occlusion="true">
+            <div data-hf-id="hf-hzuk" class="ad-row">
+              <span data-hf-id="hf-kd3k" class="ad-eyebrow">Anúncio</span>
+              <span data-hf-id="hf-mtck" class="ad-platforms">Meta Ads · Google Ads</span>
+            </div>
+            <div data-hf-id="hf-f33g" class="ad-headline">Agende sua avaliação</div>
+            <div data-hf-id="hf-nfrz" class="ad-sub">Harmonização facial · Dra. Camila</div>
+            <div data-hf-id="hf-n14x" class="ad-stats">
+              <div data-hf-id="hf-y7yw"><div data-hf-id="hf-q9bi" class="num">48 mil</div><div data-hf-id="hf-8f6b" class="lbl">alcance</div></div>
+              <div data-hf-id="hf-x11t"><div data-hf-id="hf-tx7n" class="num">1.240</div><div data-hf-id="hf-t482" class="lbl">cliques</div></div>
+              <div data-hf-id="hf-xfcu"><div data-hf-id="hf-xkb7" class="num">38</div><div data-hf-id="hf-xgj1" class="lbl">leads</div></div>
+            </div>
+            <div data-hf-id="hf-e2p6" class="cta" id="ad-cta">
+              <svg data-hf-id="hf-ywyf" viewBox="0 0 24 24" aria-hidden="true">
+                <path data-hf-id="hf-cyxn" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+                <path data-hf-id="hf-rakb" d="M8.5 8.2c.2-.5.5-.5.8-.5h.6c.2 0 .4.1.5.4l.7 1.7c.1.2 0 .4-.1.6l-.5.6c.6 1.2 1.6 2.2 2.8 2.8l.6-.5c.2-.2.4-.2.6-.1l1.7.7c.3.1.4.3.4.5v.6c0 .3-.1.6-.5.8-.6.4-1.5.6-2.6.2-1.5-.6-3.5-2.4-4.3-4-.6-1.2-.4-2.2.3-2.8z" fill="currentColor" />
+              </svg>
+              <span data-hf-id="hf-uzx8">Chamar no WhatsApp</span>
+            </div>
+            <div data-hf-id="hf-y8wc" class="tpill" id="ad-pill"><b data-hf-id="hf-akrd">19:42</b><span data-hf-id="hf-w737">Chama pelo anúncio</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 2 — ATENDIMENTO ===== -->
+      <section data-hf-id="hf-xdsb" id="atd" class="clip" data-start="1.9" data-duration="1.5" data-track-index="2">
+        <div data-hf-id="hf-o1h9" id="atd-hero" class="hero" data-layout-allow-overflow="true">
+          <h1 data-hf-id="hf-i15s" class="hero-word serif" id="atd-word" data-layout-allow-overlap="true">Atendimento.</h1>
+          <div data-hf-id="hf-weby" class="chips" id="atd-chips">
+            <span data-hf-id="hf-vfuh" class="chip">WhatsApp</span>
+            <span data-hf-id="hf-nx5x" class="chip">CRM</span>
+          </div>
+
+          <!-- WhatsApp -->
+          <div data-hf-id="hf-osui" class="card" id="chat">
+            <div data-hf-id="hf-itto" class="wa-bar">
+              <svg data-hf-id="hf-9rsq" class="back" viewBox="0 0 24 24" aria-hidden="true"><path data-hf-id="hf-jg5o" d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
+              <div data-hf-id="hf-rbdf" class="avatar">MS</div>
+              <div data-hf-id="hf-w8fr">
+                <div data-hf-id="hf-y0ur" class="wa-name">Mariana Souza</div>
+                <div data-hf-id="hf-fg5r" class="wa-online">online</div>
+              </div>
+              <div data-hf-id="hf-rn2p" class="wa-crm">VIA CRM</div>
+            </div>
+            <div data-hf-id="hf-pfux" class="wa-body">
+              <div data-hf-id="hf-s397" class="bubble in" id="b-in">
+                Oi! Vi o vídeo de vocês. Quero marcar uma avaliação.
+                <div data-hf-id="hf-puvz" class="meta"><span data-hf-id="hf-vag5">19:42</span></div>
+              </div>
+              <div data-hf-id="hf-0n5i" class="bubble out" id="b-out">
+                Oi, Mariana! Quinta às 09:20 fica bom pra você?
+                <div data-hf-id="hf-zjfj" class="meta">
+                  <span data-hf-id="hf-ru0l">08:04</span>
+                  <svg data-hf-id="hf-ho1g" class="ticks" viewBox="0 0 30 20" aria-hidden="true">
+                    <path data-hf-id="hf-ivqm" d="M2 11l4.5 4.5L15 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" />
+                    <path data-hf-id="hf-m42a" d="M12 11l4.5 4.5L25 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </div>
+              </div>
+              <div data-hf-id="hf-8987" class="tpill" id="chat-pill"><b data-hf-id="hf-rbi1">08:04</b><span data-hf-id="hf-m9mk">A recepção assume</span></div>
+            </div>
+          </div>
+
+          <!-- CRM -->
+          <div data-hf-id="hf-7nf0" class="card" id="crm">
+            <div data-hf-id="hf-mndw" class="topbar">
+              <div data-hf-id="hf-visd" class="logo-mark"></div>
+              <div data-hf-id="hf-vebu" class="topbar-title">Pipeline de pacientes</div>
+              <span data-hf-id="hf-xl0r" class="tag">Hoje</span>
+            </div>
+            <div data-hf-id="hf-wnrm" class="lead">
+              <div data-hf-id="hf-v5wz" class="avatar">MS</div>
+              <div data-hf-id="hf-wmqs">
+                <div data-hf-id="hf-2yfd" class="lead-name">Mariana Souza</div>
+                <div data-hf-id="hf-a812" class="lead-sub">Avaliação · veio pelo anúncio</div>
+              </div>
+            </div>
+            <span data-hf-id="hf-pu4d" class="status" id="st-new">Novo lead</span>
+            <span data-hf-id="hf-6bgu" class="status" id="st-sched" data-layout-allow-overlap="true">Agendado · qui 09:20</span>
+            <div data-hf-id="hf-t0x1" class="stages">
+              <div data-hf-id="hf-tan6" class="stage"><div data-hf-id="hf-ta0z" class="seg"><div data-hf-id="hf-fr7r" class="seg-fill"></div></div><div data-hf-id="hf-yeks" class="lbl">Novo lead</div></div>
+              <div data-hf-id="hf-xa86" class="stage"><div data-hf-id="hf-xb43" class="seg"><div data-hf-id="hf-eds1" class="seg-fill later"></div></div><div data-hf-id="hf-4bbm" class="lbl">Em contato</div></div>
+              <div data-hf-id="hf-xoj7" class="stage"><div data-hf-id="hf-wwt2" class="seg"><div data-hf-id="hf-hxzp" class="seg-fill later"></div></div><div data-hf-id="hf-o6mj" class="lbl">Agendado</div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 3 — OPERAÇÃO ===== -->
+      <section data-hf-id="hf-58ca" id="op" class="clip" data-start="3.4" data-duration="1.6" data-track-index="1">
+        <div data-hf-id="hf-7vej" id="op-hero" class="hero" data-layout-allow-overflow="true">
+          <h1 data-hf-id="hf-ejlu" class="hero-word serif" id="op-title"><span data-hf-id="hf-3icq" class="w" id="w-uma">Uma</span> <span data-hf-id="hf-m4yk" class="w green" id="w-op">operação</span> <span data-hf-id="hf-b08w" class="w" id="w-so">só.</span></h1>
+          <div data-hf-id="hf-dpyw" class="chips" id="op-chips">
+            <span data-hf-id="hf-oyt7" class="chip line">Redes sociais</span>
+            <span data-hf-id="hf-0m7a" class="chip line">Anúncios</span>
+            <span data-hf-id="hf-gvs1" class="chip line">WhatsApp</span>
+            <span data-hf-id="hf-8ucz" class="chip line" id="opc4">CRM</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- persistent layers -->
+      <div data-hf-id="hf-e39h" id="brand">vitamina<span data-hf-id="hf-6jgg" class="dot">.</span></div>
+      <div data-hf-id="hf-1ljc" id="kicker" class="eyebrow">Marketing e atendimento para saúde</div>
+      <div data-hf-id="hf-w3fc" id="footer">vitaminapublicitaria.com.br/clinicas</div>
+
+      <!-- carrier: the ad's CTA becomes the WhatsApp bar -->
+      <div data-hf-id="hf-icrr" id="fly-cta" data-layout-allow-occlusion="true">
+        <div data-hf-id="hf-uwqw" class="lbl" data-layout-allow-overlap="true">
+          <svg data-hf-id="hf-zb9g" viewBox="0 0 24 24" aria-hidden="true">
+            <path data-hf-id="hf-pbtn" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+            <path data-hf-id="hf-nu9n" d="M8.5 8.2c.2-.5.5-.5.8-.5h.6c.2 0 .4.1.5.4l.7 1.7c.1.2 0 .4-.1.6l-.5.6c.6 1.2 1.6 2.2 2.8 2.8l.6-.5c.2-.2.4-.2.6-.1l1.7.7c.3.1.4.3.4.5v.6c0 .3-.1.6-.5.8-.6.4-1.5.6-2.6.2-1.5-.6-3.5-2.4-4.3-4-.6-1.2-.4-2.2.3-2.8z" fill="currentColor" />
+          </svg>
+          <span data-hf-id="hf-i15g">Chamar no WhatsApp</span>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+
+      // ---------- clock (seconds; every cut is frame-aligned at 30 fps) ----------
+      const CUT_B = 1.9; // Marketing → Atendimento (frame 57)
+      const CUT_C = 3.4; // Atendimento → Uma operação só. (frame 102, elevation)
+      const END = 5.0;
+
+      // lazy:false — GSAP's lazy first render defers value writes to the next tick, which a
+      // seek-and-screenshot renderer never gets to before capturing the frame (1-frame pops at cuts).
+      const tl = gsap.timeline({ paused: true, defaults: { lazy: false } });
+
+      // fromTo that never renders early (safe for later-scene elements under seek)
+      const ft = (target, from, to, at) => tl.fromTo(target, from, { ...to, immediateRender: false }, at);
+
+      // The seam lives on the inner .hero wrapper (never on the clip element itself):
+      // motion + blur in one tween, the fade in its own tween, and a hard kill at the cut.
+      function exitCurve(hero, cut, axis) {
+        tl.to(hero, { [axis]: -230, filter: "blur(8px)", duration: 0.33, ease: "power4.in" }, cut - 0.33);
+        tl.to(hero, { opacity: 0, duration: 0.31, ease: "power2.in" }, cut - 0.31);
+        tl.set(hero, { opacity: 0 }, cut);
+      }
+      function enterCurve(hero, cut, axis) {
+        ft(hero, { [axis]: 230, filter: "blur(8px)", opacity: 0.35 }, { [axis]: 0, filter: "blur(0px)", opacity: 1, duration: 0.42, ease: "power4.out" }, cut);
+      }
+
+      // ---------- base state ----------
+      // incoming heroes rest in their seam "from" pose until their entry tween owns them
+      tl.set("#atd-hero", { x: 230, filter: "blur(8px)", opacity: 0.35 }, 0);
+      tl.set("#op-hero", { y: 230, filter: "blur(8px)", opacity: 0.35 }, 0);
+      // progress fills rest at zero until their tweens own them (CSS has them full)
+      tl.set(["#reel-fill", ".seg-fill.later"], { scaleX: 0 }, 0);
+
+      // ================= 1 — MARKETING (0 → 1.9) =================
+      // waterfall opening — binary reveals, each element whips in from its own side
+      tl.set("#brand", { opacity: 1, y: -24 }, 0);
+      tl.to("#brand", { y: 0, duration: 0.24, ease: "power4.out" }, 0);
+      tl.set("#kicker", { opacity: 1, y: 30 }, 0.04);
+      tl.to("#kicker", { y: 0, duration: 0.22, ease: "power4.out" }, 0.04);
+      tl.set("#mkt-word", { opacity: 1, y: 90 }, 0.1);
+      tl.to("#mkt-word", { y: 0, duration: 0.28, ease: "power4.out" }, 0.1);
+      ft("#mkt-chips .chip", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.26, ease: "power3.out", stagger: 0.06 }, 0.22);
+      ft("#social", { opacity: 0, y: 140 }, { opacity: 1, y: 0, duration: 0.46, ease: "power4.out" }, 0.3);
+      ft("#ad", { opacity: 0, y: 160 }, { opacity: 1, y: 0, duration: 0.46, ease: "power4.out" }, 0.42);
+      tl.set("#footer", { opacity: 1, y: 40 }, 0.36);
+      tl.to("#footer", { y: 0, duration: 0.36, ease: "power4.out" }, 0.36);
+
+      // sequenced UI life: the reel plays, then the timeline pills land (she sees the video, she calls from the ad)
+      ft("#reel-fill", { scaleX: 0 }, { scaleX: 1, duration: 1.0, ease: "none" }, 0.62);
+      ft("#social-pill", { opacity: 0, scale: 0.7 }, { opacity: 1, scale: 1, duration: 0.26, ease: "back.out(1.6)" }, 0.72);
+      ft("#ad-pill", { opacity: 0, scale: 0.7 }, { opacity: 1, scale: 1, duration: 0.26, ease: "back.out(1.6)" }, 1.06);
+
+      // seam B — Marketing exits left, Atendimento enters left; the ad's CTA is the carrier
+      // (it flies up and widens into the WhatsApp bar of the incoming chat card)
+      exitCurve("#mkt-hero", CUT_B, "x");
+      tl.set("#ad-cta", { autoAlpha: 0 }, CUT_B - 0.33);
+      tl.set("#fly-cta", { autoAlpha: 1, x: 0, y: 0, width: 380, height: 72, borderRadius: 36 }, CUT_B - 0.33);
+      tl.set("#fly-cta .lbl", { opacity: 1 }, CUT_B - 0.33);
+      tl.to("#fly-cta", { x: 72 - 472, y: 540 - 1292, width: 936, height: 88, borderRadius: 24, duration: 0.55, ease: "power2.inOut" }, CUT_B - 0.33);
+      tl.to("#fly-cta .lbl", { opacity: 0, duration: 0.16, ease: "power2.in" }, CUT_B - 0.33);
+      tl.to("#fly-cta", { autoAlpha: 0, duration: 0.12, ease: "power2.in" }, CUT_B + 0.13);
+      enterCurve("#atd-hero", CUT_B, "x");
+
+      // ================= 2 — ATENDIMENTO (1.9 → 3.4) =================
+      ft("#b-in", { opacity: 0, scale: 0.9, y: 12 }, { opacity: 1, scale: 1, y: 0, duration: 0.3, ease: "power3.out" }, CUT_B + 0.22);
+      ft("#b-out", { opacity: 0, scale: 0.9, y: 12 }, { opacity: 1, scale: 1, y: 0, duration: 0.3, ease: "power3.out" }, CUT_B + 0.52);
+      ft("#chat-pill", { opacity: 0, scale: 0.7 }, { opacity: 1, scale: 1, duration: 0.26, ease: "back.out(1.6)" }, CUT_B + 0.74);
+
+      // the CRM commits the result: status flips to Agendado, the stage rail fills
+      const SCHED = CUT_B + 0.98; // 2.88
+      tl.to("#st-new", { scale: 0.6, opacity: 0, duration: 0.14, ease: "power2.in" }, SCHED);
+      ft("#st-sched", { opacity: 0, scale: 0.7 }, { opacity: 1, scale: 1, duration: 0.26, ease: "back.out(1.6)" }, SCHED + 0.06);
+      ft(".seg-fill.later", { scaleX: 0 }, { scaleX: 1, duration: 0.3, ease: "power3.out", stagger: 0.08 }, SCHED);
+
+      // seam C — elevation: Atendimento exits UP, the closing sentence rises from below
+      exitCurve("#atd-hero", CUT_C, "y");
+      enterCurve("#op-hero", CUT_C, "y");
+
+      // ================= 3 — UMA OPERAÇÃO SÓ. (3.4 → 5.0) =================
+      // "operação" rides the hero in; the sentence closes around it, then the four proofs dock as chips
+      ft("#w-uma", { opacity: 0, x: -50 }, { opacity: 1, x: 0, duration: 0.28, ease: "power4.out" }, CUT_C + 0.3);
+      ft("#w-so", { opacity: 0, x: 50 }, { opacity: 1, x: 0, duration: 0.28, ease: "power4.out" }, CUT_C + 0.4);
+      ft("#op-chips .chip", { opacity: 0, scale: 0.7 }, { opacity: 1, scale: 1, duration: 0.26, ease: "power3.out", stagger: 0.06 }, CUT_C + 0.55);
+
+      tl.seek(0);
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

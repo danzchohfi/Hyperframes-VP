@@ -1,0 +1,20 @@
+{
+  "duration": 5,
+  "assertions": [
+    { "kind": "appearsBy", "selector": "#brand", "bySec": 0.2 },
+    { "kind": "appearsBy", "selector": "#kicker", "bySec": 0.3 },
+    { "kind": "appearsBy", "selector": "#mkt-word", "bySec": 0.45 },
+    { "kind": "appearsBy", "selector": "#social", "bySec": 0.8 },
+    { "kind": "appearsBy", "selector": "#ad", "bySec": 0.95 },
+    { "kind": "appearsBy", "selector": "#social-pill", "bySec": 1.05 },
+    { "kind": "appearsBy", "selector": "#ad-pill", "bySec": 1.4 },
+    { "kind": "before", "a": "#social", "b": "#chat" },
+    { "kind": "appearsBy", "selector": "#b-in", "bySec": 2.5 },
+    { "kind": "appearsBy", "selector": "#b-out", "bySec": 2.8 },
+    { "kind": "appearsBy", "selector": "#st-sched", "bySec": 3.3 },
+    { "kind": "before", "a": "#chat", "b": "#op-title" },
+    { "kind": "appearsBy", "selector": "#w-uma", "bySec": 3.9 },
+    { "kind": "appearsBy", "selector": "#opc4", "bySec": 4.4 },
+    { "kind": "keepsMoving", "withinSelector": "#root", "maxStaticSec": 1.0 }
+  ]
+}

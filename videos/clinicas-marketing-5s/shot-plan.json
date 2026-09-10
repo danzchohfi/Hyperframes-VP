@@ -1,0 +1,23 @@
+{
+  "category": "kinetic-typography",
+  "duration_s": 5,
+  "fps": 30,
+  "canvas": { "w": 1080, "h": 1920, "aspect": "9:16" },
+  "style": "Três palavras-herói em serifa editorial (Marketing. / Atendimento. / Uma operação só.) com telas rápidas como prova: reel + anúncio, WhatsApp + CRM. Sistema visual da página /clinicas.",
+  "palette": ["#f7f8f8", "#141414", "#4b5563", "#0f5c4a", "#deebe4", "#f0f2f1", "#e3e6e5"],
+  "font": "Instrument Serif + Inter",
+  "beats": [1.9, 3.4],
+  "export": "mp4",
+  "asset_needs": [],
+  "note": "URL capture of vitaminapublicitaria.com.br/clinicas was blocked by the session network policy; the screens are hand-built mock UI.",
+  "content": {
+    "url": "https://vitaminapublicitaria.com.br/clinicas",
+    "capture": "blocked — mock UI",
+    "highlights": [
+      { "region": "marketing", "label": "Marketing. — reel da clínica + card de anúncio (Redes sociais · Anúncios)" },
+      { "region": "atendimento", "label": "Atendimento. — chat WhatsApp + card CRM (WhatsApp · CRM)" },
+      { "region": "operacao", "label": "Uma operação só. — chips Redes sociais · Anúncios · WhatsApp · CRM + URL" }
+    ]
+  },
+  "seams": "see ledger.json — current LEFT (cut-the-curve) ×1 with CTA carrier, UP reserved for the conclusion"
+}
